@@ -9,7 +9,7 @@
 - Domain 08 (Base, Construction & Production): Done — 4 modules, 18 functions.
 - Domain 09 (Hero Survival: Hunger, Fatigue, Food): Done — 3 modules, 16 functions.
 - Domain 04 (Injury, Medical Facility, Treatment & Resurrection): Done — 3 modules, 17 functions.
-- Domain 03 (Hero Personality, Loyalty & Relationship): Not started.
+- Domain 03 (Hero Personality, Loyalty & Relationship): Done — 2 modules, 10 functions.
 - Domain 10 / 11 / 12 / 01 (Crafting, Shop & Mailbox, Quests & Achievements, Account Linking): Not started.
 
 ---
@@ -107,6 +107,27 @@
 - MEDICINE and DIVINE_TEAR are plain `master_items` entries; the prototype seeds neither — operators grant them.
 - Injuries are recorded from the `advance` route only; the dungeon retreat path does not create injuries yet.
 
+## Domain 03: Personality, Loyalty and Relationships
+
+### MOD-03-04 Personality & Loyalty (6 functions)
+- [x] FUN-03-04-001 Assign Personality — every Hero gets four deterministic traits (core / social / behavioural / special) plus a favourite food, derived from the instance id; loyalty starts at 50 (scenario 2.1).
+- [x] FUN-03-04-002 View Personality — `GET /api/personality` lists traits, favourite food, loyalty, state, combat multiplier and disobedience chance.
+- [x] FUN-03-04-003 Personality Behavior — traits are exposed to combat (loyalty multiplier + resonance) and recorded as the behavioural profile used by future AI targeting.
+- [x] FUN-03-04-004 Calculate Loyalty — victories +1, favourite meal +5, manual adjustment endpoint (−50..50) for testing and operator correction.
+- [x] FUN-03-04-005 View Loyalty — loyalty score, state and average/devoted/danger counters in the summary payload.
+- [x] FUN-03-04-006 Loyalty State Change — DEVOTED ≥ 80 (+5% stats), NORMAL 20–79, DANGER < 20 (50–78.5% stats and a 30% dispatch refusal with `ERR_HERO_DISOBEDIENCE`). Heroes are never removed from the roster (scenario 2.2).
+
+### MOD-03-05 Relationships (4 functions)
+- [x] FUN-03-05-001 Initialize Relationship — one row per Hero pair is created lazily for every Master (`hero_relationships`, unique pair).
+- [x] FUN-03-05-002 Update Relationship — shared victories add +2 affinity per pair (five wins ⇒ +10, scenario 3.1); the endpoint supports manual affinity review.
+- [x] FUN-03-05-003 View Relationship — overview returns names, affinity, tier (RIVAL / STRANGER / ACQUAINTANCE / COMRADE / TRUSTED_ALLY) and resonance bonus.
+- [x] FUN-03-05-004 Relationship Event — COMRADE and above grant a +5% ATK resonance applied in combat when both Heroes deploy together.
+
+### Prototype tuning recorded here
+- Trait pools and the favourite-food list are sample data; assignment is hashed from the Hero id so replays and tests stay stable.
+- Disobedience uses a real random roll (`Math.random`), so the outcome is not deterministic by design.
+- Relationship affinity is currently driven by victories only; shared dormitory/production events are not wired yet.
+
 ---
 
 ## Open items carried forward
@@ -117,7 +138,7 @@
 
 ---
 
-Verification: `npm run verify` passes; 81/81 server tests (13 DM-08 + 15 DM-09 + 11 DM-04 rule tests) and 11/11 shared tests. Migrations `0023_slimy_dagger.sql`, `0024_normal_magneto.sql` and `0025_unknown_miracleman.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
+Verification: `npm run verify` passes; 91/91 server tests (13 DM-08 + 15 DM-09 + 11 DM-04 + 10 DM-03 rule tests) and 11/11 shared tests. Migrations `0023_slimy_dagger.sql`, `0024_normal_magneto.sql`, `0025_unknown_miracleman.sql` and `0026_icy_elektra.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
 
-Updated: 2026-11-04 07:45:00 UTC+7
+Updated: 2026-11-04 08:10:00 UTC+7
 Signed: DeepSeek Harness, project assistant

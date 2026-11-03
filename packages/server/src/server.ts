@@ -26,6 +26,7 @@ import { rateGuard, securityAlertService } from './modules/admin/security.servic
 import { BaseError, buildingService } from './modules/base/building.service.js';
 import { SurvivalError, survivalService } from './modules/survival/survival.service.js';
 import { MedicalError, medicalService } from './modules/medical/medical.service.js';
+import { PersonalityError, personalityService } from './modules/personality/personality.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -642,6 +643,47 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-03 (P1): personality, loyalty and relationships ---
+
+  const personalityError = (res: Response, error: unknown): boolean => {
+    if (error instanceof PersonalityError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/personality', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const overview = await personalityService.overview(master.id);
+    return res.json({ ...overview, summary: await personalityService.summary(master.id) });
+  }));
+
+  app.post('/api/personality/heroes/:heroId/favorite-meal', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await personalityService.serveFavoriteMeal(master.id, String(req.params.heroId)));
+    } catch (error) {
+      if (personalityError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/personality/heroes/:heroId/loyalty', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const delta = Number(req.body?.delta);
+    if (!Number.isFinite(delta) || delta < -50 || delta > 50) return res.status(400).json({ error: 'delta phải trong khoảng -50..50.' });
+    try {
+      return res.json(await personalityService.adjustLoyalty(master.id, String(req.params.heroId), delta, String(req.body?.reason ?? 'MANUAL')));
+    } catch (error) {
+      if (personalityError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-04 (P1): injuries, medical facility and resurrection ---
@@ -1402,9 +1444,13 @@ export function createApp() {
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
     try {
       const session = await combatService.advance(master.id, String(req.params.sessionId));
-      const report = session.battleReport as { survivors?: { id: string; hp: number; maxHp: number }[] } | null;
+      const report = session.battleReport as { result?: string; survivors?: { id: string; hp: number; maxHp: number }[] } | null;
       if (report?.survivors?.length) {
         await medicalService.recordBattleInjuries(master.id, report.survivors).catch(error => console.error('[medical] injury recording failed', error));
+      }
+      if (report?.result === 'VICTORY' && report.survivors?.length) {
+        await personalityService.recordVictory(master.id, report.survivors.map(row => row.id))
+          .catch(error => console.error('[personality] loyalty update failed', error));
       }
       return res.json(session);
     }

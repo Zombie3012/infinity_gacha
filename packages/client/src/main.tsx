@@ -5,6 +5,7 @@ import { AdminPage } from './admin';
 import { BasePage } from './base';
 import { SurvivalPage } from './survival';
 import { MedicalPage } from './medical';
+import { PersonalityPage } from './personality';
 
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 type Session = { token: string; accountId: string; username: string };
@@ -577,6 +578,7 @@ function App() {
     { id: 'base', icon: '⌂', label: 'Căn cứ' },
     { id: 'survival', icon: '☘', label: 'Sinh tồn' },
     { id: 'medical', icon: '✚', label: 'Y tế' },
+    { id: 'personality', icon: '♥', label: 'Tính cách' },
     { id: 'admin', icon: '⚙', label: 'Quản trị' },
   ];
 
@@ -597,6 +599,7 @@ function App() {
         {page === 'base' && <BasePage token={session.token} onError={setError} onNotice={setNotice} />}
         {page === 'survival' && <SurvivalPage token={session.token} onError={setError} onNotice={setNotice} />}
         {page === 'medical' && <MedicalPage token={session.token} onError={setError} onNotice={setNotice} />}
+        {page === 'personality' && <PersonalityPage token={session.token} onError={setError} onNotice={setNotice} />}
 
         {page === 'admin' && <AdminPage onError={setError} onNotice={setNotice} />}
 

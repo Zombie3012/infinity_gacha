@@ -183,6 +183,13 @@
       "when": 1793749074680,
       "tag": "0025_unknown_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793749358733,
+      "tag": "0026_icy_elektra",
+      "breakpoints": true
     }
   ]
 }

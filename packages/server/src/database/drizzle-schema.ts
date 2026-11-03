@@ -578,3 +578,32 @@ export const heroResurrectionCycles = pgTable('hero_resurrection_cycles', {
   resurrectionCount: integer('resurrection_count').default(0).notNull(),
   lastResurrectedAt: timestamp('last_resurrected_at', { withTimezone: true }),
 });
+
+// --- Domain 03 (P1): personality, loyalty and relationships ---
+
+export const heroPersonalityTraits = pgTable('hero_personality_traits', {
+  heroId: varchar('hero_id', { length: 36 }).primaryKey().references(() => heroes.id, { onDelete: 'cascade' }),
+  coreTrait: varchar('core_trait', { length: 30 }).notNull(),
+  socialTrait: varchar('social_trait', { length: 30 }).notNull(),
+  behavioralTrait: varchar('behavioral_trait', { length: 30 }).notNull(),
+  specialTrait: varchar('special_trait', { length: 30 }).notNull(),
+  favoriteFood: varchar('favorite_food', { length: 50 }).notNull(),
+  loyaltyScore: integer('loyalty_score').default(50).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check('hero_personality_loyalty_range', sql`${table.loyaltyScore} >= 0 AND ${table.loyaltyScore} <= 100`),
+]);
+
+export const heroRelationships = pgTable('hero_relationships', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  heroAId: varchar('hero_a_id', { length: 36 }).notNull().references(() => heroes.id, { onDelete: 'cascade' }),
+  heroBId: varchar('hero_b_id', { length: 36 }).notNull().references(() => heroes.id, { onDelete: 'cascade' }),
+  affinityPoints: integer('affinity_points').default(0).notNull(),
+  lastInteractionAt: timestamp('last_interaction_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('uq_hero_relationship_pair').on(table.heroAId, table.heroBId),
+  index('idx_hero_relationship_master').on(table.masterId),
+]);
