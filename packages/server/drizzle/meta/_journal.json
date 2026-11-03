@@ -169,6 +169,13 @@
       "when": 1793748499595,
       "tag": "0023_slimy_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793748831222,
+      "tag": "0024_normal_magneto",
+      "breakpoints": true
     }
   ]
 }

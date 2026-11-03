@@ -8,6 +8,7 @@ import {
 } from '../../database/drizzle-schema.js';
 import { TacticalBuffManager } from './tactical-buff.manager.js';
 import { getBattleRules } from '../admin/runtime-rules.js';
+import { survivalService } from '../survival/survival.service.js';
 
 export class CombatSessionError extends Error {
   constructor(message: string, public readonly statusCode: number) { super(message); }
@@ -213,6 +214,10 @@ export class CombatSessionService {
     });
   }
   public async start(masterId: string, options?: StartCombatOptions) {
+    // DM-09 gate: overexhausted/starving Heroes cannot deploy and travel rations are charged.
+    const readiness = await survivalService.battleReadiness(masterId, options?.partyId);
+    if (!readiness.ok) throw new CombatSessionError(readiness.message, readiness.statusCode);
+
     return db.transaction(async tx => {
       const [master] = await tx.select().from(masters).where(eq(masters.id, masterId)).for('update').limit(1);
       if (!master) throw new CombatSessionError('Không tìm thấy Master.', 404);
@@ -313,7 +318,10 @@ export class CombatSessionService {
             id: hero.id, slotIndex, name: hero.name, templateCode: hero.configId, heroClass: template?.heroClass ?? undefined,
             element: template?.element ?? 'EARTH', origin: hero.category,
             hp: Math.min(hero.hp + Math.floor((hero.maxHp + bonus.hp) * floorEvent.healPercent), hero.maxHp + bonus.hp), maxHp: hero.maxHp + bonus.hp,
-            shield: 0, attack: hero.attack + bonus.attack, defense: hero.defense + bonus.defense, speed: hero.speed + bonus.speed,
+            shield: 0,
+            attack: Math.max(1, Math.floor((hero.attack + bonus.attack) * (readiness.multipliers[hero.id] ?? 1))),
+            defense: Math.max(0, Math.floor((hero.defense + bonus.defense) * (readiness.multipliers[hero.id] ?? 1))),
+            speed: hero.speed + bonus.speed,
             critRate, critDamage: 0.5, skills: skillsByHeroId.get(hero.id) ?? [], statusEffects: [],
           };
         }),

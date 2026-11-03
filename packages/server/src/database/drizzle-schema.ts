@@ -522,3 +522,16 @@ export const buildingWorkerAssignments = pgTable('building_worker_assignments', 
   efficiencyBoost: doublePrecision('efficiency_boost').default(1).notNull(),
   assignedAt: timestamp('assigned_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// --- Domain 09 (P1): hero survival (hunger, fatigue, food) ---
+
+export const heroSurvivalStates = pgTable('hero_survival_states', {
+  heroId: varchar('hero_instance_id', { length: 36 }).primaryKey().references(() => heroes.id, { onDelete: 'cascade' }),
+  hungerScore: doublePrecision('hunger_score').default(0).notNull(),
+  fatigueScore: doublePrecision('fatigue_score').default(0).notNull(),
+  isResting: boolean('is_resting').default(false).notNull(),
+  lastTickAt: timestamp('last_tick_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check('hero_survival_hunger_range', sql`${table.hungerScore} >= 0 AND ${table.hungerScore} <= 100`),
+  check('hero_survival_fatigue_range', sql`${table.fatigueScore} >= 0 AND ${table.fatigueScore} <= 100`),
+]);

@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
+import { survivalService } from '../survival/survival.service.js';
 import {
   baseBuildings, baseProductionNodes, buildingTypes, buildingWorkerAssignments, heroes, masterItems, masters, worlds,
 } from '../../database/drizzle-schema.js';
@@ -335,7 +336,13 @@ export class BuildingService {
         .where(eq(baseProductionNodes.id, node.id));
     });
 
-    return { collected: amount, resourceType: node.resourceType, atCapacity: accrued.atCapacity };
+    // A harvest counts as one labour shift for every assigned Hero (DM-09).
+    const shift = await survivalService.applyShift(masterId, assignments.map(row => row.heroInstanceId));
+
+    return {
+      collected: amount, resourceType: node.resourceType, atCapacity: accrued.atCapacity,
+      ejectedWorkers: shift.ejected,
+    };
   }
 
   async assignWorker(masterId: string, buildingId: string, heroId: unknown) {

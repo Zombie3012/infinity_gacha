@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './style.css';
 import { AdminPage } from './admin';
 import { BasePage } from './base';
+import { SurvivalPage } from './survival';
 
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 type Session = { token: string; accountId: string; username: string };
@@ -573,6 +574,7 @@ function App() {
     { id: 'heroes', icon: '♙', label: 'Hero' },
     { id: 'battle', icon: '⚔', label: 'Chiến đấu' },
     { id: 'base', icon: '⌂', label: 'Căn cứ' },
+    { id: 'survival', icon: '☘', label: 'Sinh tồn' },
     { id: 'admin', icon: '⚙', label: 'Quản trị' },
   ];
 
@@ -591,6 +593,7 @@ function App() {
         {notice && <div className="toast success-toast"><span>✓</span>{notice}<button onClick={() => setNotice('')}>×</button></div>}
 
         {page === 'base' && <BasePage token={session.token} onError={setError} onNotice={setNotice} />}
+        {page === 'survival' && <SurvivalPage token={session.token} onError={setError} onNotice={setNotice} />}
 
         {page === 'admin' && <AdminPage onError={setError} onNotice={setNotice} />}
 

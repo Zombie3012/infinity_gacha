@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P1 Domain 09 (survival) is implemented: per-Hero hunger and fatigue that drift with time and activity, feeding and resting, a kitchen that converts raw food into meals, and dungeon rations charged before a run.
 - Phase P1 has started with Domain 08 (base, construction and production): zone expansion, a seven-entry building catalogue, offline resource accrual with capacity pause, harvesting into the Master inventory, and Hero work assignments that raise output.
 - Redis is part of the selected architecture for later caching, distributed locks, leaderboards, and timers; it is not connected in this step.
 
@@ -207,3 +208,12 @@ Signed: DeepSeek Harness, project assistant
 - Progress is tracked domain by domain in `P1_PROGRESS_CHECKLIST.md`, mirroring the P0 checklist.
 - Repository hygiene: git baseline created, `npm run verify` (encoding guard + build + tests) added, P1/P2 scope matrices repaired from CP437 mojibake and the duplicated `FUN-08-02-001` row rebuilt from the MBFL source.
 - Verified: `npm run verify` green — 55/55 server tests (13 new), 11/11 shared tests.
+
+## Update - 2026-11-04 07:22:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Completed P1 Domain 09 (Survival): 16 functions across MOD-09-01..03 — hunger/fatigue tracking with lazy time drift, feeding, resting, overexertion blocking, kitchen conversion, base upkeep quotes and dungeon rations.
+- Cross-domain integration: harvesting a building now counts as a labour shift (+5 hunger, +8 fatigue, auto-eject at 100 fatigue), combat applies the starvation ATK/DEF penalty and charges 10 rations per Hero, and new Masters start with 100 FOOD.
+- New table `hero_survival_states` (migration `0024_normal_magneto.sql`) and a **Sinh tồn** screen in the web client.
+- Verified: `npm run verify` green — 70/70 server tests (15 new survival rules), 11/11 shared tests.

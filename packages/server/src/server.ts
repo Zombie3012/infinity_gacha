@@ -24,6 +24,7 @@ import { CONFIG_KEYS, ConfigError, isConfigKey, systemConfigService } from './mo
 import { monitoringService } from './modules/admin/monitoring.service.js';
 import { rateGuard, securityAlertService } from './modules/admin/security.service.js';
 import { BaseError, buildingService } from './modules/base/building.service.js';
+import { SurvivalError, survivalService } from './modules/survival/survival.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -315,6 +316,8 @@ export function createApp() {
           difficultyMultiplier: initialWorld.difficultyMultiplier,
           currentFloor: initialWorld.currentFloor,
         });
+        // P1 starter kit: a small food reserve so the first dungeon run is possible.
+        await tx.insert(masterItems).values({ id: uuidv4(), masterId: created.id, itemId: 'FOOD', quantity: 100, updatedAt: new Date() });
         const sampleTemplates = await tx.select({ code: equipmentTemplates.code }).from(equipmentTemplates)
           .where(inArray(equipmentTemplates.code, ['SAMPLE_IRON_SWORD', 'SAMPLE_LEATHER_CHEST', 'SAMPLE_SWIFT_CHARM']));
         if (sampleTemplates.length) await tx.insert(equipmentInstances).values(sampleTemplates.map(template => ({
@@ -638,6 +641,84 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-09 (P1): hero survival (hunger, fatigue, food) ---
+
+  const survivalError = (res: Response, error: unknown): boolean => {
+    if (error instanceof SurvivalError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/survival', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await survivalService.overview(master.id));
+  }));
+
+  app.get('/api/survival/upkeep', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await survivalService.baseUpkeep(master.id, req.query.hours));
+  }));
+
+  app.post('/api/survival/heroes/:heroId/feed', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await survivalService.feed(master.id, String(req.params.heroId), req.body?.quantity));
+    } catch (error) {
+      if (survivalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/survival/heroes/:heroId/rest', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await survivalService.setResting(master.id, String(req.params.heroId), true));
+    } catch (error) {
+      if (survivalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.delete('/api/survival/heroes/:heroId/rest', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await survivalService.setResting(master.id, String(req.params.heroId), false));
+    } catch (error) {
+      if (survivalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/survival/kitchen/cook', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await survivalService.cook(master.id, req.body?.quantity));
+    } catch (error) {
+      if (survivalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/survival/rations/quote', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const context = req.body?.context === 'WAR' ? 'WAR' : 'DUNGEON';
+    try {
+      return res.json(await survivalService.rationQuote(master.id, context, req.body?.heroCount, req.body?.charge === true));
+    } catch (error) {
+      if (survivalError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-08 (P1): base, construction and production ---

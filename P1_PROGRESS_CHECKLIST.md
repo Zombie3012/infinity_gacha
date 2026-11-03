@@ -7,7 +7,7 @@
 
 ## Progress Summary
 - Domain 08 (Base, Construction & Production): Done — 4 modules, 18 functions.
-- Domain 09 (Hero Survival: Hunger, Fatigue, Food): Not started.
+- Domain 09 (Hero Survival: Hunger, Fatigue, Food): Done — 3 modules, 16 functions.
 - Domain 04 (Injury, Medical Facility, Treatment & Resurrection): Not started.
 - Domain 03 (Hero Personality, Loyalty & Relationship): Not started.
 - Domain 10 / 11 / 12 / 01 (Crafting, Shop & Mailbox, Quests & Achievements, Account Linking): Not started.
@@ -48,16 +48,46 @@
 - Demolition returns Silver only; spent WOOD/STONE are not refunded.
 - Work shifts do **not** yet raise Hunger/Fatigue: that belongs to DM-09 (next domain) and is a deliberate dependency.
 
+## Domain 09: Hero Survival (Hunger, Fatigue, Food)
+
+### MOD-09-01 Hunger Management (5 functions)
+- [x] FUN-09-01-001 Track Hero Hunger — `hero_survival_states` keeps a 0–100 score per Hero with the tiers FULL / SATISFIED / HUNGRY / STARVING / CRITICAL.
+- [x] FUN-09-01-002 Calculate Hunger Consumption — passive +1/hour (+2/hour when the warehouse is empty), +8 per battle, +5 per labour shift; state settles lazily from `last_tick_at`.
+- [x] FUN-09-01-003 Distribute Food — `POST /api/survival/heroes/:id/feed` consumes FOOD (1 food = −20 hunger, max 10 per call) and rejects when the store is empty.
+- [x] FUN-09-01-004 Process Starvation — at 60+ hunger the Hero fights at 60% ATK/DEF (applied to combat stats); at 100 the Hero cannot be dispatched (`ERR_HERO_STARVING_MUST_FEED`).
+- [x] FUN-09-01-005 View Hunger Status — `GET /api/survival` returns score, tier, attack multiplier and per-Master counters.
+
+### MOD-09-02 Fatigue Management (6 functions)
+- [x] FUN-09-02-001 Track Hero Fatigue — 0–100 score with tiers RESTED / NORMAL / TIRED / EXHAUSTED / CRITICAL / OVEREXHAUSTED.
+- [x] FUN-09-02-002 Calculate Fatigue Increase — +2/hour awake, +12 per battle, +8 per labour shift.
+- [x] FUN-09-02-003 Start Hero Rest — `POST /api/survival/heroes/:id/rest`; refuses Heroes still assigned to a building.
+- [x] FUN-09-02-004 Process Fatigue Recovery — resting drains 15 points/hour (80 → 20 after 4 hours, matching scenario 10.2) and stops at zero.
+- [x] FUN-09-02-005 View Fatigue Status — included in the survival roster payload and in the new client page.
+- [x] FUN-09-02-006 Prevent Overexertion — at 100 fatigue the Hero is Overexhausted: `POST /api/combat/session/start` returns `ERR_HERO_OVEREXHAUSTED_MUST_REST`, and a labour shift that reaches 100 auto-removes the Hero from its building.
+
+### MOD-09-03 Food Storage & Consumption (5 functions)
+- [x] FUN-09-03-001 Manage Food Storage — FOOD lives in `master_items`; capacity is `max(100, Kitchen level × 200)`.
+- [x] FUN-09-03-002 Produce Food — `POST /api/survival/kitchen/cook` converts 2 FOOD_RAW into 1 FOOD, capped by storage capacity.
+- [x] FUN-09-03-003 Consume Base Resources — `GET /api/survival/upkeep?hours=` quotes two meals per healthy Hero per day; an empty store doubles hunger gain.
+- [x] FUN-09-03-004 Consume Dungeon Resources — 10 rations per party Hero are validated and deducted before a dungeon run starts (`ERR_INSUFFICIENT_RATIONS` when short).
+- [x] FUN-09-03-005 Consume War Resources — `POST /api/survival/rations/quote` prices war dispatch at 15 rations per Hero (army dispatch itself is P3 scope).
+
+### Integration delivered with this domain
+- Harvesting a production building now charges one labour shift to every assigned Hero (+5 hunger, +8 fatigue) and ejects anyone reaching Overexhausted.
+- Combat applies the starvation multiplier to ATK/DEF and charges travel rations before the session is created.
+- New Masters receive 100 FOOD as a starter kit so the first dungeon run is possible.
+
 ---
 
 ## Open items carried forward
-- DM-08 has no automated HTTP coverage yet; the smoke flow (construct → settle → collect → upgrade → assign → expand) was verified live and the arithmetic is covered by unit tests.
+- DM-08/DM-09 rely on unit tests for the arithmetic plus live smoke flows; the HTTP layer still has no automated domain coverage.
+- Food consumption for Heroes idling in the base is quoted but not yet charged on a schedule (no scheduler in the prototype).
 - Base construction is not gated behind a `feature_unlock_configs` row; every Master with a world can build.
 - Balance values above remain sample data.
 
 ---
 
-Verification: `npm run verify` (encoding guard → build → tests) passes; 55/55 server tests (13 new DM-08 rule tests) and 11/11 shared tests. Migration `0023_slimy_dagger.sql` applied. Live smoke on the seeded demo account confirmed: 100 STONE/h mine produced 200 Stone after 2 backdated hours, upgrade blocked without WOOD then accepted, worker raised the rate to 168/h (L2 × 1.05), zone 2 expanded for 2,000 Silver, and zone 3 correctly refused until World Level 2.
+Verification: `npm run verify` passes; 70/70 server tests (13 DM-08 + 15 DM-09 rule tests) and 11/11 shared tests. Migrations `0023_slimy_dagger.sql` and `0024_normal_magneto.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
 
-Updated: 2026-11-04 06:55:00 UTC+7
+Updated: 2026-11-04 07:20:00 UTC+7
 Signed: DeepSeek Harness, project assistant
