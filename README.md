@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P1 has started with Domain 08 (base, construction and production): zone expansion, a seven-entry building catalogue, offline resource accrual with capacity pause, harvesting into the Master inventory, and Hero work assignments that raise output.
 - Redis is part of the selected architecture for later caching, distributed locks, leaderboards, and timers; it is not connected in this step.
 
 ## Run locally
@@ -195,3 +196,14 @@ Signed: DeepSeek Harness, project assistant
 - Fixed the root workspace scripts: `npm run build` now builds `shared` first, and `npm test` no longer fails on the package without a test script.
 - Verified: 42/42 server tests and 11/11 shared tests pass; live checks confirmed a published `GACHA_PITY` version changed the banner base rate to 2% and `BATTLE_RULES` changed the buff cooldown to 5s without a restart.
 - Repaired remaining encoding damage: double-encoded UI symbols in the client (for example the `∞` brand mark) and four lossy Vietnamese error strings in the combat service.
+
+## Update - 2026-11-04 06:58:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Started Phase P1 with Domain 08 (Base, Construction & Production): 18 functions across MOD-08-01..04.
+- New tables `building_types`, `base_buildings`, `base_production_nodes`, `building_worker_assignments`, plus `worlds.base_zones`; migration `0023_slimy_dagger.sql` applied; catalogue seeded by `building_types.sample.sql`.
+- New API surface under `/api/base` (overview, expand, construct, upgrade, demolish, production, collect, assign/remove worker) and a **Căn cứ** screen in the web client with plot grid, production readout and Hero assignment.
+- Progress is tracked domain by domain in `P1_PROGRESS_CHECKLIST.md`, mirroring the P0 checklist.
+- Repository hygiene: git baseline created, `npm run verify` (encoding guard + build + tests) added, P1/P2 scope matrices repaired from CP437 mojibake and the duplicated `FUN-08-02-001` row rebuilt from the MBFL source.
+- Verified: `npm run verify` green — 55/55 server tests (13 new), 11/11 shared tests.

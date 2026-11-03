@@ -23,6 +23,7 @@ import { AUDIT_ACTIONS, auditService } from './modules/admin/audit.service.js';
 import { CONFIG_KEYS, ConfigError, isConfigKey, systemConfigService } from './modules/admin/system-config.service.js';
 import { monitoringService } from './modules/admin/monitoring.service.js';
 import { rateGuard, securityAlertService } from './modules/admin/security.service.js';
+import { BaseError, buildingService } from './modules/base/building.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -637,6 +638,145 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-08 (P1): base, construction and production ---
+
+  const requireMaster = async (req: AuthRequest) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    return master;
+  };
+
+  const baseError = (res: Response, error: unknown): boolean => {
+    if (error instanceof BaseError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/base/overview', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await buildingService.overview(master.id));
+  }));
+
+  app.post('/api/base/expand', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await buildingService.expand(master.id);
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: AUDIT_ACTIONS.BASE_EXPANDED,
+        entityType: 'WORLD', entityId: master.id, diff: { next: result },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/buildings', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await buildingService.construct(master.id, req.body?.buildingType, req.body?.plotIndex);
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: AUDIT_ACTIONS.BUILDING_CONSTRUCTED,
+        entityType: 'BUILDING', entityId: result.building.id,
+        diff: { buildingType: result.building.buildingType, plotIndex: result.building.plotIndex, silverSpent: result.silverSpent },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/buildings/:buildingId/upgrade', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await buildingService.upgrade(master.id, String(req.params.buildingId));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: AUDIT_ACTIONS.BUILDING_UPGRADED,
+        entityType: 'BUILDING', entityId: result.building.id,
+        diff: { targetLevel: result.targetLevel, silverSpent: result.silverSpent, materialsSpent: result.materialsSpent },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/buildings/:buildingId/demolish', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await buildingService.demolish(master.id, String(req.params.buildingId));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: AUDIT_ACTIONS.BUILDING_DEMOLISHED,
+        entityType: 'BUILDING', entityId: result.demolished, diff: { refundSilver: result.refundSilver },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/buildings/:buildingId/production', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await buildingService.configureProduction(master.id, String(req.params.buildingId), req.body?.resourceType));
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/buildings/:buildingId/collect', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await buildingService.collect(master.id, String(req.params.buildingId));
+      if (result.collected > 0) {
+        void auditService.record({
+          actorId: master.id, actorType: 'MASTER', action: AUDIT_ACTIONS.RESOURCE_COLLECTED,
+          entityType: 'BUILDING', entityId: String(req.params.buildingId),
+          diff: { resourceType: result.resourceType, quantity: result.collected },
+        });
+      }
+      return res.json(result);
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/buildings/:buildingId/workers', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.status(201).json(await buildingService.assignWorker(master.id, String(req.params.buildingId), req.body?.heroId));
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.delete('/api/base/buildings/:buildingId/workers/:heroId', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await buildingService.removeWorker(master.id, String(req.params.buildingId), String(req.params.heroId)));
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-14: configuration versioning, audit, monitoring and security ---

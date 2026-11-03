@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
 import { AdminPage } from './admin';
+import { BasePage } from './base';
 
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 type Session = { token: string; accountId: string; username: string };
@@ -571,6 +572,7 @@ function App() {
     { id: 'summon', icon: '✦', label: 'Thiên Thư' },
     { id: 'heroes', icon: '♙', label: 'Hero' },
     { id: 'battle', icon: '⚔', label: 'Chiến đấu' },
+    { id: 'base', icon: '⌂', label: 'Căn cứ' },
     { id: 'admin', icon: '⚙', label: 'Quản trị' },
   ];
 
@@ -587,6 +589,8 @@ function App() {
       <div className="content">
         {error && <div className="toast error-toast"><span>!</span>{error}<button onClick={() => setError('')}>×</button></div>}
         {notice && <div className="toast success-toast"><span>✓</span>{notice}<button onClick={() => setNotice('')}>×</button></div>}
+
+        {page === 'base' && <BasePage token={session.token} onError={setError} onNotice={setNotice} />}
 
         {page === 'admin' && <AdminPage onError={setError} onNotice={setNotice} />}
 

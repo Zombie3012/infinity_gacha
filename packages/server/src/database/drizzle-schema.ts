@@ -50,6 +50,7 @@ export const worlds = pgTable('worlds', {
   seedAlgorithmVersion: integer('seed_algorithm_version').default(1).notNull(),
   difficultyMultiplier: doublePrecision('difficulty_multiplier').default(1).notNull(),
   currentFloor: integer('current_floor').default(1).notNull(),
+  baseZones: integer('base_zones').default(1).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -473,3 +474,51 @@ export const securityAlerts = pgTable('security_alerts', {
   check('security_alerts_severity_check', sql`${table.severity} IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')`),
   check('security_alerts_status_check', sql`${table.status} IN ('OPEN', 'RESOLVED')`),
 ]);
+
+// --- Domain 08 (P1): base, construction and production ---
+
+export const buildingTypes = pgTable('building_types', {
+  code: varchar('code', { length: 40 }).primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  category: varchar('category', { length: 20 }).notNull(),
+  description: text('description').notNull(),
+  maxLevel: integer('max_level').default(5).notNull(),
+  maxWorkers: integer('max_workers').default(0).notNull(),
+  requiredWorldLevel: integer('required_world_level').default(1).notNull(),
+  buildCostSilver: integer('build_cost_silver').notNull(),
+  production: jsonb('production').$type<{ resourceType: string; ratePerHour: number; capacity: number } | null>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const baseBuildings = pgTable('base_buildings', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  buildingType: varchar('building_type', { length: 40 }).notNull().references(() => buildingTypes.code),
+  plotIndex: integer('plot_index').notNull(),
+  level: integer('level').default(1).notNull(),
+  durability: integer('durability').default(100).notNull(),
+  status: varchar('status', { length: 20 }).default('READY').notNull(),
+  upgradeFinishesAt: timestamp('upgrade_finishes_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('uq_base_buildings_plot').on(table.masterId, table.plotIndex),
+]);
+
+export const baseProductionNodes = pgTable('base_production_nodes', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  buildingId: varchar('building_id', { length: 36 }).notNull().unique().references(() => baseBuildings.id, { onDelete: 'cascade' }),
+  resourceType: varchar('resource_type', { length: 30 }).notNull(),
+  baseRatePerHour: doublePrecision('base_rate_per_hour').notNull(),
+  currentStored: doublePrecision('current_stored').default(0).notNull(),
+  maxCapacity: doublePrecision('max_capacity').notNull(),
+  lastHarvestAt: timestamp('last_harvest_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const buildingWorkerAssignments = pgTable('building_worker_assignments', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  buildingId: varchar('building_id', { length: 36 }).notNull().references(() => baseBuildings.id, { onDelete: 'cascade' }),
+  heroInstanceId: varchar('hero_instance_id', { length: 36 }).notNull().unique().references(() => heroes.id, { onDelete: 'cascade' }),
+  efficiencyBoost: doublePrecision('efficiency_boost').default(1).notNull(),
+  assignedAt: timestamp('assigned_at', { withTimezone: true }).defaultNow().notNull(),
+});

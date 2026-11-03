@@ -39,3 +39,26 @@
 .admin-badge.danger{background:rgba(233,154,185,.16);color:#e99ab9}
 .admin-muted{color:#79839a;font-size:8px;display:block}
 @media(max-width:900px){.admin-grid{grid-template-columns:1fr}.admin-row{grid-template-columns:1fr 1fr}}
+/* --- DM-08 base & production --- */
+.base-note{font-size:10px;color:#8791a5;margin:8px 0 0}
+.base-type-picker{min-width:220px;margin-bottom:0}
+.base-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+.plot-card{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--line);border-radius:9px;background:linear-gradient(140deg,rgba(20,26,39,.96),rgba(16,21,31,.94));text-align:left}
+.plot-card header{display:flex;align-items:center;justify-content:space-between}
+.plot-index{font-size:8px;letter-spacing:1.4px;color:#8d92a6;text-transform:uppercase}
+.plot-card h3{margin:0;font-size:12px;font-family:Manrope,sans-serif;color:#e9ecf6}
+.plot-card h3 small{color:#8d92a6;font-size:9px;margin-left:6px}
+.plot-empty{align-items:center;justify-content:center;border-style:dashed;color:#8f98ad;min-height:150px}
+.plot-empty strong{font-size:22px;color:#b8a3ff}
+.plot-empty small{font-size:9px}
+.plot-prod{margin:0;font-size:10px;color:#c3cad9}
+.plot-prod span{display:block;color:#8d92a6;font-size:9px}
+.plot-warn{margin:0;font-size:9px;color:#e8c77b}
+.plot-workers{display:flex;flex-wrap:wrap;gap:6px;font-size:9px;color:#8d92a6}
+.worker-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:999px;background:rgba(154,126,239,.14);color:#d9cff7}
+.worker-chip button{border:0;background:none;color:#b8a3ff;font-size:11px;line-height:1;padding:0}
+.base-hero-picker{padding:5px 7px;border:1px solid rgba(163,177,206,.15);border-radius:5px;background:#101622;color:#e9ebf2;font-size:10px}
+.plot-actions{display:flex;gap:8px;align-items:center;margin-top:auto;flex-wrap:wrap}
+.plot-actions .primary-button,.plot-actions .secondary-button{height:29px;padding:0 11px;font-size:9px}
+@media(max-width:1100px){.base-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.base-grid{grid-template-columns:1fr}}
