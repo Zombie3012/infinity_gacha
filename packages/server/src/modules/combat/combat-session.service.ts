@@ -296,8 +296,13 @@ export class CombatSessionService {
       for (const row of gearRows) {
         const heroId = row.item.equippedHeroId!;
         const bonus = gearBonus.get(heroId) ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
-        bonus.hp += row.template.bonusHp; bonus.attack += row.template.bonusAttack;
-        bonus.defense += row.template.bonusDefense; bonus.speed += row.template.bonusSpeed;
+        // Crafted gear scales with enhancement/fusion and its rolled substats.
+        const multiplier = row.item.statMultiplier ?? 1;
+        const substats = row.item.substats ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
+        bonus.hp += Math.round(row.template.bonusHp * multiplier) + substats.hp;
+        bonus.attack += Math.round(row.template.bonusAttack * multiplier) + substats.attack;
+        bonus.defense += Math.round(row.template.bonusDefense * multiplier) + substats.defense;
+        bonus.speed += Math.round(row.template.bonusSpeed * multiplier) + substats.speed;
         gearBonus.set(heroId, bonus);
       }
 

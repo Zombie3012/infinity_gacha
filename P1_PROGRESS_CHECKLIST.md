@@ -11,7 +11,8 @@
 - Domain 04 (Injury, Medical Facility, Treatment & Resurrection): Done — 3 modules, 17 functions.
 - Domain 03 (Hero Personality, Loyalty & Relationship): Done — 2 modules, 10 functions.
 - Domain 11 (Shop & Mailbox): Done — 2 modules, 12 functions.
-- Domain 10 / 12 / 01 (Crafting, Quests & Achievements, Account Linking): Not started.
+- Domain 10 (Crafting & Enhancement): Done — 1 module, 4 functions.
+- Domain 12 / 01 (Quests & Achievements, Account Linking): Not started.
 
 ---
 
@@ -150,6 +151,21 @@
 ### Seed data added
 - `shop_items.sample.sql`: nine entries, including MEDICINE, DIVINE_TEAR, FOOD and raw materials that the previous domains were missing, plus MOON_CAKE rotating on weekends only.
 
+## Domain 10: Crafting, Enhancement and Fusion
+
+- [x] FUN-10-03-001 Craft Item — `POST /api/crafting/craft` consumes recipe materials + Silver and rolls a new `equipment_instances` row with deterministic substats inside rarity brackets (scenario 12.1).
+- [x] FUN-10-03-002 Upgrade Equipment — `POST /api/crafting/equipment/:id/enhance` costs `level + 1` ENHANCEMENT_STONE and 500 × (level + 1) Silver for +10% base stats per level, capped at +15.
+- [x] FUN-10-03-003 Item Fusion — `POST /api/crafting/fuse` consumes three identical inventory instances (same template and star) into one at the next star with ×1.3 base stats; unenhanced copies are consumed first (scenario 12.2).
+- [x] FUN-10-03-004 Material Requirement — `validateCraft` reports missing materials, missing Silver and forge-level shortfall separately, surfaced on every recipe in `GET /api/crafting`.
+
+### Integration and seed data
+- Equipment bonuses in combat now scale by the instance multiplier and add rolled substats (`Math.round(base × multiplier) + substat`).
+- `crafting_recipes.sample.sql` seeds three recipes (Iron Sword, Leather Chest, Swift Charm) gated by Forge level.
+- Shop catalogue gained ENHANCEMENT_STONE so the enhancement loop is reachable without SQL.
+
+### Bug found and fixed during verification
+- Enhancement used to overwrite the fusion multiplier (a 2-star ×1.3 item dropped to ×1.1 on the first enhance). Multipliers now stack: `effectiveMultiplier(star, level) = 1.3^(star-1) × (1 + 0.1 × level)`, covered by a regression test.
+
 ---
 
 ## Open items carried forward
@@ -160,7 +176,7 @@
 
 ---
 
-Verification: `npm run verify` passes; 102/102 server tests (13 DM-08, 15 DM-09, 11 DM-04, 10 DM-03, 11 DM-11 rule tests) and 11/11 shared tests. Migrations `0023` … `0027_cooing_carlie_cooper.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
+Verification: `npm run verify` passes; 116/116 server tests (13 DM-08, 15 DM-09, 11 DM-04, 10 DM-03, 11 DM-11, 13 DM-10 rule tests) and 11/11 shared tests. Migrations `0023` … `0028_wild_maddog.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
 
-Updated: 2026-11-04 08:35:00 UTC+7
+Updated: 2026-11-04 09:00:00 UTC+7
 Signed: DeepSeek Harness, project assistant

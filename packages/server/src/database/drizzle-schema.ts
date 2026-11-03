@@ -174,6 +174,11 @@ export const equipmentInstances = pgTable('equipment_instances', {
   dropFloor: integer('drop_floor'),
   droppedAt: timestamp('dropped_at', { withTimezone: true }),
   pickedUpAt: timestamp('picked_up_at', { withTimezone: true }),
+  starLevel: integer('star_level').default(1).notNull(),
+  enhanceLevel: integer('enhance_level').default(0).notNull(),
+  statMultiplier: doublePrecision('stat_multiplier').default(1).notNull(),
+  substats: jsonb('substats').$type<{ hp: number; attack: number; defense: number; speed: number }>()
+    .notNull().default(sql`'{"hp":0,"attack":0,"defense":0,"speed":0}'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   check('ck_equipment_location', sql`${table.location} IN ('INVENTORY', 'EQUIPPED', 'FLOOR_DROP')`),
@@ -648,3 +653,16 @@ export const mailboxMessages = pgTable('mailbox_messages', {
 }, (table) => [
   index('idx_mailbox_master').on(table.masterId, table.isClaimed, table.expiresAt),
 ]);
+
+// --- Domain 10 (P1): crafting, enhancement and fusion ---
+
+export const craftingRecipes = pgTable('crafting_recipes', {
+  code: varchar('code', { length: 50 }).primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  targetTemplateCode: varchar('target_template_code', { length: 50 }).notNull().references(() => equipmentTemplates.code),
+  requiredForgeLevel: integer('required_forge_level').default(1).notNull(),
+  requiredMaterials: jsonb('required_materials').$type<{ itemId: string; quantity: number }[]>().notNull(),
+  craftFeeSilver: integer('craft_fee_silver').default(0).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});

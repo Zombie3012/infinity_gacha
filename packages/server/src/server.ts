@@ -29,6 +29,7 @@ import { MedicalError, medicalService } from './modules/medical/medical.service.
 import { PersonalityError, personalityService } from './modules/personality/personality.service.js';
 import { ShopError, shopService } from './modules/shop/shop.service.js';
 import { MailboxError, mailboxService } from './modules/shop/mailbox.service.js';
+import { CraftingError, craftingService } from './modules/crafting/crafting.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -645,6 +646,60 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-10 (P1): crafting, enhancement and fusion ---
+
+  const craftingError = (res: Response, error: unknown): boolean => {
+    if (error instanceof CraftingError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/crafting', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await craftingService.overview(master.id));
+  }));
+
+  app.post('/api/crafting/craft', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await craftingService.craft(master.id, String(req.body?.recipeCode ?? ''));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'ITEM_CRAFTED', entityType: 'EQUIPMENT',
+        entityId: result.instanceId, diff: { recipeCode: String(req.body?.recipeCode ?? ''), templateCode: result.templateCode, silverSpent: result.silverSpent },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (craftingError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/crafting/equipment/:instanceId/enhance', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await craftingService.enhance(master.id, String(req.params.instanceId)));
+    } catch (error) {
+      if (craftingError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/crafting/fuse', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await craftingService.fuse(master.id, String(req.body?.templateCode ?? ''), req.body?.starLevel));
+    } catch (error) {
+      if (craftingError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-11 (P1): base shop and mailbox ---

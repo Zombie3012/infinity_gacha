@@ -10,6 +10,7 @@ VALUES
   ('IRON', 'Quặng sắt', 'Nguyên liệu chế tạo tại Xưởng Rèn.', 'IRON', 'MATERIAL', 300, 30, '{}', true, 70),
   ('DIVINE_TEAR', 'Thần Lệ', 'Vật phẩm hồi sinh Hero Limited/Special.', 'DIVINE_TEAR', 'CONSUMABLE', 5000, 1, '{}', true, 80),
   ('MOON_CAKE', 'Bánh Trăng', 'Món ăn đặc biệt, chỉ bán vào cuối tuần.', 'MOON_CAKE', 'CONSUMABLE', 900, 2, '{0,6}', true, 90)
+  ,('ENHANCEMENT_STONE', 'Đá Tăng Cường', 'Đá dùng để nâng cấp trang bị tại Xưởng Rèn.', 'ENHANCEMENT_STONE', 'MATERIAL', 400, 20, '{}', true, 85)
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,

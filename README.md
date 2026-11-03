@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P1 Domain 10 (crafting) is implemented: recipe-based equipment crafting with rolled substats, enhancement by stones and Silver, and three-into-one fusion that raises star rarity by 30% per star.
 - Phase P1 Domain 11 (shop & mailbox) is implemented: a rotating Silver shop with per-item daily limits, plus system/operator mail whose Silver and item attachments are claimed into the wallet in one transaction.
 - Phase P1 Domain 03 (personality) is implemented: four deterministic traits per Hero, a loyalty score with DEVOTED/NORMAL/DANGER states that scales combat stats and can refuse dispatch, favourite meals, and a Hero-to-Hero affinity graph with a COMRADE resonance bonus.
 - Phase P1 Domain 04 (medical) is implemented: battle injuries with temporary ATK/DEF penalties, a Medical Facility with bed capacity and accelerated treatment, emergency healing with MEDICINE, and Divine Grace resurrection with a progressive 30-day cost cycle.
@@ -249,3 +250,13 @@ Signed: DeepSeek Harness, project assistant
 - Seeded nine shop entries including MEDICINE, DIVINE_TEAR and raw materials, closing the supply gap left by the survival and medical domains.
 - Verified live: the daily limit sold 3 of a 5-unit request and flagged `ERR_SHOP_DAILY_LIMIT_EXCEEDED`, weekend-only MOON_CAKE was refused mid-week, mail claiming added 5,000 Silver and 2 FOOD, and an expired message was purged on read.
 - `npm run verify` green — 102/102 server tests (11 new shop rules), 11/11 shared tests.
+
+## Update - 2026-11-04 09:02:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Completed P1 Domain 10 (Crafting): 4 functions — recipe validation, crafting with deterministic substat rolls, enhancement by ENHANCEMENT_STONE + Silver, and three-into-one star fusion.
+- New table `crafting_recipes` and equipment instance columns `star_level`, `enhance_level`, `stat_multiplier`, `substats` (migration `0028_wild_maddog.sql`), plus a **Xưởng** screen in the web client.
+- Combat equipment bonuses now scale with fusion/enhancement and add rolled substats.
+- Fixed a stacking bug found by live testing: enhancing a fused item used to replace its star multiplier instead of compounding it; covered by a regression test.
+- Verified: `npm run verify` green — 116/116 server tests (13 new crafting rules), 11/11 shared tests.
