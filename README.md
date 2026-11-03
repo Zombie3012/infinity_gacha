@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P1 Domain 01 (accounts) is implemented: provider identity linking (Google/Apple, HMAC-simulated hand-off) and single-use recovery tokens that rotate the password and revoke sessions.
 - Phase P1 Domain 12 (quests) is implemented: main/side quests with explicit acceptance, daily quests rotating at 00:00 UTC+7, weekly quests rolling on Thursday, and lifetime achievements that pay Gems.
 - Phase P1 Domain 10 (crafting) is implemented: recipe-based equipment crafting with rolled substats, enhancement by stones and Silver, and three-into-one fusion that raises star rarity by 30% per star.
 - Phase P1 Domain 11 (shop & mailbox) is implemented: a rotating Silver shop with per-item daily limits, plus system/operator mail whose Silver and item attachments are claimed into the wallet in one transaction.
@@ -271,3 +272,13 @@ Signed: DeepSeek Harness, project assistant
 - Gameplay hooks now feed the quest engine from combat victories, crafting, shop purchases and resource harvesting.
 - Verified live: crafting twice completed the accepted side quest and the daily craft quest, claiming paid 2,000 Silver, a dungeon victory completed the main floor-clear quest and the daily win quest, and the hero-count achievement tracked 3/10.
 - `npm run verify` green — 125/125 server tests (9 new quest rules), 11/11 shared tests.
+
+## Update - 2026-11-04 10:07:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Completed P1 Domain 01 (Account Linking & Recovery): 2 functions — HMAC-verified Google/Apple identity linking with duplicate protection, and 24-hour single-use recovery tokens that rotate the password and revoke sessions.
+- New tables `account_external_identities` and `account_recovery_tokens` (migration `0030_ordinary_storm.sql`), `LINK_PROVIDER_SECRET` added to the example environment, plus a **Tài khoản** screen in the web client.
+- **Phase P1 is now complete: 93/93 functions across 8 domains and 19 modules**, tracked in `P1_PROGRESS_CHECKLIST.md`.
+- Verified live: a tampered provider token was rejected, a valid link was stored, a second account was refused with `ERR_AUTH_EXTERNAL_ID_ALREADY_LINKED`, recovery rotated the password, and replaying the used token failed.
+- `npm run verify` green — 134/134 server tests (9 new account rules), 11/11 shared tests.

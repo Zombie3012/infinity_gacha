@@ -111,3 +111,7 @@
 .quest-action{display:flex;justify-content:flex-end}
 .quest-action .secondary-button{height:28px;padding:0 10px;font-size:9px}
 @media(max-width:900px){.quest-row{grid-template-columns:1fr 1fr}}
+/* --- DM-01 account --- */
+.recovery-box{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding:12px 14px;border:1px dashed rgba(154,126,239,.4);border-radius:8px;background:rgba(154,126,239,.08)}
+.recovery-box code{font-family:ui-monospace,Menlo,monospace;font-size:14px;letter-spacing:2px;color:#d9cff7}
+.recovery-box small{font-size:9px;color:#98a2b8}

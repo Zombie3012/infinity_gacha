@@ -6,6 +6,8 @@
 - Method: one domain at a time, end to end (schema → service → routes → client → tests → migration), matching the P0 delivery style.
 
 ## Progress Summary
+
+**All 93 P1 functions across 8 domains / 19 modules are implemented.**
 - Domain 08 (Base, Construction & Production): Done — 4 modules, 18 functions.
 - Domain 09 (Hero Survival: Hunger, Fatigue, Food): Done — 3 modules, 16 functions.
 - Domain 04 (Injury, Medical Facility, Treatment & Resurrection): Done — 3 modules, 17 functions.
@@ -13,7 +15,7 @@
 - Domain 11 (Shop & Mailbox): Done — 2 modules, 12 functions.
 - Domain 10 (Crafting & Enhancement): Done — 1 module, 4 functions.
 - Domain 12 (Quests & Achievements): Done — 3 modules, 14 functions.
-- Domain 01 (Account Linking & Recovery): Not started.
+- Domain 01 (Account Linking & Recovery): Done — 1 module, 2 functions.
 
 ---
 
@@ -194,6 +196,15 @@
 - `UPGRADE_BUILDING` objectives exist in the model but no seeded quest uses them (building completion is settled lazily).
 - Quest rewards are granted directly rather than via mailbox; audit entries are written for claims.
 
+## Domain 01: Account Linking and Recovery
+
+- [x] FUN-01-01-004 Account Linking — `POST /api/account/identities` verifies an HMAC hand-off (`providerSignature`), links a Google/Apple identity to the account, refuses duplicates with `ERR_AUTH_EXTERNAL_ID_ALREADY_LINKED` (scenario 1.2) and exposes `GET /api/account/identities` / `DELETE /api/account/identities/:provider`.
+- [x] FUN-01-01-005 Account Recovery — `POST /api/account/recovery-token` issues a single-use token valid for 24 hours (stored as a SHA-256 hash only); `POST /api/auth/recover` rotates the password, revokes every existing session and refuses reused/expired tokens.
+
+### Prototype boundary (explicit)
+- There is no real OAuth client: a provider hand-off is simulated with `HMAC-SHA256(LINK_PROVIDER_SECRET, "provider:providerUserId")`. `LINK_PROVIDER_SECRET` must be configured or linking returns `LINK_PROVIDER_NOT_CONFIGURED`.
+- Identity data lives in `account_external_identities` (migration `0030_ordinary_storm.sql`); recovery tokens live in `account_recovery_tokens`.
+
 ---
 
 ## Open items carried forward
@@ -204,7 +215,7 @@
 
 ---
 
-Verification: `npm run verify` passes; 125/125 server tests (13 DM-08, 15 DM-09, 11 DM-04, 10 DM-03, 11 DM-11, 13 DM-10, 9 DM-12 rule tests) and 11/11 shared tests. Migrations `0023` … `0029_kind_wendigo.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
+Verification: `npm run verify` passes; 134/134 server tests (13 DM-08, 15 DM-09, 11 DM-04, 10 DM-03, 11 DM-11, 13 DM-10, 9 DM-12, 9 DM-01 rule tests) and 11/11 shared tests. Migrations `0023` … `0030_ordinary_storm.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
 
-Updated: 2026-11-04 09:30:00 UTC+7
+Updated: 2026-11-04 10:05:00 UTC+7
 Signed: DeepSeek Harness, project assistant

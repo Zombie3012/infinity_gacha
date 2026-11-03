@@ -721,3 +721,28 @@ export const achievementProgress = pgTable('achievement_progress', {
 }, (table) => [
   primaryKey({ columns: [table.masterId, table.achievementCode] }),
 ]);
+
+// --- Domain 01 (P1): account linking and recovery ---
+
+export const accountExternalIdentities = pgTable('account_external_identities', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  accountId: varchar('account_id', { length: 36 }).notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  provider: varchar('provider', { length: 20 }).notNull(),
+  providerUserId: varchar('provider_user_id', { length: 128 }).notNull(),
+  linkedAt: timestamp('linked_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('uq_external_identity').on(table.provider, table.providerUserId),
+  uniqueIndex('uq_account_provider').on(table.accountId, table.provider),
+  check('account_external_identity_provider_check', sql`${table.provider} IN ('GOOGLE', 'APPLE')`),
+]);
+
+export const accountRecoveryTokens = pgTable('account_recovery_tokens', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  accountId: varchar('account_id', { length: 36 }).notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  tokenHash: varchar('token_hash', { length: 64 }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_recovery_tokens_account').on(table.accountId, table.expiresAt),
+]);

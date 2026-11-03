@@ -31,6 +31,7 @@ import { ShopError, shopService } from './modules/shop/shop.service.js';
 import { MailboxError, mailboxService } from './modules/shop/mailbox.service.js';
 import { CraftingError, craftingService } from './modules/crafting/crafting.service.js';
 import { QuestError, questService } from './modules/quest/quest.service.js';
+import { AccountError, accountLinkService } from './modules/auth/account.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -647,6 +648,76 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-01 (P1): account linking and recovery ---
+
+  const accountError = (res: Response, error: unknown): boolean => {
+    if (error instanceof AccountError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/account/identities', requireAccount, asyncRoute(async (req, res) => {
+    return res.json(await accountLinkService.identities(req.accountId!));
+  }));
+
+  app.post('/api/account/identities', requireAccount, asyncRoute(async (req, res) => {
+    try {
+      const linked = await accountLinkService.link(req.accountId!, req.body?.provider, req.body?.providerUserId, req.body?.providerToken);
+      void auditService.record({
+        actorId: req.accountId!, actorType: 'PLAYER', action: 'ACCOUNT_LINKED', entityType: 'ACCOUNT',
+        entityId: req.accountId!, diff: { provider: linked.provider },
+      });
+      return res.status(201).json(linked);
+    } catch (error) {
+      if (accountError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.delete('/api/account/identities/:provider', requireAccount, asyncRoute(async (req, res) => {
+    try {
+      const result = await accountLinkService.unlink(req.accountId!, String(req.params.provider));
+      void auditService.record({
+        actorId: req.accountId!, actorType: 'PLAYER', action: 'ACCOUNT_UNLINKED', entityType: 'ACCOUNT',
+        entityId: req.accountId!, diff: { provider: result.unlinked },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (accountError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/account/recovery-token', requireAccount, asyncRoute(async (req, res) => {
+    try {
+      const issued = await accountLinkService.issueRecoveryToken(req.accountId!);
+      void auditService.record({
+        actorId: req.accountId!, actorType: 'PLAYER', action: 'RECOVERY_TOKEN_ISSUED', entityType: 'ACCOUNT',
+        entityId: req.accountId!, diff: {},
+      });
+      return res.status(201).json(issued);
+    } catch (error) {
+      if (accountError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/auth/recover', asyncRoute(async (req, res) => {
+    try {
+      const result = await accountLinkService.recover(req.body?.username, req.body?.recoveryToken, req.body?.newPassword);
+      void auditService.record({
+        actorId: String(req.body?.username ?? ''), actorType: 'PLAYER', action: 'ACCOUNT_RECOVERED',
+        entityType: 'ACCOUNT', entityId: String(req.body?.username ?? ''), diff: {},
+      });
+      return res.json(result);
+    } catch (error) {
+      if (accountError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-12 (P1): quests and achievements ---
