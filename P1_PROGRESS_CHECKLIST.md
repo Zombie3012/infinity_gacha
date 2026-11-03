@@ -12,7 +12,8 @@
 - Domain 03 (Hero Personality, Loyalty & Relationship): Done — 2 modules, 10 functions.
 - Domain 11 (Shop & Mailbox): Done — 2 modules, 12 functions.
 - Domain 10 (Crafting & Enhancement): Done — 1 module, 4 functions.
-- Domain 12 / 01 (Quests & Achievements, Account Linking): Not started.
+- Domain 12 (Quests & Achievements): Done — 3 modules, 14 functions.
+- Domain 01 (Account Linking & Recovery): Not started.
 
 ---
 
@@ -166,6 +167,33 @@
 ### Bug found and fixed during verification
 - Enhancement used to overwrite the fusion multiplier (a 2-star ×1.3 item dropped to ×1.1 on the first enhance). Multipliers now stack: `effectiveMultiplier(star, level) = 1.3^(star-1) × (1 + 0.1 × level)`, covered by a regression test.
 
+## Domain 12: Quests and Achievements
+
+### MOD-12-01 Main & Side Quests (5 functions)
+- [x] FUN-12-01-001 View Quest List — `GET /api/quests` groups main, accepted side, available side, daily, weekly and achievements.
+- [x] FUN-12-01-002 Accept Quest — `POST /api/quests/:code/accept` activates a side quest (main quests start automatically).
+- [x] FUN-12-01-003 Track Quest Progress — gameplay events (victory, floor clear, craft, shop spend, harvest) advance matching objectives through `recordEvent`.
+- [x] FUN-12-01-004 Complete Quest — progress is capped at the target and flips the row to COMPLETED exactly once.
+- [x] FUN-12-01-005 Claim Quest Reward — `POST /api/quests/:code/claim` grants Silver/Gems/items in one transaction and marks the row CLAIMED.
+
+### MOD-12-02 Daily & Weekly Quests (5 functions)
+- [x] FUN-12-02-001 Generate Daily Quest — five daily quests are selected deterministically from the pool per UTC+7 date.
+- [x] FUN-12-02-002 Generate Weekly Quest — active weekly quests are instantiated for the current Thursday-based week key.
+- [x] FUN-12-02-003 Reset Daily Quest — the period key changes at 00:00 UTC+7, so a new day yields a fresh set with zero progress.
+- [x] FUN-12-02-004 Reset Weekly Quest — weekly keys roll at Thursday 00:00 UTC+7, matching the scroll exchange cap.
+- [x] FUN-12-02-005 Track Mission Progress — the same event pipeline updates daily and weekly counters.
+
+### MOD-12-03 Achievements (4 functions)
+- [x] FUN-12-03-001 View Achievement — `GET /api/quests` returns the codex with category, metric, threshold and progress.
+- [x] FUN-12-03-002 Track Achievement — lifetime counters increment on matching events; OWN_HEROES is evaluated from the current roster.
+- [x] FUN-12-03-003 Unlock Achievement — crossing the threshold stamps `unlocked_at` once.
+- [x] FUN-12-03-004 Claim Achievement Reward — `POST /api/achievements/:code/claim` pays Gems/Silver/items and records a claimed timestamp.
+
+### Prototype notes
+- Master EXP rewards are not paid yet: the reward payload supports Silver, Gems and items, and the EXP pipeline still lives in the battle reward code.
+- `UPGRADE_BUILDING` objectives exist in the model but no seeded quest uses them (building completion is settled lazily).
+- Quest rewards are granted directly rather than via mailbox; audit entries are written for claims.
+
 ---
 
 ## Open items carried forward
@@ -176,7 +204,7 @@
 
 ---
 
-Verification: `npm run verify` passes; 116/116 server tests (13 DM-08, 15 DM-09, 11 DM-04, 10 DM-03, 11 DM-11, 13 DM-10 rule tests) and 11/11 shared tests. Migrations `0023` … `0028_wild_maddog.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
+Verification: `npm run verify` passes; 125/125 server tests (13 DM-08, 15 DM-09, 11 DM-04, 10 DM-03, 11 DM-11, 13 DM-10, 9 DM-12 rule tests) and 11/11 shared tests. Migrations `0023` … `0029_kind_wendigo.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
 
-Updated: 2026-11-04 09:00:00 UTC+7
+Updated: 2026-11-04 09:30:00 UTC+7
 Signed: DeepSeek Harness, project assistant

@@ -1,4 +1,4 @@
-import { integer, pgTable, timestamp, unique, uniqueIndex, index, varchar, bigint, doublePrecision, boolean, jsonb, check, text } from 'drizzle-orm/pg-core';
+import { integer, pgTable, timestamp, unique, uniqueIndex, index, varchar, bigint, doublePrecision, boolean, jsonb, check, text, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const accounts = pgTable('accounts', {
@@ -666,3 +666,58 @@ export const craftingRecipes = pgTable('crafting_recipes', {
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// --- Domain 12 (P1): quests and achievements ---
+
+export const questDefinitions = pgTable('quest_definitions', {
+  code: varchar('code', { length: 50 }).primaryKey(),
+  name: varchar('name', { length: 150 }).notNull(),
+  description: text('description').notNull(),
+  questType: varchar('quest_type', { length: 10 }).notNull(),
+  objectiveType: varchar('objective_type', { length: 30 }).notNull(),
+  targetCount: integer('target_count').default(1).notNull(),
+  reward: jsonb('reward').$type<{ silver?: number; gems?: number; items?: { itemId: string; quantity: number }[] }>().notNull().default({}),
+  requiredLevel: integer('required_level').default(1).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  sortOrder: integer('sort_order').default(100).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check('quest_definitions_type_check', sql`${table.questType} IN ('MAIN', 'SIDE', 'DAILY', 'WEEKLY')`),
+]);
+
+export const questProgress = pgTable('quest_progress', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  questCode: varchar('quest_code', { length: 50 }).notNull().references(() => questDefinitions.code, { onDelete: 'cascade' }),
+  periodKey: varchar('period_key', { length: 20 }).default('').notNull(),
+  progress: integer('progress').default(0).notNull(),
+  status: varchar('status', { length: 20 }).default('ACTIVE').notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+}, (table) => [
+  uniqueIndex('uq_quest_progress').on(table.masterId, table.questCode, table.periodKey),
+  check('quest_progress_status_check', sql`${table.status} IN ('ACTIVE', 'COMPLETED', 'CLAIMED')`),
+]);
+
+export const achievements = pgTable('achievements', {
+  code: varchar('code', { length: 50 }).primaryKey(),
+  name: varchar('name', { length: 150 }).notNull(),
+  description: text('description').notNull(),
+  category: varchar('category', { length: 20 }).notNull(),
+  metric: varchar('metric', { length: 30 }).notNull(),
+  threshold: integer('threshold').notNull(),
+  reward: jsonb('reward').$type<{ silver?: number; gems?: number; items?: { itemId: string; quantity: number }[] }>().notNull().default({}),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const achievementProgress = pgTable('achievement_progress', {
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  achievementCode: varchar('achievement_code', { length: 50 }).notNull().references(() => achievements.code, { onDelete: 'cascade' }),
+  progress: integer('progress').default(0).notNull(),
+  unlockedAt: timestamp('unlocked_at', { withTimezone: true }),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+}, (table) => [
+  primaryKey({ columns: [table.masterId, table.achievementCode] }),
+]);

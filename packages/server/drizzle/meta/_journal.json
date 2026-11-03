@@ -204,6 +204,13 @@
       "when": 1793749695658,
       "tag": "0028_wild_maddog",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793749960122,
+      "tag": "0029_kind_wendigo",
+      "breakpoints": true
     }
   ]
 }

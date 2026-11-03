@@ -30,6 +30,7 @@ import { PersonalityError, personalityService } from './modules/personality/pers
 import { ShopError, shopService } from './modules/shop/shop.service.js';
 import { MailboxError, mailboxService } from './modules/shop/mailbox.service.js';
 import { CraftingError, craftingService } from './modules/crafting/crafting.service.js';
+import { QuestError, questService } from './modules/quest/quest.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -648,6 +649,65 @@ export function createApp() {
     return res.json(updated);
   }));
 
+  // --- DM-12 (P1): quests and achievements ---
+
+  const questError = (res: Response, error: unknown): boolean => {
+    if (error instanceof QuestError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/quests', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await questService.overview(master.id));
+  }));
+
+  app.post('/api/quests/:code/accept', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.status(201).json(await questService.accept(master.id, String(req.params.code)));
+    } catch (error) {
+      if (questError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/quests/:code/claim', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await questService.claimQuest(master.id, String(req.params.code));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'QUEST_REWARD_CLAIMED', entityType: 'QUEST',
+        entityId: String(req.params.code), diff: { reward: result.reward },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (questError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/achievements/:code/claim', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await questService.claimAchievement(master.id, String(req.params.code));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'ACHIEVEMENT_CLAIMED', entityType: 'ACHIEVEMENT',
+        entityId: String(req.params.code), diff: { reward: result.reward },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (questError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
   // --- DM-10 (P1): crafting, enhancement and fusion ---
 
   const craftingError = (res: Response, error: unknown): boolean => {
@@ -669,6 +729,7 @@ export function createApp() {
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
       const result = await craftingService.craft(master.id, String(req.body?.recipeCode ?? ''));
+      void questService.recordEvent(master.id, 'CRAFT_ITEM', 1).catch(error => console.error('[quest] craft progress failed', error));
       void auditService.record({
         actorId: master.id, actorType: 'MASTER', action: 'ITEM_CRAFTED', entityType: 'EQUIPMENT',
         entityId: result.instanceId, diff: { recipeCode: String(req.body?.recipeCode ?? ''), templateCode: result.templateCode, silverSpent: result.silverSpent },
@@ -738,6 +799,7 @@ export function createApp() {
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
       const result = await shopService.purchase(master.id, String(req.body?.itemCode ?? ''), req.body?.quantity);
+      void questService.recordEvent(master.id, 'SPEND_SILVER', result.silverSpent).catch(error => console.error('[quest] spend progress failed', error));
       void auditService.record({
         actorId: master.id, actorType: 'MASTER', action: 'SHOP_PURCHASE', entityType: 'SHOP_ITEM',
         entityId: String(req.body?.itemCode ?? ''), diff: { purchased: result.purchased, silverSpent: result.silverSpent },
@@ -1093,6 +1155,9 @@ export function createApp() {
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
       const result = await buildingService.collect(master.id, String(req.params.buildingId));
+      if (result.collected > 0) {
+        void questService.recordEvent(master.id, 'COLLECT_RESOURCE', result.collected).catch(error => console.error('[quest] collect progress failed', error));
+      }
       if (result.collected > 0) {
         void auditService.record({
           actorId: master.id, actorType: 'MASTER', action: AUDIT_ACTIONS.RESOURCE_COLLECTED,
@@ -1609,13 +1674,21 @@ export function createApp() {
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
     try {
       const session = await combatService.advance(master.id, String(req.params.sessionId));
-      const report = session.battleReport as { result?: string; survivors?: { id: string; hp: number; maxHp: number }[] } | null;
+      const report = session.battleReport as { result?: string; floor?: number; nextFloor?: number; survivors?: { id: string; hp: number; maxHp: number }[] } | null;
       if (report?.survivors?.length) {
         await medicalService.recordBattleInjuries(master.id, report.survivors).catch(error => console.error('[medical] injury recording failed', error));
       }
       if (report?.result === 'VICTORY' && report.survivors?.length) {
         await personalityService.recordVictory(master.id, report.survivors.map(row => row.id))
           .catch(error => console.error('[personality] loyalty update failed', error));
+      }
+      if (report?.result === 'VICTORY') {
+        await questService.recordEvent(master.id, 'WIN_BATTLE', 1)
+          .catch(error => console.error('[quest] victory progress failed', error));
+        if ((report.nextFloor ?? 0) > (report.floor ?? 0)) {
+          await questService.recordEvent(master.id, 'CLEAR_FLOOR', 1)
+            .catch(error => console.error('[quest] floor progress failed', error));
+        }
       }
       return res.json(session);
     }

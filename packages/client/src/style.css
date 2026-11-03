@@ -101,3 +101,13 @@
 @media(max-width:1200px){.shop-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:860px){.shop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.shop-grid{grid-template-columns:1fr}}
+/* --- DM-12 quests --- */
+.quest-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.quest-row{display:grid;grid-template-columns:1.6fr 1.1fr 1fr auto;gap:14px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:rgba(20,26,39,.6)}
+.quest-main b{display:block;font-size:11px;color:#e9ecf6}
+.quest-main small{font-size:9px;color:#8d92a6}
+.quest-meter span{display:block;font-size:9px;color:#98a2b8;margin-bottom:4px}
+.quest-reward{font-size:9px;color:#e8c77b}
+.quest-action{display:flex;justify-content:flex-end}
+.quest-action .secondary-button{height:28px;padding:0 10px;font-size:9px}
+@media(max-width:900px){.quest-row{grid-template-columns:1fr 1fr}}
