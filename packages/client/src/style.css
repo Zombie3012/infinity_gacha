@@ -87,3 +87,17 @@
 .personality-card footer{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9px;color:#8d92a6;margin-top:4px}
 @media(max-width:1100px){.personality-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.personality-grid{grid-template-columns:1fr}}
+/* --- DM-11 shop & mailbox --- */
+.shop-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
+.shop-card{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--line);border-radius:9px;background:linear-gradient(140deg,rgba(20,26,39,.96),rgba(16,21,31,.94))}
+.shop-card header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.shop-card header b{font-size:12px;color:#e9ecf6}
+.shop-card p{margin:0;font-size:9px;color:#8d92a6;line-height:1.5;min-height:30px}
+.shop-price{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.shop-price span{font-size:12px;color:#e8c77b;font-weight:600}
+.shop-price small{font-size:8px;color:#8d92a6}
+.shop-actions{display:flex;gap:8px;margin-top:auto}
+.shop-actions .primary-button,.shop-actions .secondary-button{height:29px;padding:0 11px;font-size:9px}
+@media(max-width:1200px){.shop-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:860px){.shop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.shop-grid{grid-template-columns:1fr}}

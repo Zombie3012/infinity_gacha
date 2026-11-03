@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P1 Domain 11 (shop & mailbox) is implemented: a rotating Silver shop with per-item daily limits, plus system/operator mail whose Silver and item attachments are claimed into the wallet in one transaction.
 - Phase P1 Domain 03 (personality) is implemented: four deterministic traits per Hero, a loyalty score with DEVOTED/NORMAL/DANGER states that scales combat stats and can refuse dispatch, favourite meals, and a Hero-to-Hero affinity graph with a COMRADE resonance bonus.
 - Phase P1 Domain 04 (medical) is implemented: battle injuries with temporary ATK/DEF penalties, a Medical Facility with bed capacity and accelerated treatment, emergency healing with MEDICINE, and Divine Grace resurrection with a progressive 30-day cost cycle.
 - Phase P1 Domain 09 (survival) is implemented: per-Hero hunger and fatigue that drift with time and activity, feeding and resting, a kitchen that converts raw food into meals, and dungeon rations charged before a run.
@@ -238,3 +239,13 @@ Signed: DeepSeek Harness, project assistant
 - New tables `hero_personality_traits` and `hero_relationships` (migration `0026_icy_elektra.sql`) plus a **Tính cách** screen in the web client.
 - Verified live: favourite meal 50 → 55 loyalty, a DANGER Hero at 0.65 multiplier refused dispatch once (expected 30% roll), then fought at reduced ATK; the victory raised loyalty and gave both survivors +2 affinity.
 - `npm run verify` green — 91/91 server tests (10 new personality rules), 11/11 shared tests.
+
+## Update - 2026-11-04 08:37:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Completed P1 Domain 11 (Shop & Mailbox): 12 functions across MOD-11-02..04 — rotating catalogue, per-Master daily purchase limits, admin catalogue management, operator mail with attachments, claiming and 30-day expiry purge.
+- New tables `shop_items`, `shop_purchase_limits`, `mailbox_messages` (migration `0027_cooing_carlie_cooper.sql`) plus a **Cửa hàng** screen with shop and mailbox tabs.
+- Seeded nine shop entries including MEDICINE, DIVINE_TEAR and raw materials, closing the supply gap left by the survival and medical domains.
+- Verified live: the daily limit sold 3 of a 5-unit request and flagged `ERR_SHOP_DAILY_LIMIT_EXCEEDED`, weekend-only MOON_CAKE was refused mid-week, mail claiming added 5,000 Silver and 2 FOOD, and an expired message was purged on read.
+- `npm run verify` green — 102/102 server tests (11 new shop rules), 11/11 shared tests.

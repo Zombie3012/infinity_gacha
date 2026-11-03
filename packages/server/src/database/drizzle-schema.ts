@@ -607,3 +607,44 @@ export const heroRelationships = pgTable('hero_relationships', {
   uniqueIndex('uq_hero_relationship_pair').on(table.heroAId, table.heroBId),
   index('idx_hero_relationship_master').on(table.masterId),
 ]);
+
+// --- Domain 11 (P1): base shop and mailbox ---
+
+export const shopItems = pgTable('shop_items', {
+  code: varchar('code', { length: 50 }).primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description').notNull(),
+  itemId: varchar('item_id', { length: 50 }).notNull(),
+  category: varchar('category', { length: 20 }).notNull(),
+  priceSilver: bigint('price_silver', { mode: 'bigint' }).notNull(),
+  dailyLimit: integer('daily_limit').default(0).notNull(),
+  rotationDays: integer('rotation_days').array().notNull().default(sql`'{}'::integer[]`),
+  isActive: boolean('is_active').default(true).notNull(),
+  sortOrder: integer('sort_order').default(100).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const shopPurchaseLimits = pgTable('shop_purchase_limits', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  shopItemCode: varchar('shop_item_code', { length: 50 }).notNull(),
+  periodKey: varchar('period_key', { length: 20 }).notNull(),
+  quantity: integer('quantity').default(0).notNull(),
+}, (table) => [
+  uniqueIndex('uq_shop_purchase_limit').on(table.masterId, table.shopItemCode, table.periodKey),
+]);
+
+export const mailboxMessages = pgTable('mailbox_messages', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  sender: varchar('sender', { length: 30 }).notNull().default('SYSTEM'),
+  subject: varchar('subject', { length: 150 }).notNull(),
+  body: text('body').notNull(),
+  attachments: jsonb('attachments').$type<{ silver?: number; items?: { itemId: string; quantity: number }[] }>().notNull().default({}),
+  isClaimed: boolean('is_claimed').default(false).notNull(),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_mailbox_master').on(table.masterId, table.isClaimed, table.expiresAt),
+]);

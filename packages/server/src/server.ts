@@ -27,6 +27,8 @@ import { BaseError, buildingService } from './modules/base/building.service.js';
 import { SurvivalError, survivalService } from './modules/survival/survival.service.js';
 import { MedicalError, medicalService } from './modules/medical/medical.service.js';
 import { PersonalityError, personalityService } from './modules/personality/personality.service.js';
+import { ShopError, shopService } from './modules/shop/shop.service.js';
+import { MailboxError, mailboxService } from './modules/shop/mailbox.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -643,6 +645,114 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-11 (P1): base shop and mailbox ---
+
+  const shopError = (res: Response, error: unknown): boolean => {
+    if (error instanceof ShopError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    if (error instanceof MailboxError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/shop', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await shopService.catalog(master.id));
+  }));
+
+  app.get('/api/shop/items/:code', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await shopService.detail(master.id, String(req.params.code)));
+    } catch (error) {
+      if (shopError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/shop/purchase', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await shopService.purchase(master.id, String(req.body?.itemCode ?? ''), req.body?.quantity);
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'SHOP_PURCHASE', entityType: 'SHOP_ITEM',
+        entityId: String(req.body?.itemCode ?? ''), diff: { purchased: result.purchased, silverSpent: result.silverSpent },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (shopError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/mailbox', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await mailboxService.list(master.id));
+  }));
+
+  app.post('/api/mailbox/:messageId/claim', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await mailboxService.claim(master.id, String(req.params.messageId)));
+    } catch (error) {
+      if (shopError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/admin/shop', requireAdminApiKey, asyncRoute(async (_req, res) => {
+    return res.json(await shopService.listAll());
+  }));
+
+  app.post('/api/admin/shop/items', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.status(201).json(await shopService.upsertItem(req.body as never));
+    } catch (error) {
+      if (shopError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/mailbox/send', requireAdminApiKey, asyncRoute(async (req, res) => {
+    const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+    const requestedMasterId = typeof req.body?.masterId === 'string' ? req.body.masterId : '';
+    let masterId = requestedMasterId;
+    if (!masterId && username) {
+      const [found] = await db.select({ id: masters.id }).from(masters)
+        .innerJoin(accounts, eq(accounts.id, masters.accountId))
+        .where(eq(accounts.username, username)).limit(1);
+      masterId = found?.id ?? '';
+    }
+    if (!masterId) return res.status(404).json({ error: 'Không xác định được Master nhận thư.' });
+    try {
+      const sent = await mailboxService.send({
+        masterId,
+        sender: typeof req.body?.sender === 'string' ? req.body.sender : 'OPERATOR',
+        subject: String(req.body?.subject ?? ''),
+        body: String(req.body?.body ?? ''),
+        attachments: req.body?.attachments,
+        lifetimeDays: Number(req.body?.lifetimeDays) || undefined,
+      });
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'MAIL_SENT', entityType: 'MAIL',
+        entityId: sent.id, diff: { masterId, subject: sent.subject, attachments: sent.attachments },
+      });
+      return res.status(201).json(sent);
+    } catch (error) {
+      if (shopError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-03 (P1): personality, loyalty and relationships ---

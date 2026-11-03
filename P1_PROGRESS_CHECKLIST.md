@@ -10,7 +10,8 @@
 - Domain 09 (Hero Survival: Hunger, Fatigue, Food): Done — 3 modules, 16 functions.
 - Domain 04 (Injury, Medical Facility, Treatment & Resurrection): Done — 3 modules, 17 functions.
 - Domain 03 (Hero Personality, Loyalty & Relationship): Done — 2 modules, 10 functions.
-- Domain 10 / 11 / 12 / 01 (Crafting, Shop & Mailbox, Quests & Achievements, Account Linking): Not started.
+- Domain 11 (Shop & Mailbox): Done — 2 modules, 12 functions.
+- Domain 10 / 12 / 01 (Crafting, Quests & Achievements, Account Linking): Not started.
 
 ---
 
@@ -128,6 +129,27 @@
 - Disobedience uses a real random roll (`Math.random`), so the outcome is not deterministic by design.
 - Relationship affinity is currently driven by victories only; shared dormitory/production events are not wired yet.
 
+## Domain 11: Base Shop and Mailbox
+
+### MOD-11-02 Shop Management (6 functions)
+- [x] FUN-11-02-001 View Shop — `GET /api/shop` returns today's active catalogue with per-item limits and the rotated-out list.
+- [x] FUN-11-02-002 View Product Detail — `GET /api/shop/items/:code` exposes price, availability and remaining daily units.
+- [x] FUN-11-02-003 Purchase Item — `POST /api/shop/purchase` deducts Silver and deposits the item atomically; errors are `ERR_SHOP_INSUFFICIENT_FUNDS` / `ERR_SHOP_ITEM_ROTATED_OUT`.
+- [x] FUN-11-02-004 Shop Rotation — items carry `rotation_days` (0–6 in UTC+7); items outside their weekdays are hidden and unbuyable.
+- [x] FUN-11-02-005 Configure Shop — `GET /api/admin/shop` and `POST /api/admin/shop/items` (admin key) upsert the catalogue, prices and limits.
+- [x] FUN-11-02-006 Purchase Limit — per-Master daily counters keyed by UTC+7 date; scenario 13.1 is honoured (buy the remainder, return `ERR_SHOP_DAILY_LIMIT_EXCEEDED` for the excess).
+
+### MOD-11-04 Rewards & Mailbox (6 functions)
+- [x] FUN-11-04-001 Generate Reward — operator payloads accept Silver and item attachments (`normalizeAttachments`).
+- [x] FUN-11-04-002 Distribute Reward — claiming credits `masters.silver_coins` and `master_items` in one transaction.
+- [x] FUN-11-04-003 Send Mail — `POST /api/admin/mailbox/send` addresses a Master directly or by username, with audit logging.
+- [x] FUN-11-04-004 View Mailbox — `GET /api/mailbox` splits unclaimed/claimed mail and reports how many expired messages were purged.
+- [x] FUN-11-04-005 Claim Mail Attachment — `POST /api/mailbox/:id/claim` is idempotent-safe (`Thư đã được nhận`) and refuses expired mail (`ERR_MAIL_EXPIRED`).
+- [x] FUN-11-04-006 Mail Expiration — expiry is 30 days by default (configurable per send) and expired mail is purged lazily on read.
+
+### Seed data added
+- `shop_items.sample.sql`: nine entries, including MEDICINE, DIVINE_TEAR, FOOD and raw materials that the previous domains were missing, plus MOON_CAKE rotating on weekends only.
+
 ---
 
 ## Open items carried forward
@@ -138,7 +160,7 @@
 
 ---
 
-Verification: `npm run verify` passes; 91/91 server tests (13 DM-08 + 15 DM-09 + 11 DM-04 + 10 DM-03 rule tests) and 11/11 shared tests. Migrations `0023_slimy_dagger.sql`, `0024_normal_magneto.sql`, `0025_unknown_miracleman.sql` and `0026_icy_elektra.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
+Verification: `npm run verify` passes; 102/102 server tests (13 DM-08, 15 DM-09, 11 DM-04, 10 DM-03, 11 DM-11 rule tests) and 11/11 shared tests. Migrations `0023` … `0027_cooing_carlie_cooper.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
 
-Updated: 2026-11-04 08:10:00 UTC+7
+Updated: 2026-11-04 08:35:00 UTC+7
 Signed: DeepSeek Harness, project assistant
