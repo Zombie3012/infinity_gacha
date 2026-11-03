@@ -25,6 +25,7 @@ import { monitoringService } from './modules/admin/monitoring.service.js';
 import { rateGuard, securityAlertService } from './modules/admin/security.service.js';
 import { BaseError, buildingService } from './modules/base/building.service.js';
 import { SurvivalError, survivalService } from './modules/survival/survival.service.js';
+import { MedicalError, medicalService } from './modules/medical/medical.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -641,6 +642,67 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-04 (P1): injuries, medical facility and resurrection ---
+
+  const medicalError = (res: Response, error: unknown): boolean => {
+    if (error instanceof MedicalError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/medical', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await medicalService.overview(master.id));
+  }));
+
+  app.get('/api/medical/history', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await medicalService.history(master.id));
+  }));
+
+  app.post('/api/medical/treatments', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.status(201).json(await medicalService.admit(master.id, String(req.body?.heroId ?? '')));
+    } catch (error) {
+      if (medicalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/medical/emergency', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await medicalService.emergency(master.id, String(req.body?.heroId ?? '')));
+    } catch (error) {
+      if (medicalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/medical/resurrect', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await medicalService.resurrect(master.id, String(req.body?.heroId ?? ''));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'HERO_RESURRECTED',
+        entityType: 'HERO', entityId: result.heroId,
+        diff: { tearsUsed: result.tearsUsed, silverSpent: result.silverSpent, cycleCount: result.cycleCount, cycleReset: result.cycleReset },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (medicalError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-09 (P1): hero survival (hunger, fatigue, food) ---
@@ -1338,7 +1400,14 @@ export function createApp() {
   app.post('/api/combat/session/:sessionId/advance', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
-    try { return res.json(await combatService.advance(master.id, String(req.params.sessionId))); }
+    try {
+      const session = await combatService.advance(master.id, String(req.params.sessionId));
+      const report = session.battleReport as { survivors?: { id: string; hp: number; maxHp: number }[] } | null;
+      if (report?.survivors?.length) {
+        await medicalService.recordBattleInjuries(master.id, report.survivors).catch(error => console.error('[medical] injury recording failed', error));
+      }
+      return res.json(session);
+    }
     catch (error) {
       if (error instanceof CombatSessionError) return res.status(error.statusCode).json({ error: error.message });
       throw error;

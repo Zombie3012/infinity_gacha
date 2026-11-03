@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P1 Domain 04 (medical) is implemented: battle injuries with temporary ATK/DEF penalties, a Medical Facility with bed capacity and accelerated treatment, emergency healing with MEDICINE, and Divine Grace resurrection with a progressive 30-day cost cycle.
 - Phase P1 Domain 09 (survival) is implemented: per-Hero hunger and fatigue that drift with time and activity, feeding and resting, a kitchen that converts raw food into meals, and dungeon rations charged before a run.
 - Phase P1 has started with Domain 08 (base, construction and production): zone expansion, a seven-entry building catalogue, offline resource accrual with capacity pause, harvesting into the Master inventory, and Hero work assignments that raise output.
 - Redis is part of the selected architecture for later caching, distributed locks, leaderboards, and timers; it is not connected in this step.
@@ -217,3 +218,13 @@ Signed: DeepSeek Harness, project assistant
 - Cross-domain integration: harvesting a building now counts as a labour shift (+5 hunger, +8 fatigue, auto-eject at 100 fatigue), combat applies the starvation ATK/DEF penalty and charges 10 rations per Hero, and new Masters start with 100 FOOD.
 - New table `hero_survival_states` (migration `0024_normal_magneto.sql`) and a **Sinh tồn** screen in the web client.
 - Verified: `npm run verify` green — 70/70 server tests (15 new survival rules), 11/11 shared tests.
+
+## Update - 2026-11-04 07:47:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Completed P1 Domain 04 (Medical): 17 functions across MOD-04-02..04 — injury classification after battles, temporary stat penalties, facility beds and treatment timers, emergency treatment, and Divine Grace resurrection with a progressive 30-day cycle.
+- New tables `hero_injuries`, `hero_treatments`, `hero_resurrection_cycles` (migration `0025_unknown_miracleman.sql`) and a **Y tế** screen in the web client.
+- Combat now stacks the injury multiplier with the starvation penalty, and finished battles record injuries for survivors below 50% HP.
+- Fixed a `BigInt` serialization bug that made treatment responses fail with HTTP 500.
+- Verified: `npm run verify` green — 81/81 server tests (11 new medical rules), 11/11 shared tests.

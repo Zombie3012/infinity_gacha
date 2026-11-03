@@ -535,3 +535,46 @@ export const heroSurvivalStates = pgTable('hero_survival_states', {
   check('hero_survival_hunger_range', sql`${table.hungerScore} >= 0 AND ${table.hungerScore} <= 100`),
   check('hero_survival_fatigue_range', sql`${table.fatigueScore} >= 0 AND ${table.fatigueScore} <= 100`),
 ]);
+
+// --- Domain 04 (P1): injuries, medical treatments and resurrection ---
+
+export const heroInjuries = pgTable('hero_injuries', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  heroId: varchar('hero_id', { length: 36 }).notNull().references(() => heroes.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  severity: varchar('severity', { length: 20 }).notNull(),
+  penaltyPercent: integer('penalty_percent').notNull(),
+  naturalHealAt: timestamp('natural_heal_at', { withTimezone: true }).notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  healedAt: timestamp('healed_at', { withTimezone: true }),
+  healedBy: varchar('healed_by', { length: 20 }),
+}, (table) => [
+  index('idx_hero_injuries_hero').on(table.heroId, table.healedAt),
+  check('hero_injuries_severity_check', sql`${table.severity} IN ('MINOR', 'MODERATE', 'SEVERE')`),
+]);
+
+export const heroTreatments = pgTable('hero_treatments', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  heroId: varchar('hero_id', { length: 36 }).notNull().references(() => heroes.id, { onDelete: 'cascade' }),
+  buildingId: varchar('building_id', { length: 36 }).references(() => baseBuildings.id, { onDelete: 'set null' }),
+  injuryId: varchar('injury_id', { length: 36 }).references(() => heroInjuries.id, { onDelete: 'set null' }),
+  treatmentType: varchar('treatment_type', { length: 20 }).notNull(),
+  status: varchar('status', { length: 20 }).default('ACTIVE').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  finishesAt: timestamp('finishes_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  costSilver: bigint('cost_silver', { mode: 'bigint' }).default(sql`0`).notNull(),
+  costItems: jsonb('cost_items').$type<Record<string, number>>().notNull().default({}),
+}, (table) => [
+  index('idx_hero_treatments_status').on(table.status, table.finishesAt),
+  check('hero_treatments_type_check', sql`${table.treatmentType} IN ('INJURY', 'RESURRECTION')`),
+  check('hero_treatments_status_check', sql`${table.status} IN ('ACTIVE', 'COMPLETED', 'CANCELLED')`),
+]);
+
+export const heroResurrectionCycles = pgTable('hero_resurrection_cycles', {
+  heroId: varchar('hero_id', { length: 36 }).primaryKey().references(() => heroes.id, { onDelete: 'cascade' }),
+  cycleStartAt: timestamp('cycle_start_at', { withTimezone: true }).defaultNow().notNull(),
+  resurrectionCount: integer('resurrection_count').default(0).notNull(),
+  lastResurrectedAt: timestamp('last_resurrected_at', { withTimezone: true }),
+});

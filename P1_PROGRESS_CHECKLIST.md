@@ -8,7 +8,7 @@
 ## Progress Summary
 - Domain 08 (Base, Construction & Production): Done — 4 modules, 18 functions.
 - Domain 09 (Hero Survival: Hunger, Fatigue, Food): Done — 3 modules, 16 functions.
-- Domain 04 (Injury, Medical Facility, Treatment & Resurrection): Not started.
+- Domain 04 (Injury, Medical Facility, Treatment & Resurrection): Done — 3 modules, 17 functions.
 - Domain 03 (Hero Personality, Loyalty & Relationship): Not started.
 - Domain 10 / 11 / 12 / 01 (Crafting, Shop & Mailbox, Quests & Achievements, Account Linking): Not started.
 
@@ -77,6 +77,36 @@
 - Combat applies the starvation multiplier to ATK/DEF and charges travel rations before the session is created.
 - New Masters receive 100 FOOD as a starter kit so the first dungeon run is possible.
 
+## Domain 04: Injury, Medical Facility and Resurrection
+
+### MOD-04-02 Injury & Temporary Stat Reduction (5 functions)
+- [x] FUN-04-02-001 Classify Injury — HP below 15% after a battle ⇒ SEVERE, below 30% ⇒ MODERATE, below 50% ⇒ MINOR; recorded in `hero_injuries` when the battle report is generated.
+- [x] FUN-04-02-002 Apply Temporary Reduction — SEVERE −25%, MODERATE −15%, MINOR −10% ATK/DEF (and speed stays untouched); the multiplier is applied together with the starvation penalty when combat starts.
+- [x] FUN-04-02-003 Calculate Recovery Duration — natural timers 2h / 1h / 30m; a Medical Facility shortens treatment by 20% per level above 1 but never below 20% of the base.
+- [x] FUN-04-02-004 View Injury Status — `GET /api/medical` lists severity, penalty, natural heal deadline and the resulting combat multiplier.
+- [x] FUN-04-02-005 Restore Hero Stats — injuries resolve lazily when the timer expires (or on treatment/emergency) and the Hero returns to HEALTHY once no injury remains.
+
+### MOD-04-03 Medical Facility (4 functions)
+- [x] FUN-04-03-001 Construct Medical Facility — uses the DM-08 building flow with the `MEDICAL` type (world level 2, 3,000 Silver).
+- [x] FUN-04-03-002 Upgrade Medical Facility — DM-08 upgrade path applies (level, durability, timer).
+- [x] FUN-04-03-003 Manage Treatment Capacity — bed capacity is `level + 1` (level 1 ⇒ 2 beds, matching scenario 5.1); admission is refused with `Viện Y Tế đã hết giường` when full.
+- [x] FUN-04-03-004 View Medical Facility — overview exposes level, beds used/free and active treatments.
+
+### MOD-04-04 Treatment & Resurrection (8 functions)
+- [x] FUN-04-04-001 Start Treatment — `POST /api/medical/treatments` admits an injured Hero into a free bed and starts the accelerated timer.
+- [x] FUN-04-04-002 Treatment Queue — active treatments and bed occupancy are part of the overview payload.
+- [x] FUN-04-04-003 Emergency Treatment — `POST /api/medical/emergency` consumes 1 MEDICINE and heals instantly (scenario 5.2).
+- [x] FUN-04-04-004 Discharge — completed treatments mark the injury healed and restore the Hero to HEALTHY.
+- [x] FUN-04-04-005 Resurrection Request — `POST /api/medical/resurrect` opens the Divine Grace flow for DISABLED Heroes.
+- [x] FUN-04-04-006 Resurrection Validation — Normal Heroes are rejected with `ERR_RESURRECTION_NORMAL_PERMADEATH` (scenario 6.3); cost is `n` DIVINE_TEAR + 10,000 × n Silver with a 30-day cycle reset (scenarios 6.1/6.2).
+- [x] FUN-04-04-007 Process Resurrection — revives to 50% HP, applies +25 fatigue, increments the cycle counter and charges materials/Silver atomically.
+- [x] FUN-04-04-008 Recovery History — every treatment and resurrection is stored in `hero_treatments` with cost, and resurrect actions also write an audit entry.
+
+### Prototype tuning recorded here
+- Injury thresholds follow the acceptance scenarios; healing is lazy (no background worker).
+- MEDICINE and DIVINE_TEAR are plain `master_items` entries; the prototype seeds neither — operators grant them.
+- Injuries are recorded from the `advance` route only; the dungeon retreat path does not create injuries yet.
+
 ---
 
 ## Open items carried forward
@@ -87,7 +117,7 @@
 
 ---
 
-Verification: `npm run verify` passes; 70/70 server tests (13 DM-08 + 15 DM-09 rule tests) and 11/11 shared tests. Migrations `0023_slimy_dagger.sql` and `0024_normal_magneto.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
+Verification: `npm run verify` passes; 81/81 server tests (13 DM-08 + 15 DM-09 + 11 DM-04 rule tests) and 11/11 shared tests. Migrations `0023_slimy_dagger.sql`, `0024_normal_magneto.sql` and `0025_unknown_miracleman.sql` applied. Live smoke confirmed: cooking 5 meals from 10 raw food, feeding a Hero (−20 hunger), 4 hours of rest taking fatigue 80 → 20, dungeon rations quoting 40 for 4 Heroes, combat refused with `ERR_INSUFFICIENT_RATIONS` then allowed after stocking 100 FOOD, a starving Hero entering battle at the 60% multiplier, and 30 rations deducted on dispatch.
 
-Updated: 2026-11-04 07:20:00 UTC+7
+Updated: 2026-11-04 07:45:00 UTC+7
 Signed: DeepSeek Harness, project assistant

@@ -9,6 +9,7 @@ import {
 import { TacticalBuffManager } from './tactical-buff.manager.js';
 import { getBattleRules } from '../admin/runtime-rules.js';
 import { survivalService } from '../survival/survival.service.js';
+import { medicalService } from '../medical/medical.service.js';
 
 export class CombatSessionError extends Error {
   constructor(message: string, public readonly statusCode: number) { super(message); }
@@ -217,6 +218,7 @@ export class CombatSessionService {
     // DM-09 gate: overexhausted/starving Heroes cannot deploy and travel rations are charged.
     const readiness = await survivalService.battleReadiness(masterId, options?.partyId);
     if (!readiness.ok) throw new CombatSessionError(readiness.message, readiness.statusCode);
+    const injuryPenalties = await medicalService.penaltyByHero(masterId);
 
     return db.transaction(async tx => {
       const [master] = await tx.select().from(masters).where(eq(masters.id, masterId)).for('update').limit(1);
@@ -319,8 +321,8 @@ export class CombatSessionService {
             element: template?.element ?? 'EARTH', origin: hero.category,
             hp: Math.min(hero.hp + Math.floor((hero.maxHp + bonus.hp) * floorEvent.healPercent), hero.maxHp + bonus.hp), maxHp: hero.maxHp + bonus.hp,
             shield: 0,
-            attack: Math.max(1, Math.floor((hero.attack + bonus.attack) * (readiness.multipliers[hero.id] ?? 1))),
-            defense: Math.max(0, Math.floor((hero.defense + bonus.defense) * (readiness.multipliers[hero.id] ?? 1))),
+            attack: Math.max(1, Math.floor((hero.attack + bonus.attack) * (readiness.multipliers[hero.id] ?? 1) * (injuryPenalties[hero.id] ?? 1))),
+            defense: Math.max(0, Math.floor((hero.defense + bonus.defense) * (readiness.multipliers[hero.id] ?? 1) * (injuryPenalties[hero.id] ?? 1))),
             speed: hero.speed + bonus.speed,
             critRate, critDamage: 0.5, skills: skillsByHeroId.get(hero.id) ?? [], statusEffects: [],
           };
