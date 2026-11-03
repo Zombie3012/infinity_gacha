@@ -1,0 +1,94 @@
+﻿Domain ID,Module ID,Module,Function ID,Function,Business Description,Actor,Priority,Dependency,Proposed Phase,Scope Basis / Status
+DM-01,MOD-01-01,Account Management,FUN-01-01-004,Account Linking – Liên kết tài khoản,"Liên kết tài khoản với nền tảng hỗ trợ; P1, ngoài phạm vi P0.",ACT-01,Should,FUN-01-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-01,MOD-01-01,Account Management,FUN-01-01-005,Account Recovery – Khôi phục tài khoản,"Hỗ trợ khôi phục quyền truy cập tài khoản; P1, ngoài phạm vi P0.","ACT-01, ACT-03, ACT-08",Should,FUN-01-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-04,Hero Personality & Loyalty,FUN-03-04-001,Assign Personality – Gán tính cách,Xác định Personality Trait cho Hero,ACT-03,Must,FUN-03-01-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-04,Hero Personality & Loyalty,FUN-03-04-002,View Personality – Xem tính cách,Hiển thị tính cách Hero,ACT-01,Should,FUN-03-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-04,Hero Personality & Loyalty,FUN-03-04-003,Personality Behavior – Xử lý hành vi,Điều chỉnh hành vi dựa trên tính cách,ACT-03,Must,FUN-03-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-04,Hero Personality & Loyalty,FUN-03-04-004,Calculate Loyalty – Tính Loyalty,Cập nhật mức trung thành,ACT-03,Must,FUN-03-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-04,Hero Personality & Loyalty,FUN-03-04-005,View Loyalty – Xem Loyalty,Hiển thị độ trung thành,ACT-01,Should,FUN-03-04-004,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-04,Hero Personality & Loyalty,FUN-03-04-006,Loyalty State Change – Thay đổi trạng thái,Chuyển trạng thái theo ngưỡng Loyalty,ACT-03,Must,FUN-03-04-004,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-05,Hero Relationship,FUN-03-05-001,Initialize Relationship – Khởi tạo quan hệ,Tạo quan hệ giữa các Hero,ACT-03,Should,FUN-03-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-05,Hero Relationship,FUN-03-05-002,Update Relationship – Cập nhật quan hệ,Thay đổi mức quan hệ qua tương tác,ACT-03,Should,FUN-03-05-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-05,Hero Relationship,FUN-03-05-003,View Relationship – Xem quan hệ,Hiển thị quan hệ giữa các Hero,ACT-01,Could,FUN-03-05-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-03,MOD-03-05,Hero Relationship,FUN-03-05-004,Relationship Event – Sự kiện quan hệ,Kích hoạt sự kiện dựa trên quan hệ,ACT-03,Could,FUN-03-05-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-02,Injury & Temporary Stat Reduction,FUN-04-02-001,Classify Injury – Phân loại thương tích,Xác định mức độ thương tích,ACT-03,Must,FUN-04-01-004,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-02,Injury & Temporary Stat Reduction,FUN-04-02-002,Apply Temporary Reduction – Giảm chỉ số tạm thời,Áp dụng giảm chỉ số sau hồi phục,ACT-03,Must,FUN-04-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-02,Injury & Temporary Stat Reduction,FUN-04-02-003,Calculate Recovery Duration – Tính thời gian phục hồi,Tính thời gian theo sức mạnh và tình trạng Hero,ACT-03,Must,FUN-04-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-02,Injury & Temporary Stat Reduction,FUN-04-02-004,View Injury Status – Xem thương tích,Hiển thị tình trạng và thời gian còn lại,ACT-01,Should,FUN-04-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-02,Injury & Temporary Stat Reduction,FUN-04-02-005,Restore Hero Stats – Khôi phục chỉ số,Phục hồi chỉ số theo thời gian hoặc điều trị,ACT-03,Must,"FUN-04-02-002, FUN-04-02-003",P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-03,Medical Facility,FUN-04-03-001,Construct Medical Facility – Xây cơ sở chữa trị,Xây dựng công trình chữa trị,"ACT-01, ACT-03",Must,FUN-08-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-03,Medical Facility,FUN-04-03-002,Upgrade Medical Facility – Nâng cấp cơ sở,Tăng năng lực chữa trị,"ACT-01, ACT-03",Should,FUN-04-03-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-03,Medical Facility,FUN-04-03-003,Manage Treatment Capacity – Quản lý công suất,Quản lý số Hero được chữa trị đồng thời,ACT-03,Must,FUN-04-03-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-03,Medical Facility,FUN-04-03-004,View Medical Facility – Xem cơ sở,Hiển thị trạng thái cơ sở,ACT-01,Should,FUN-04-03-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-04,Treatment & Resurrection,FUN-04-04-001,Start Treatment – Bắt đầu chữa trị,Đưa Hero vào điều trị,"ACT-01, ACT-03",Must,FUN-04-03-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-04,Treatment & Resurrection,FUN-04-04-002,Treatment Queue – Hàng đợi điều trị,Quản lý thứ tự điều trị,ACT-03,Must,FUN-04-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-04,Treatment & Resurrection,FUN-04-04-003,Emergency Treatment – Chữa trị khẩn cấp,Sử dụng tài nguyên để rút ngắn thời gian,"ACT-01, ACT-03",Should,FUN-04-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-04,Treatment & Resurrection,FUN-04-04-004,Treatment Completion – Hoàn tất chữa trị,Xác nhận Hero hoàn thành điều trị,ACT-03,Must,FUN-04-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-04,Treatment & Resurrection,FUN-04-04-005,Resurrection Request – Yêu cầu hồi sinh,Gửi yêu cầu hồi sinh Hero đủ điều kiện,ACT-01,Should,FUN-04-01-004,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-04,Treatment & Resurrection,FUN-04-04-006,Resurrection Validation – Kiểm tra hồi sinh,Kiểm tra điều kiện và tài nguyên,ACT-03,Must,FUN-04-04-005,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-04,Treatment & Resurrection,FUN-04-04-007,Process Resurrection – Xử lý hồi sinh,Thực hiện hồi sinh Hero,ACT-03,Must,FUN-04-04-006,P1 - Draft,Explicitly marked P1 in MBFL
+DM-04,MOD-04-04,Treatment & Resurrection,FUN-04-04-008,Recovery History – Lịch sử phục hồi,Lưu lịch sử chữa trị và hồi sinh,ACT-03,Should,"FUN-04-04-004, FUN-04-04-007",P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-01,Private World Management,FUN-08-01-002,View World Overview – Xem tổng quan thế giới,Hiển thị tình trạng thế giới,ACT-01,Must,FUN-08-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-01,Private World Management,FUN-08-01-003,Manage World Progress – Quản lý tiến trình,Theo dõi cấp độ và phát triển thế giới,ACT-03,Should,FUN-08-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-01,Private World Management,FUN-08-01-004,Expand Private World – Mở rộng thế giới,Mở rộng khu vực xây dựng,"ACT-01, ACT-03",Should,FUN-08-01-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-01,Private World Management,FUN-08-01-005,World Feature Unlock – Mở khóa tính năng thế giới,Mở tính năng theo điều kiện,ACT-03,Must,FUN-08-01-003,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-02,Building Management,FUN-08-02-001,Construct Building – Xây dựng công trình,Xây dựng công trình mới,"ACT-01, ACT-03",Must,FUN-08-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-02,Building Management,FUN-08-02-002,Upgrade Building – Nâng cấp công trình,Nâng cấp cấp độ công trình,"ACT-01, ACT-03",Must,FUN-08-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-02,Building Management,FUN-08-02-003,Unlock Building – Mở khóa công trình,Mở khóa công trình theo điều kiện,ACT-03,Must,FUN-08-01-005,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-02,Building Management,FUN-08-02-004,Demolish Building – Phá dỡ công trình,Phá dỡ công trình,ACT-01,Could,FUN-08-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-02,Building Management,FUN-08-02-005,View Building Status – Xem trạng thái,Hiển thị cấp độ và hoạt động,ACT-01,Must,FUN-08-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-03,Resource Production,FUN-08-03-001,Configure Production – Cấu hình sản xuất,Thiết lập hoạt động sản xuất,ACT-01,Must,FUN-08-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-03,Resource Production,FUN-08-03-002,Generate Resources – Sản xuất tài nguyên,Tạo tài nguyên theo chu kỳ,ACT-03,Must,FUN-08-03-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-03,Resource Production,FUN-08-03-003,Collect Resources – Thu thập tài nguyên,Thu thập tài nguyên đã sản xuất,ACT-01,Must,FUN-08-03-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-03,Resource Production,FUN-08-03-004,Upgrade Production – Nâng cấp sản xuất,Tăng hiệu suất sản xuất,ACT-01,Should,FUN-08-03-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-03,Resource Production,FUN-08-03-005,Manage Production Capacity – Quản lý công suất,Quản lý giới hạn lưu trữ,ACT-03,Should,FUN-08-03-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-04,Hero Assignment to Buildings,FUN-08-04-001,Assign Hero to Building – Phân công Hero,Giao Hero làm việc tại công trình,ACT-01,Should,FUN-08-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-04,Hero Assignment to Buildings,FUN-08-04-002,Remove Hero from Building – Thu hồi Hero,Gỡ Hero khỏi công trình,ACT-01,Should,FUN-08-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-04,Hero Assignment to Buildings,FUN-08-04-003,Calculate Work Efficiency – Tính hiệu suất,Tính hiệu quả làm việc theo Hero,ACT-03,Should,FUN-08-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-08,MOD-08-04,Hero Assignment to Buildings,FUN-08-04-004,Monitor Hero Assignment – Theo dõi phân công,Kiểm tra trạng thái Hero được phân công,ACT-03,Should,FUN-08-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-01,Hunger Management,FUN-09-01-001,Track Hero Hunger – Theo dõi đói,Theo dõi chỉ số Hunger,ACT-03,Must,FUN-03-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-01,Hunger Management,FUN-09-01-002,Calculate Hunger Consumption – Tính tiêu hao,Tính mức tiêu hao theo thời gian và hoạt động,ACT-03,Must,FUN-09-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-01,Hunger Management,FUN-09-01-003,Distribute Food – Phân phối thức ăn,Phân phối thức ăn cho Hero,"ACT-01, ACT-03",Must,FUN-09-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-01,Hunger Management,FUN-09-01-004,Process Starvation – Xử lý thiếu đói,Xử lý khi Hunger đạt ngưỡng nguy hiểm,ACT-03,Must,FUN-09-01-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-01,Hunger Management,FUN-09-01-005,View Hunger Status – Xem trạng thái đói,Hiển thị Hunger của Hero,ACT-01,Should,FUN-09-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-02,Fatigue Management,FUN-09-02-001,Track Hero Fatigue – Theo dõi mệt mỏi,Theo dõi chỉ số Fatigue,ACT-03,Must,FUN-03-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-02,Fatigue Management,FUN-09-02-002,Calculate Fatigue Increase – Tính mức mệt mỏi,Tăng Fatigue theo hoạt động,ACT-03,Must,FUN-09-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-02,Fatigue Management,FUN-09-02-003,Start Hero Rest – Bắt đầu nghỉ ngơi,Đưa Hero vào trạng thái nghỉ,"ACT-01, ACT-03",Must,FUN-09-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-02,Fatigue Management,FUN-09-02-004,Process Fatigue Recovery – Phục hồi mệt mỏi,Giảm Fatigue theo thời gian,ACT-03,Must,FUN-09-02-003,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-02,Fatigue Management,FUN-09-02-005,View Fatigue Status – Xem trạng thái mệt mỏi,Hiển thị tình trạng Hero,ACT-01,Should,FUN-09-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-02,Fatigue Management,FUN-09-02-006,Prevent Overexertion – Ngăn quá sức,Áp dụng giới hạn hoạt động theo Fatigue,ACT-03,Should,FUN-09-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-03,Food Storage & Production,FUN-09-03-001,Manage Food Storage – Quản lý kho thức ăn,Quản lý lượng thức ăn hiện có,"ACT-01, ACT-03",Must,FUN-10-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-03,Food Storage & Production,FUN-09-03-002,Produce Food – Sản xuất thức ăn,Tạo thức ăn từ công trình,ACT-03,Should,FUN-08-03-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-03,Food Storage & Production,FUN-09-03-003,Consume Base Resources – Tiêu hao tại căn cứ,Tính tài nguyên tiêu hao tại căn cứ,ACT-03,Must,FUN-08-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-03,Food Storage & Production,FUN-09-03-004,Consume Dungeon Resources – Tiêu hao Dungeon,Tính tài nguyên sử dụng khi khám phá,ACT-03,Must,FUN-07-05-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-09,MOD-09-03,Food Storage & Production,FUN-09-03-005,Consume War Resources – Tiêu hao chiến tranh,Tính tài nguyên khi điều động quân đội,ACT-03,Should,FUN-13-05-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-10,MOD-10-03,Crafting & Enhancement,FUN-10-03-001,Craft Item – Chế tạo vật phẩm,Chế tạo theo công thức,"ACT-01, ACT-03",Could,FUN-10-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-10,MOD-10-03,Crafting & Enhancement,FUN-10-03-002,Upgrade Equipment – Nâng cấp trang bị,Tăng cấp trang bị,"ACT-01, ACT-03",Should,FUN-10-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-10,MOD-10-03,Crafting & Enhancement,FUN-10-03-003,Item Fusion – Hợp thành vật phẩm,Kết hợp nguyên liệu hoặc vật phẩm,"ACT-01, ACT-03",Could,FUN-10-03-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-10,MOD-10-03,Crafting & Enhancement,FUN-10-03-004,Material Requirement – Kiểm tra nguyên liệu,Kiểm tra điều kiện chế tạo,ACT-03,Should,FUN-10-03-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-02,Shop Management,FUN-11-02-001,View Shop – Xem cửa hàng,Hiển thị danh mục bán,ACT-01,Must,—,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-02,Shop Management,FUN-11-02-002,View Product Detail – Chi tiết sản phẩm,Hiển thị giá và điều kiện mua,ACT-01,Should,FUN-11-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-02,Shop Management,FUN-11-02-003,Purchase Item – Mua vật phẩm,Mua vật phẩm bằng tiền game,"ACT-01, ACT-03",Must,FUN-11-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-02,Shop Management,FUN-11-02-004,Shop Rotation – Luân phiên cửa hàng,Thay đổi danh mục theo lịch,"ACT-03, ACT-05",Should,FUN-11-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-02,Shop Management,FUN-11-02-005,Configure Shop – Cấu hình cửa hàng,Quản lý danh mục và giá,"ACT-04, ACT-05",Must,—,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-02,Shop Management,FUN-11-02-006,Purchase Limit – Giới hạn mua,Kiểm tra giới hạn mua,ACT-03,Should,FUN-11-02-003,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-04,Reward & Mailbox,FUN-11-04-001,Generate Reward – Tạo phần thưởng,Tạo phần thưởng theo điều kiện,ACT-03,Must,—,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-04,Reward & Mailbox,FUN-11-04-002,Distribute Reward – Phân phối thưởng,Cộng phần thưởng cho người chơi,ACT-03,Must,FUN-11-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-04,Reward & Mailbox,FUN-11-04-003,Send Mail – Gửi thư,Gửi thông báo hoặc phần thưởng qua thư,"ACT-03, ACT-05",Should,FUN-11-04-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-04,Reward & Mailbox,FUN-11-04-004,View Mailbox – Xem hộp thư,Hiển thị thư nhận được,ACT-01,Should,FUN-11-04-003,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-04,Reward & Mailbox,FUN-11-04-005,Claim Mail Attachment – Nhận đính kèm,Nhận phần thưởng từ thư,"ACT-01, ACT-03",Should,FUN-11-04-004,P1 - Draft,Explicitly marked P1 in MBFL
+DM-11,MOD-11-04,Reward & Mailbox,FUN-11-04-006,Mail Expiration – Hết hạn thư,Xử lý thư hết hạn,ACT-03,Could,FUN-11-04-003,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-01,Main & Side Quest,FUN-12-01-001,View Quest List – Danh sách nhiệm vụ,Hiển thị nhiệm vụ hiện có,ACT-01,Must,—,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-01,Main & Side Quest,FUN-12-01-002,Accept Quest – Nhận nhiệm vụ,Kích hoạt nhiệm vụ,"ACT-01, ACT-03",Should,FUN-12-01-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-01,Main & Side Quest,FUN-12-01-003,Track Quest Progress – Theo dõi tiến độ,Theo dõi tiến trình hoàn thành,ACT-03,Must,FUN-12-01-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-01,Main & Side Quest,FUN-12-01-004,Complete Quest – Hoàn thành nhiệm vụ,Xác nhận hoàn thành,ACT-03,Must,FUN-12-01-003,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-01,Main & Side Quest,FUN-12-01-005,Claim Quest Reward – Nhận thưởng,Nhận phần thưởng nhiệm vụ,"ACT-01, ACT-03",Must,FUN-12-01-004,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-02,Daily & Weekly Quest,FUN-12-02-001,Generate Daily Quest – Tạo nhiệm vụ ngày,Tạo nhiệm vụ hàng ngày,ACT-03,Should,—,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-02,Daily & Weekly Quest,FUN-12-02-002,Generate Weekly Quest – Tạo nhiệm vụ tuần,Tạo nhiệm vụ hàng tuần,ACT-03,Should,—,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-02,Daily & Weekly Quest,FUN-12-02-003,Reset Daily Quest – Làm mới nhiệm vụ ngày,Reset theo chu kỳ,ACT-03,Should,FUN-12-02-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-02,Daily & Weekly Quest,FUN-12-02-004,Reset Weekly Quest – Làm mới nhiệm vụ tuần,Reset theo chu kỳ,ACT-03,Should,FUN-12-02-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-02,Daily & Weekly Quest,FUN-12-02-005,Track Mission Progress – Theo dõi nhiệm vụ,Cập nhật tiến trình,ACT-03,Should,"FUN-12-02-001, FUN-12-02-002",P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-03,Achievement,FUN-12-03-001,View Achievement – Xem thành tựu,Hiển thị danh sách thành tựu,ACT-01,Should,—,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-03,Achievement,FUN-12-03-002,Track Achievement – Theo dõi thành tựu,Theo dõi điều kiện đạt,ACT-03,Should,FUN-12-03-001,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-03,Achievement,FUN-12-03-003,Unlock Achievement – Mở khóa thành tựu,Xác nhận thành tựu đạt được,ACT-03,Should,FUN-12-03-002,P1 - Draft,Explicitly marked P1 in MBFL
+DM-12,MOD-12-03,Achievement,FUN-12-03-004,Claim Achievement Reward – Nhận thưởng,Nhận phần thưởng thành tựu,"ACT-01, ACT-03",Should,FUN-12-03-003,P1 - Draft,Explicitly marked P1 in MBFL

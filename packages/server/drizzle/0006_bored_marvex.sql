@@ -1,0 +1,1 @@
+ALTER TABLE "combat_party_slots" ADD CONSTRAINT "ck_combat_party_slot_range" CHECK ("combat_party_slots"."slot_index" BETWEEN 0 AND 4);

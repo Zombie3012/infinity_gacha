@@ -1,0 +1,33 @@
+{
+  "name": "@infiniti-gacha/server",
+  "version": "0.1.0",
+  "description": "Infinite Gacha Game Server Engine & API",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "node --watch dist/server.js",
+    "test": "node --test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@infiniti-gacha/shared": "*",
+    "argon2": "^0.45.2",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "drizzle-orm": "^0.45.4",
+    "express": "^4.21.2",
+    "pg": "^8.23.1",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.1",
+    "@types/pg": "^8.23.1",
+    "@types/uuid": "^10.0.0",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^5.7.3"
+  }
+}

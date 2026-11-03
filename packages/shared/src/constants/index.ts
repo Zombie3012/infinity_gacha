@@ -1,0 +1,51 @@
+export const GAME_CONSTANTS = {
+  // Gacha System Constants
+  GACHA: {
+    BASE_FIVE_STAR_RATE: 0.004,       // 0.40%
+    BASE_HERO_TOTAL_RATE: 0.50,       // 50.00%
+    BASE_MATERIAL_TOTAL_RATE: 0.50,   // 50.00%
+    PITY_THRESHOLD_START: 60,         // Roll 61 begins polynomial escalation
+    PITY_GUARANTEE_ROLL: 70,          // Roll 70 is 100% guarantee
+    SINGLE_SUMMON_COST_SCROLLS: 1,
+    MULTI_SUMMON_COST_SCROLLS: 10,
+    SCROLL_EXCHANGE_COST_SILVER: 10000,
+    SCROLL_EXCHANGE_WEEKLY_CAP: 50,
+    WEEKLY_RESET_DAY: 4,              // Thursday
+    WEEKLY_RESET_HOUR: 0,             // 00:00 UTC+7
+    WEEKLY_RESET_TIMEZONE: 'Asia/Ho_Chi_Minh', // UTC+7
+  },
+
+  // Combat Constants
+  COMBAT: {
+    TACTICAL_BUFF_COOLDOWN_SECONDS: 15,
+    MAX_COMBAT_HEROES_PER_TEAM: 5,
+  },
+
+  // Survival Constants
+  SURVIVAL: {
+    MAX_HUNGER: 100,
+    MAX_FATIGUE: 100,
+    CRITICAL_THRESHOLD: 80,
+    DANGER_LOYALTY_THRESHOLD: 20,
+  },
+
+  // World & Marching Constants
+  WORLD: {
+    GRID_WIDTH: 1000,
+    GRID_HEIGHT: 1000,
+    BASE_TERRITORY_CAP: 10,
+    MAX_TERRITORY_CAP: 30,
+    BASE_MARCH_SECONDS_PER_TILE: 30,
+    ABANDON_COUNTDOWN_SECONDS: 600, // 10 minutes
+    SCOUT_SPEED_MULTIPLIER: 3.0,
+  },
+
+  // Alliance Constants
+  ALLIANCE: {
+    CREATE_FEE_GEMS: 5000,
+    CREATE_FEE_SILVER: 500000,
+    MIN_LEVEL_CREATE: 20,
+    LEAVE_COOLDOWN_SECONDS: 86400, // 24 hours
+    DEFAULT_MAX_MEMBERS: 30,
+  },
+} as const;

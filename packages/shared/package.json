@@ -1,0 +1,14 @@
+{
+  "name": "@infiniti-gacha/shared",
+  "version": "0.1.0",
+  "description": "Shared models, enums, formulas, and constants for Infinite Gacha",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

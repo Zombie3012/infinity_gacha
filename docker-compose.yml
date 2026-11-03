@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: infinite-gacha-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: infinite_gacha
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - infinite_gacha_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d infinite_gacha"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  infinite_gacha_pgdata:

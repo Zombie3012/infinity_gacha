@@ -1,0 +1,2 @@
+ALTER TABLE "combat_sessions" ADD COLUMN "party_id" varchar(36);--> statement-breakpoint
+ALTER TABLE "combat_sessions" ADD CONSTRAINT "combat_sessions_party_id_master_parties_id_fk" FOREIGN KEY ("party_id") REFERENCES "public"."master_parties"("id") ON DELETE set null ON UPDATE no action;

@@ -1,0 +1,38 @@
+﻿Phase,Domain ID,Domain Name,Module ID,Module Name,Function ID,Function Name,Description,Actor,Priority,Dependencies
+P3,DM-13,Multiplayer & World Conquest,MOD-13-01,Global World & Map Exploration,FUN-13-01-001,Unlock Global World – Mở khóa thế giới chung,Mở quyền tham gia Global World,ACT-03,Must,FUN-01-03-006
+P3,DM-13,Multiplayer & World Conquest,MOD-13-01,Global World & Map Exploration,FUN-13-01-002,View Global Map – Xem bản đồ chung,Hiển thị bản đồ thế giới,ACT-01,Must,FUN-13-01-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-01,Global World & Map Exploration,FUN-13-01-003,View Region – Xem khu vực,Hiển thị thông tin vùng lãnh thổ,ACT-01,Must,FUN-13-01-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-01,Global World & Map Exploration,FUN-13-01-004,Discover Region – Khám phá vùng,Mở thông tin khu vực mới,"ACT-01, ACT-03",Should,FUN-13-01-003
+P3,DM-13,Multiplayer & World Conquest,MOD-13-01,Global World & Map Exploration,FUN-13-01-005,Global World Progress – Tiến trình thế giới,Theo dõi tiến trình chinh phục,ACT-03,Should,FUN-13-01-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-02,Territory Control & Expansion,FUN-13-02-001,View Territory – Xem lãnh thổ,Hiển thị thông tin lãnh thổ,ACT-01,Must,FUN-13-01-003
+P3,DM-13,Multiplayer & World Conquest,MOD-13-02,Territory Control & Expansion,FUN-13-02-002,Claim Territory – Chiếm lãnh thổ,Chiếm lãnh thổ đủ điều kiện,"ACT-01, ACT-03",Must,FUN-13-02-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-02,Territory Control & Expansion,FUN-13-02-003,Upgrade Territory – Nâng cấp lãnh thổ,Phát triển lãnh thổ sở hữu,ACT-01,Should,FUN-13-02-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-02,Territory Control & Expansion,FUN-13-02-004,Abandon Territory – Bỏ lãnh thổ,Từ bỏ quyền sở hữu,ACT-01,Could,FUN-13-02-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-02,Territory Control & Expansion,FUN-13-02-005,Track Territory Ownership – Quản lý sở hữu,Theo dõi chủ sở hữu lãnh thổ,ACT-03,Must,FUN-13-02-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-03,Scouting & Intelligence,FUN-13-03-001,Scout Player – Trinh sát người chơi,Thu thập thông tin đối thủ,"ACT-01, ACT-03",Should,FUN-13-01-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-03,Scouting & Intelligence,FUN-13-03-002,Scout Territory – Trinh sát lãnh thổ,Thu thập thông tin vùng mục tiêu,"ACT-01, ACT-03",Should,FUN-13-02-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-03,Scouting & Intelligence,FUN-13-03-003,View Scouting Report – Xem báo cáo,Hiển thị thông tin trinh sát,ACT-01,Should,"FUN-13-03-001, FUN-13-03-002"
+P3,DM-13,Multiplayer & World Conquest,MOD-13-04,Army Management & Movement,FUN-13-04-001,Create Army – Tạo quân đội,Tạo đội quân điều động,ACT-01,Must,FUN-05-01-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-04,Army Management & Movement,FUN-13-04-002,Assign Hero to Army – Phân công Hero,Đưa Hero vào quân đội,ACT-01,Must,FUN-13-04-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-04,Army Management & Movement,FUN-13-04-003,Deploy Army – Điều động quân đội,Gửi quân đến vị trí mục tiêu,"ACT-01, ACT-03",Must,FUN-13-04-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-04,Army Management & Movement,FUN-13-04-004,Recall Army – Thu hồi quân đội,Gọi quân trở về,"ACT-01, ACT-03",Should,FUN-13-04-003
+P3,DM-13,Multiplayer & World Conquest,MOD-13-04,Army Management & Movement,FUN-13-04-005,Track Army Movement – Theo dõi di chuyển,Theo dõi hành trình quân đội,ACT-03,Must,FUN-13-04-003
+P3,DM-13,Multiplayer & World Conquest,MOD-13-05,PvP Combat & Territory Defense,FUN-13-05-001,Initiate Player Attack – Tấn công người chơi,Khởi tạo cuộc tấn công,"ACT-01, ACT-03",Must,FUN-13-04-003
+P3,DM-13,Multiplayer & World Conquest,MOD-13-05,PvP Combat & Territory Defense,FUN-13-05-002,Validate PvP Conditions – Kiểm tra điều kiện PvP,Kiểm tra điều kiện tấn công,ACT-03,Must,FUN-13-05-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-05,PvP Combat & Territory Defense,FUN-13-05-003,Execute PvP Battle – Thực hiện PvP,Chạy trận đấu tự động,ACT-03,Must,FUN-13-05-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-05,PvP Combat & Territory Defense,FUN-13-05-004,Process PvP Result – Xử lý kết quả PvP,Cập nhật thắng thua và thương vong,ACT-03,Must,FUN-13-05-003
+P3,DM-13,Multiplayer & World Conquest,MOD-13-05,PvP Combat & Territory Defense,FUN-13-05-005,Defend Territory – Phòng thủ lãnh thổ,Quản lý cơ chế phòng thủ,ACT-03,Must,FUN-13-02-005
+P3,DM-13,Multiplayer & World Conquest,MOD-13-05,PvP Combat & Territory Defense,FUN-13-05-006,PvP Protection – Bảo vệ người chơi,Áp dụng quy tắc bảo vệ và chống tấn công liên tục,ACT-03,Must,FUN-13-05-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-05,PvP Combat & Territory Defense,FUN-13-05-007,PvP Battle Report – Báo cáo PvP,Lưu lịch sử chiến đấu,"ACT-03, ACT-01",Should,FUN-13-05-004
+P3,DM-13,Multiplayer & World Conquest,MOD-13-06,Alliance System,FUN-13-06-001,Create Alliance – Tạo liên minh,Tạo liên minh,ACT-01,Should,FUN-13-01-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-06,Alliance System,FUN-13-06-002,Search Alliance – Tìm liên minh,Tìm liên minh,ACT-01,Should,FUN-13-06-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-06,Alliance System,FUN-13-06-003,Join Alliance – Gia nhập liên minh,Gửi yêu cầu gia nhập,ACT-01,Should,FUN-13-06-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-06,Alliance System,FUN-13-06-004,Leave Alliance – Rời liên minh,Rời khỏi liên minh,ACT-01,Should,FUN-13-06-003
+P3,DM-13,Multiplayer & World Conquest,MOD-13-06,Alliance System,FUN-13-06-005,Manage Alliance Member – Quản lý thành viên,Quản lý thành viên,ACT-01,Should,FUN-13-06-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-06,Alliance System,FUN-13-06-006,Alliance Communication – Giao tiếp liên minh,Giao tiếp giữa thành viên,ACT-01,Could,FUN-13-06-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-07,World War & Conquest,FUN-13-07-001,Declare War – Tuyên chiến,Khởi tạo chiến tranh,ACT-01,Could,FUN-13-06-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-07,World War & Conquest,FUN-13-07-002,Manage War Progress – Quản lý chiến tranh,Theo dõi trạng thái chiến tranh,ACT-03,Could,FUN-13-07-001
+P3,DM-13,Multiplayer & World Conquest,MOD-13-07,World War & Conquest,FUN-13-07-003,Territory War – Chiến tranh lãnh thổ,Tranh chấp lãnh thổ,"ACT-01, ACT-03",Could,FUN-13-05-003
+P3,DM-13,Multiplayer & World Conquest,MOD-13-07,World War & Conquest,FUN-13-07-004,Determine War Result – Kết quả chiến tranh,Xác định kết quả cuối cùng,ACT-03,Could,FUN-13-07-002
+P3,DM-13,Multiplayer & World Conquest,MOD-13-07,World War & Conquest,FUN-13-07-005,Distribute War Reward – Thưởng chiến tranh,Phân phối thưởng,ACT-03,Could,FUN-13-07-004
+P3,DM-13,Multiplayer & World Conquest,MOD-13-07,World War & Conquest,FUN-13-07-006,World Conquest Ranking – Xếp hạng chinh phục,Xếp hạng người chơi/liên minh,ACT-03,Could,FUN-13-07-004

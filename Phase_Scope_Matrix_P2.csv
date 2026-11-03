@@ -1,0 +1,41 @@
+﻿Domain ID,Module ID,Module,Function ID,Function,Business Description,Actor,Priority,Dependency,Proposed Phase,Scope Basis / Status
+DM-11,MOD-11-03,Payment & IAP,FUN-11-03-001,View Purchase Package – Xem gói mua,Hiển thị các gói thanh toán,ACT-01,Should,—,P2 - Draft,Explicitly marked P2 in MBFL
+DM-11,MOD-11-03,Payment & IAP,FUN-11-03-002,Initiate Payment – Khởi tạo thanh toán,Tạo yêu cầu thanh toán,"ACT-01, ACT-03",Should,FUN-11-03-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-11,MOD-11-03,Payment & IAP,FUN-11-03-003,Process Payment – Xử lý thanh toán,Gửi yêu cầu tới cổng thanh toán,"ACT-03, ACT-07",Should,FUN-11-03-002,P2 - Draft,Explicitly marked P2 in MBFL
+DM-11,MOD-11-03,Payment & IAP,FUN-11-03-004,Validate Payment – Xác minh thanh toán,Xác thực giao dịch thành công,"ACT-03, ACT-07",Must,FUN-11-03-003,P2 - Draft,Explicitly marked P2 in MBFL
+DM-11,MOD-11-03,Payment & IAP,FUN-11-03-005,Grant Purchase Reward – Cấp vật phẩm,Cấp gói vật phẩm đã mua,ACT-03,Must,FUN-11-03-004,P2 - Draft,Explicitly marked P2 in MBFL
+DM-11,MOD-11-03,Payment & IAP,FUN-11-03-006,Payment History – Lịch sử thanh toán,Tra cứu giao dịch,"ACT-01, ACT-03",Should,FUN-11-03-003,P2 - Draft,Explicitly marked P2 in MBFL
+DM-11,MOD-11-03,Payment & IAP,FUN-11-03-007,Refund Processing – Xử lý hoàn tiền,Xử lý giao dịch hoàn tiền,"ACT-03, ACT-07",Could,FUN-11-03-004,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-04,Event Management,FUN-12-04-001,Configure Event – Cấu hình sự kiện,Tạo sự kiện,"ACT-04, ACT-05",Should,—,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-04,Event Management,FUN-12-04-002,Schedule Event – Lên lịch sự kiện,Thiết lập thời gian,ACT-05,Should,FUN-12-04-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-04,Event Management,FUN-12-04-003,Activate Event – Kích hoạt sự kiện,Kích hoạt theo lịch,"ACT-03, ACT-05",Should,FUN-12-04-002,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-04,Event Management,FUN-12-04-004,View Event – Xem sự kiện,Hiển thị sự kiện,ACT-01,Should,FUN-12-04-003,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-04,Event Management,FUN-12-04-005,Event Mission – Nhiệm vụ sự kiện,Quản lý nhiệm vụ sự kiện,"ACT-03, ACT-05",Should,FUN-12-04-003,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-04,Event Management,FUN-12-04-006,Event Reward – Phần thưởng sự kiện,Cấp phần thưởng,ACT-03,Should,FUN-12-04-005,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-04,Event Management,FUN-12-04-007,Close Event – Kết thúc sự kiện,Kết thúc và xử lý sự kiện,"ACT-03, ACT-05",Should,FUN-12-04-003,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-05,Ranking & Leaderboard,FUN-12-05-001,Calculate Ranking – Tính xếp hạng,Tính thứ hạng theo tiêu chí,ACT-03,Should,FUN-13-01-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-05,Ranking & Leaderboard,FUN-12-05-002,View Leaderboard – Xem bảng xếp hạng,Hiển thị bảng xếp hạng,ACT-01,Should,FUN-12-05-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-12,MOD-12-05,Ranking & Leaderboard,FUN-12-05-003,Distribute Ranking Reward – Thưởng xếp hạng,Phân phối thưởng theo thứ hạng,ACT-03,Should,FUN-12-05-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-01,Player Administration,FUN-14-01-001,Search Player – Tìm người chơi,Tìm kiếm tài khoản,ACT-04,Must,FUN-01-01-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-01,Player Administration,FUN-14-01-002,View Player Data – Xem dữ liệu,Tra cứu thông tin người chơi,ACT-04,Must,FUN-14-01-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-01,Player Administration,FUN-14-01-003,Restrict Account – Hạn chế tài khoản,Áp dụng giới hạn tài khoản,ACT-04,Should,FUN-14-01-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-01,Player Administration,FUN-14-01-004,Restore Account – Khôi phục tài khoản,Khôi phục tài khoản đủ điều kiện,ACT-04,Should,FUN-14-01-003,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-01,Player Administration,FUN-14-01-005,Player Compensation – Bồi thường,Cấp bồi thường cho người chơi,"ACT-04, ACT-05",Should,FUN-14-01-002,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-02,Hero & World Master Configuration,FUN-14-02-001,Hero Template Configuration – Cấu hình Hero,Quản lý Hero Template,"ACT-04, ACT-06",Must,—,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-02,Hero & World Master Configuration,FUN-14-02-002,Hero Stats Configuration – Cấu hình chỉ số,Thiết lập chỉ số Hero,ACT-06,Must,FUN-14-02-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-02,Hero & World Master Configuration,FUN-14-02-003,Hero Skill Configuration – Cấu hình kỹ năng,Thiết lập kỹ năng Hero,ACT-06,Must,FUN-14-02-001,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-02,Hero & World Master Configuration,FUN-14-02-004,Monster Configuration – Cấu hình quái vật,Quản lý Monster Template,ACT-06,Must,—,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-02,Hero & World Master Configuration,FUN-14-02-005,Boss Configuration – Cấu hình Boss,Quản lý Boss,ACT-06,Must,FUN-14-02-004,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-02,Hero & World Master Configuration,FUN-14-02-006,Item Configuration – Cấu hình vật phẩm,Quản lý Item Template,"ACT-04, ACT-06",Must,—,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-04,Economy & Event Operational Configuration,FUN-14-04-001,Currency Configuration – Cấu hình tiền tệ,Quản lý loại tiền tệ,ACT-04,Must,DM-11,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-04,Economy & Event Operational Configuration,FUN-14-04-002,Shop Configuration – Cấu hình cửa hàng,Quản lý danh mục bán,ACT-05,Should,DM-11,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-04,Economy & Event Operational Configuration,FUN-14-04-003,Reward Configuration – Cấu hình thưởng,Quản lý phần thưởng,"ACT-04, ACT-06",Must,DM-11,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-04,Economy & Event Operational Configuration,FUN-14-04-004,Event Configuration – Cấu hình sự kiện,Quản lý nội dung sự kiện,ACT-05,Should,DM-12,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-04,Economy & Event Operational Configuration,FUN-14-04-005,Banner Configuration – Cấu hình banner,Quản lý banner triệu hồi,ACT-05,Must,DM-02,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-05,Game Analytics,FUN-14-05-001,Player Analytics – Phân tích người chơi,Theo dõi hành vi người chơi,"ACT-04, ACT-05",Should,DM-01,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-05,Game Analytics,FUN-14-05-002,Gacha Analytics – Phân tích Gacha,Theo dõi lượt triệu hồi và phân phối Hero,"ACT-04, ACT-05",Should,DM-02,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-05,Game Analytics,FUN-14-05-003,Economy Analytics – Phân tích kinh tế,Theo dõi dòng tiền và tài nguyên,"ACT-04, ACT-05",Should,DM-11,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-05,Game Analytics,FUN-14-05-004,Battle Analytics – Phân tích chiến đấu,Theo dõi tỷ lệ thắng thua và tử trận,"ACT-04, ACT-05",Should,DM-06,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-05,Game Analytics,FUN-14-05-005,Retention Analytics – Phân tích duy trì,Theo dõi khả năng giữ chân người chơi,"ACT-04, ACT-05",Could,DM-01,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-06,Customer Support,FUN-14-06-001,Support Ticket – Yêu cầu hỗ trợ,Tiếp nhận yêu cầu,"ACT-01, ACT-08",Should,—,P2 - Draft,Explicitly marked P2 in MBFL
+DM-14,MOD-14-06,Customer Support,FUN-14-06-002,Handle Support Request – Xử lý hỗ trợ,Xử lý yêu cầu người chơi,ACT-08,Should,FUN-14-06-001,P2 - Draft,Explicitly marked P2 in MBFL

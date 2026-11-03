@@ -1,0 +1,1 @@
+ALTER TABLE "accounts" ADD CONSTRAINT "accounts_status_check" CHECK ("accounts"."status" IN ('ACTIVE', 'SUSPENDED', 'BANNED'));

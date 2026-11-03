@@ -1,0 +1,345 @@
+﻿Function ID,Function Name,Module ID,Dependency Token,Tentative Full ID,Classification,Review Note
+FUN-01-01-001,Register Account – Đăng ký tài khoản,MOD-01-01,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-01-01-002,Login – Đăng nhập,MOD-01-01,FUN-01-01-001,,Full Function ID,Target exists
+FUN-01-01-003,Logout – Đăng xuất,MOD-01-01,FUN-01-01-002,,Full Function ID,Target exists
+FUN-01-01-004,Account Linking – Liên kết tài khoản,MOD-01-01,FUN-01-01-001,,Full Function ID,Target exists
+FUN-01-01-005,Account Recovery – Khôi phục tài khoản,MOD-01-01,FUN-01-01-001,,Full Function ID,Target exists
+FUN-01-01-006,Account Security – Bảo mật tài khoản,MOD-01-01,FUN-01-01-002,,Full Function ID,Target exists
+FUN-01-02-001,View Player Profile – Xem hồ sơ,MOD-01-02,FUN-01-01-002,,Full Function ID,Target exists
+FUN-01-02-002,Update Player Profile – Cập nhật hồ sơ,MOD-01-02,FUN-01-01-002,,Full Function ID,Target exists
+FUN-01-02-003,Player Settings – Cài đặt người chơi,MOD-01-02,FUN-01-02-002,,Full Function ID,Target exists
+FUN-01-02-004,Player Progress – Tiến trình người chơi,MOD-01-02,FUN-01-02-001,,Full Function ID,Target exists
+FUN-01-03-001,Initialize Master – Khởi tạo Master,MOD-01-03,FUN-01-01-002,,Full Function ID,Target exists
+FUN-01-03-002,View Master Profile – Xem hồ sơ Master,MOD-01-03,FUN-01-03-001,,Full Function ID,Target exists
+FUN-01-03-003,Master EXP – Quản lý kinh nghiệm,MOD-01-03,FUN-01-03-001,,Full Function ID,Target exists
+FUN-01-03-004,Master Level Up – Tăng cấp Master,MOD-01-03,FUN-01-03-003,,Full Function ID,Target exists
+FUN-01-03-005,Master Skill Management – Quản lý kỹ năng,MOD-01-03,FUN-01-03-004,,Full Function ID,Target exists
+FUN-01-03-006,Feature Unlock – Mở khóa tính năng,MOD-01-03,FUN-01-03-004,,Full Function ID,Target exists
+FUN-02-01-001,View Banner List – Danh sách banner,MOD-02-01,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-02-01-002,View Banner Detail – Chi tiết banner,MOD-02-01,FUN-02-01-001,,Full Function ID,Target exists
+FUN-02-01-003,Configure Banner – Cấu hình banner,MOD-02-01,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-02-01-004,Configure Hero Pool – Cấu hình Hero Pool,MOD-02-01,FUN-02-01-003,,Full Function ID,Target exists
+FUN-02-01-005,Banner Schedule – Lịch banner,MOD-02-01,FUN-02-01-003,,Full Function ID,Target exists
+FUN-02-01-006,Activate Banner – Kích hoạt banner,MOD-02-01,FUN-02-01-005,,Full Function ID,Target exists
+FUN-02-02-001,Normal Single Summon – Triệu hồi thường 1 lần,MOD-02-02,FUN-02-01-006,,Full Function ID,Target exists
+FUN-02-02-002,Normal Multi Summon – Triệu hồi thường nhiều lần,MOD-02-02,FUN-02-02-001,,Full Function ID,Target exists
+FUN-02-02-003,Normal Summon Result – Kết quả triệu hồi thường,MOD-02-02,FUN-02-02-001,,Full Function ID,Target exists
+FUN-02-02-004,Normal Summon History – Lịch sử triệu hồi,MOD-02-02,FUN-02-02-003,,Full Function ID,Target exists
+FUN-02-03-001,Special Single Summon – Triệu hồi đặc biệt 1 lần,MOD-02-03,FUN-02-01-006,,Full Function ID,Target exists
+FUN-02-03-002,Special Multi Summon – Triệu hồi đặc biệt nhiều lần,MOD-02-03,FUN-02-03-001,,Full Function ID,Target exists
+FUN-02-03-003,Limited Single Summon – Triệu hồi giới hạn 1 lần,MOD-02-03,FUN-02-03-001,,Full Function ID,Target exists
+FUN-02-03-004,Limited Multi Summon – Triệu hồi giới hạn nhiều lần,MOD-02-03,FUN-02-03-001,,Full Function ID,Target exists
+FUN-02-03-005,Special Summon Result – Kết quả đặc biệt,MOD-02-03,FUN-02-03-001,,Full Function ID,Target exists
+FUN-02-03-006,Limited Summon Result – Kết quả giới hạn,MOD-02-03,FUN-02-03-003,,Full Function ID,Target exists
+FUN-02-04-001,Configure Drop Rate – Cấu hình tỷ lệ,MOD-02-04,FUN-02-01-004,,Full Function ID,Target exists
+FUN-02-04-002,Calculate Summon Probability – Tính xác suất,MOD-02-04,FUN-02-04-001,,Full Function ID,Target exists
+FUN-02-04-003,Update Pity Counter – Cập nhật Pity,MOD-02-04,FUN-02-04-001,,Full Function ID,Target exists
+FUN-02-04-004,Guaranteed Reward – Bảo đảm phần thưởng,MOD-02-04,FUN-02-04-003,,Full Function ID,Target exists
+FUN-02-04-005,Pity Isolation – Tách bộ đếm Pity theo banner,MOD-02-04,FUN-02-04-003,,Full Function ID,Target exists
+FUN-02-04-006,View Pity Progress – Xem tiến trình Pity,MOD-02-04,FUN-02-04-003,,Full Function ID,Target exists
+FUN-02-05-001,Duplicate Detection – Phát hiện Hero trùng,MOD-02-05,FUN-02-05-003,,Full Function ID,Target exists
+FUN-02-05-002,Duplicate Conversion – Chuyển đổi Hero trùng,MOD-02-05,FUN-02-05-001,,Full Function ID,Target exists
+FUN-02-05-003,Assign Summon Origin – Gán nguồn gốc,MOD-02-05,Any one of FUN-02-02-003 / FUN-02-03-005 / FUN-02-03-006,OR: FUN-02-02-003; FUN-02-03-005; FUN-02-03-006,Owner approved alternative prerequisites,"Record the corresponding origin during the matching Normal, Special, or Limited summon-result processing; these are alternatives, not cumulative prerequisites."
+FUN-02-05-004,View Summon History – Xem lịch sử,MOD-02-05,FUN-02-05-003,,Full Function ID,Target exists
+FUN-03-01-001,View Hero List – Danh sách Hero,MOD-03-01,FUN-02-02-003,,Full Function ID,Target exists
+FUN-03-01-002,View Hero Detail – Chi tiết Hero,MOD-03-01,FUN-03-01-001,,Full Function ID,Target exists
+FUN-03-01-003,Filter Hero – Lọc Hero,MOD-03-01,FUN-03-01-001,,Full Function ID,Target exists
+FUN-03-01-004,Sort Hero – Sắp xếp Hero,MOD-03-01,FUN-03-01-001,,Full Function ID,Target exists
+FUN-03-01-005,Lock Hero – Khóa Hero,MOD-03-01,FUN-03-01-001,,Full Function ID,Target exists
+FUN-03-01-006,View Hero History – Lịch sử Hero,MOD-03-01,FUN-03-01-002,,Full Function ID,Target exists
+FUN-03-02-001,View Hero Stats – Xem chỉ số,MOD-03-02,FUN-03-01-002,,Full Function ID,Target exists
+FUN-03-02-002,Level Up Hero – Tăng cấp,MOD-03-02,FUN-03-02-001,,Full Function ID,Target exists
+FUN-03-02-003,Hero EXP Management – Quản lý EXP,MOD-03-02,FUN-03-02-002,,Full Function ID,Target exists
+FUN-03-02-004,Hero Promotion – Thăng cấp bậc,MOD-03-02,FUN-03-02-002,,Full Function ID,Target exists
+FUN-03-02-005,Hero Awakening – Thức tỉnh,MOD-03-02,FUN-03-02-004,,Full Function ID,Target exists
+FUN-03-02-006,Hero Evolution – Tiến hóa,MOD-03-02,FUN-03-02-004,,Full Function ID,Target exists
+FUN-03-03-001,View Hero Skills – Xem kỹ năng,MOD-03-03,FUN-03-01-002,,Full Function ID,Target exists
+FUN-03-03-002,Unlock Hero Skill – Mở khóa kỹ năng,MOD-03-03,FUN-03-03-001,,Full Function ID,Target exists
+FUN-03-03-003,Upgrade Hero Skill – Nâng cấp kỹ năng,MOD-03-03,FUN-03-03-002,,Full Function ID,Target exists
+FUN-03-03-004,Configure Skill Behavior – Cấu hình hành vi kỹ năng,MOD-03-03,FUN-03-03-001,,Full Function ID,Target exists
+FUN-03-04-001,Assign Personality – Gán tính cách,MOD-03-04,FUN-03-01-002,,Full Function ID,Target exists
+FUN-03-04-002,View Personality – Xem tính cách,MOD-03-04,FUN-03-04-001,,Full Function ID,Target exists
+FUN-03-04-003,Personality Behavior – Xử lý hành vi,MOD-03-04,FUN-03-04-001,,Full Function ID,Target exists
+FUN-03-04-004,Calculate Loyalty – Tính Loyalty,MOD-03-04,FUN-03-04-001,,Full Function ID,Target exists
+FUN-03-04-005,View Loyalty – Xem Loyalty,MOD-03-04,FUN-03-04-004,,Full Function ID,Target exists
+FUN-03-04-006,Loyalty State Change – Thay đổi trạng thái,MOD-03-04,FUN-03-04-004,,Full Function ID,Target exists
+FUN-03-05-001,Initialize Relationship – Khởi tạo quan hệ,MOD-03-05,FUN-03-04-001,,Full Function ID,Target exists
+FUN-03-05-002,Update Relationship – Cập nhật quan hệ,MOD-03-05,FUN-03-05-001,,Full Function ID,Target exists
+FUN-03-05-003,View Relationship – Xem quan hệ,MOD-03-05,FUN-03-05-002,,Full Function ID,Target exists
+FUN-03-05-004,Relationship Event – Sự kiện quan hệ,MOD-03-05,FUN-03-05-002,,Full Function ID,Target exists
+FUN-04-01-001,Detect Hero Death – Phát hiện tử trận,MOD-04-01,FUN-06-02-001,,Full Function ID,Target exists
+FUN-04-01-002,Determine Death Rule – Xác định quy tắc tử trận,MOD-04-01,FUN-04-01-001,,Full Function ID,Target exists
+FUN-04-01-002,Determine Death Rule – Xác định quy tắc tử trận,MOD-04-01,FUN-02-05-003,,Full Function ID,Target exists
+FUN-04-01-003,Process Permadeath – Xử lý chết vĩnh viễn,MOD-04-01,FUN-04-01-002,,Full Function ID,Target exists
+FUN-04-01-004,Process Disabled State – Vô hiệu hóa Hero,MOD-04-01,FUN-04-01-002,,Full Function ID,Target exists
+FUN-04-01-005,Create Death Record – Lưu hồ sơ tử trận,MOD-04-01,FUN-04-01-003,,Full Function ID,Target exists
+FUN-04-01-005,Create Death Record – Lưu hồ sơ tử trận,MOD-04-01,FUN-04-01-004,,Full Function ID,Target exists
+FUN-04-01-006,Update Hero Availability – Cập nhật khả năng sử dụng,MOD-04-01,FUN-04-01-003,,Full Function ID,Target exists
+FUN-04-01-006,Update Hero Availability – Cập nhật khả năng sử dụng,MOD-04-01,FUN-04-01-004,,Full Function ID,Target exists
+FUN-04-02-001,Classify Injury – Phân loại thương tích,MOD-04-02,FUN-04-01-004,,Full Function ID,Target exists
+FUN-04-02-002,Apply Temporary Reduction – Giảm chỉ số tạm thời,MOD-04-02,FUN-04-02-001,,Full Function ID,Target exists
+FUN-04-02-003,Calculate Recovery Duration – Tính thời gian phục hồi,MOD-04-02,FUN-04-02-001,,Full Function ID,Target exists
+FUN-04-02-004,View Injury Status – Xem thương tích,MOD-04-02,FUN-04-02-001,,Full Function ID,Target exists
+FUN-04-02-005,Restore Hero Stats – Khôi phục chỉ số,MOD-04-02,FUN-04-02-002,,Full Function ID,Target exists
+FUN-04-02-005,Restore Hero Stats – Khôi phục chỉ số,MOD-04-02,FUN-04-02-003,,Full Function ID,Target exists
+FUN-04-03-001,Construct Medical Facility – Xây cơ sở chữa trị,MOD-04-03,FUN-08-02-001,,Full Function ID,Target exists
+FUN-04-03-002,Upgrade Medical Facility – Nâng cấp cơ sở,MOD-04-03,FUN-04-03-001,,Full Function ID,Target exists
+FUN-04-03-003,Manage Treatment Capacity – Quản lý công suất,MOD-04-03,FUN-04-03-001,,Full Function ID,Target exists
+FUN-04-03-004,View Medical Facility – Xem cơ sở,MOD-04-03,FUN-04-03-001,,Full Function ID,Target exists
+FUN-04-04-001,Start Treatment – Bắt đầu chữa trị,MOD-04-04,FUN-04-03-001,,Full Function ID,Target exists
+FUN-04-04-002,Treatment Queue – Hàng đợi điều trị,MOD-04-04,FUN-04-04-001,,Full Function ID,Target exists
+FUN-04-04-003,Emergency Treatment – Chữa trị khẩn cấp,MOD-04-04,FUN-04-04-001,,Full Function ID,Target exists
+FUN-04-04-004,Treatment Completion – Hoàn tất chữa trị,MOD-04-04,FUN-04-04-001,,Full Function ID,Target exists
+FUN-04-04-005,Resurrection Request – Yêu cầu hồi sinh,MOD-04-04,FUN-04-01-004,,Full Function ID,Target exists
+FUN-04-04-006,Resurrection Validation – Kiểm tra hồi sinh,MOD-04-04,FUN-04-04-005,,Full Function ID,Target exists
+FUN-04-04-007,Process Resurrection – Xử lý hồi sinh,MOD-04-04,FUN-04-04-006,,Full Function ID,Target exists
+FUN-04-04-008,Recovery History – Lịch sử phục hồi,MOD-04-04,FUN-04-04-004,,Full Function ID,Target exists
+FUN-04-04-008,Recovery History – Lịch sử phục hồi,MOD-04-04,FUN-04-04-007,,Full Function ID,Target exists
+FUN-05-01-001,Create Party – Tạo đội hình,MOD-05-01,FUN-03-01-001,,Full Function ID,Target exists
+FUN-05-01-002,Edit Party – Chỉnh sửa đội hình,MOD-05-01,FUN-05-01-001,,Full Function ID,Target exists
+FUN-05-01-003,Delete Party – Xóa đội hình,MOD-05-01,FUN-05-01-001,,Full Function ID,Target exists
+FUN-05-01-004,View Party – Xem đội hình,MOD-05-01,FUN-05-01-001,,Full Function ID,Target exists
+FUN-05-01-005,Set Default Party – Đặt đội hình mặc định,MOD-05-01,FUN-05-01-001,,Full Function ID,Target exists
+FUN-05-02-001,Add Hero to Party – Thêm Hero,MOD-05-02,FUN-05-01-001,,Full Function ID,Target exists
+FUN-05-02-002,Remove Hero from Party – Xóa Hero,MOD-05-02,FUN-05-02-001,,Full Function ID,Target exists
+FUN-05-02-003,Replace Hero – Thay Hero,MOD-05-02,FUN-05-02-001,,Full Function ID,Target exists
+FUN-05-02-004,Validate Hero Availability – Kiểm tra khả dụng,MOD-05-02,FUN-04-01-006,,Full Function ID,Target exists
+FUN-05-03-001,Set Hero Position – Đặt vị trí,MOD-05-03,FUN-05-02-001,,Full Function ID,Target exists
+FUN-05-03-002,Change Hero Position – Đổi vị trí,MOD-05-03,FUN-05-03-001,,Full Function ID,Target exists
+FUN-05-03-003,Save Formation Preset – Lưu đội hình,MOD-05-03,FUN-05-03-001,,Full Function ID,Target exists
+FUN-05-03-004,Validate Formation – Kiểm tra đội hình,MOD-05-03,FUN-05-03-001,,Full Function ID,Target exists
+FUN-06-01-001,Create Battle – Khởi tạo trận đấu,MOD-06-01,FUN-07-05-001,,Full Function ID,Target exists
+FUN-06-01-002,Assign Combatants – Phân bổ chiến binh,MOD-06-01,FUN-06-01-001,,Full Function ID,Target exists
+FUN-06-01-003,Initialize Battle State – Khởi tạo trạng thái,MOD-06-01,FUN-06-01-002,,Full Function ID,Target exists
+FUN-06-01-004,Initialize Battle Strategy – Khởi tạo chiến thuật,MOD-06-01,FUN-06-01-003,,Full Function ID,Target exists
+FUN-06-02-001,Execute Auto Battle – Thực hiện chiến đấu tự động,MOD-06-02,FUN-06-01-003,,Full Function ID,Target exists
+FUN-06-02-002,AI Target Selection – Chọn mục tiêu,MOD-06-02,FUN-06-02-001,,Full Function ID,Target exists
+FUN-06-02-003,AI Action Selection – Chọn hành động,MOD-06-02,FUN-06-02-001,,Full Function ID,Target exists
+FUN-06-02-004,AI Skill Execution – Sử dụng kỹ năng,MOD-06-02,FUN-06-02-003,,Full Function ID,Target exists
+FUN-06-02-005,AI Personality Influence – Ảnh hưởng tính cách,MOD-06-02,FUN-03-04-003,,Full Function ID,Target exists
+FUN-06-02-006,AI Relationship Influence – Ảnh hưởng quan hệ,MOD-06-02,FUN-03-05-002,,Full Function ID,Target exists
+FUN-06-03-001,Damage Calculation – Tính sát thương,MOD-06-03,FUN-06-02-001,,Full Function ID,Target exists
+FUN-06-03-002,Buff & Debuff – Hiệu ứng,MOD-06-03,FUN-06-03-001,,Full Function ID,Target exists
+FUN-06-03-003,Status Effect – Trạng thái,MOD-06-03,FUN-06-03-001,,Full Function ID,Target exists
+FUN-06-03-004,Critical Hit – Chí mạng,MOD-06-03,FUN-06-03-001,,Full Function ID,Target exists
+FUN-06-03-005,Combat Element – Thuộc tính,MOD-06-03,FUN-06-03-001,,Full Function ID,Target exists
+FUN-06-04-001,Configure Combat Strategy – Thiết lập chiến thuật,MOD-06-04,FUN-06-01-004,,Full Function ID,Target exists
+FUN-06-04-002,Offensive Command – Chỉ thị tấn công,MOD-06-04,FUN-06-04-001,,Full Function ID,Target exists
+FUN-06-04-003,Defensive Command – Chỉ thị phòng thủ,MOD-06-04,FUN-06-04-001,,Full Function ID,Target exists
+FUN-06-04-004,Tactical Buff – Buff chiến thuật,MOD-06-04,FUN-06-04-001,,Full Function ID,Target exists
+FUN-06-04-005,Target Priority – Ưu tiên mục tiêu,MOD-06-04,FUN-06-04-001,,Full Function ID,Target exists
+FUN-06-04-006,Retreat Policy – Chính sách rút lui,MOD-06-04,FUN-06-04-001,,Full Function ID,Target exists
+FUN-06-05-001,Determine Battle Result – Xác định kết quả,MOD-06-05,FUN-06-02-001,,Full Function ID,Target exists
+FUN-06-05-002,Process Hero Survival – Xử lý Hero sống sót,MOD-06-05,FUN-06-05-001,,Full Function ID,Target exists
+FUN-06-05-003,Process Battle Casualties – Xử lý thương vong,MOD-06-05,FUN-06-05-001,,Full Function ID,Target exists
+FUN-06-05-004,Distribute Battle EXP – Phân phối EXP,MOD-06-05,FUN-06-05-001,,Full Function ID,Target exists
+FUN-06-05-005,Generate Battle Reward – Phần thưởng trận đấu,MOD-06-05,FUN-06-05-001,,Full Function ID,Target exists
+FUN-06-05-006,Generate Battle Report – Báo cáo chiến đấu,MOD-06-05,FUN-06-05-001,,Full Function ID,Target exists
+FUN-06-05-007,Update Hero Condition – Cập nhật thể trạng,MOD-06-05,FUN-06-05-001,,Full Function ID,Target exists
+FUN-07-01-001,Configure Dungeon Template – Cấu hình mẫu Dungeon,MOD-07-01,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-07-01-002,Configure Floor – Cấu hình tầng,MOD-07-01,FUN-07-01-001,,Full Function ID,Target exists
+FUN-07-01-003,Configure Floor Requirement – Điều kiện tầng,MOD-07-01,FUN-07-01-002,,Full Function ID,Target exists
+FUN-07-01-004,Configure Dungeon Reward – Cấu hình thưởng,MOD-07-01,FUN-07-01-002,,Full Function ID,Target exists
+FUN-07-02-001,Generate Dungeon Seed – Sinh Seed,MOD-07-02,FUN-08-01-001,,Full Function ID,Owner-approved P0 prerequisite: initialize the World before generating its fixed Seed.
+FUN-07-02-002,Save Dungeon Seed – Lưu Seed,MOD-07-02,FUN-07-02-001,,Full Function ID,Target exists
+FUN-07-02-003,Version Seed Algorithm – Phiên bản thuật toán,MOD-07-02,FUN-07-02-001,,Full Function ID,Target exists
+FUN-07-02-004,Reconstruct Dungeon – Tái tạo Dungeon,MOD-07-02,FUN-07-02-002,,Full Function ID,Target exists
+FUN-07-02-004,Reconstruct Dungeon – Tái tạo Dungeon,MOD-07-02,FUN-07-02-003,,Full Function ID,Target exists
+FUN-07-02-005,Manage Seed Lifecycle – Quản lý vòng đời Seed,MOD-07-02,FUN-07-02-002,,Full Function ID,Target exists
+FUN-07-03-001,Generate Dungeon Map – Sinh bản đồ,MOD-07-03,FUN-07-02-001,,Full Function ID,Target exists
+FUN-07-03-002,Generate Room Layout – Sinh phòng,MOD-07-03,FUN-07-03-001,,Full Function ID,Target exists
+FUN-07-03-003,Generate Monster Placement – Bố trí quái vật,MOD-07-03,FUN-07-03-001,,Full Function ID,Target exists
+FUN-07-03-004,Generate Dungeon Difficulty – Sinh độ khó,MOD-07-03,FUN-07-03-001,,Full Function ID,Target exists
+FUN-07-03-005,Generate Environment Event – Sinh sự kiện môi trường,MOD-07-03,FUN-07-03-001,,Full Function ID,Target exists
+FUN-07-04-001,View Floor List – Danh sách tầng,MOD-07-04,FUN-07-01-002,,Full Function ID,Target exists
+FUN-07-04-002,Unlock Floor – Mở khóa tầng,MOD-07-04,FUN-07-01-003,,Full Function ID,Target exists
+FUN-07-04-003,Enter Floor – Vào tầng,MOD-07-04,FUN-07-04-002,,Full Function ID,Target exists
+FUN-07-04-004,Track Floor Progress – Theo dõi tiến trình,MOD-07-04,FUN-07-04-003,,Full Function ID,Target exists
+FUN-07-04-005,Complete Floor – Hoàn thành tầng,MOD-07-04,FUN-07-04-004,,Full Function ID,Target exists
+FUN-07-04-006,Handle Floor Failure – Xử lý thất bại,MOD-07-04,FUN-07-04-004,,Full Function ID,Target exists
+FUN-07-05-001,Initialize Dungeon Instance – Khởi tạo Dungeon,MOD-07-05,FUN-07-03-001,,Full Function ID,Target exists
+FUN-07-05-002,Explore Dungeon – Khám phá Dungeon,MOD-07-05,FUN-07-05-001,,Full Function ID,Target exists
+FUN-07-05-003,Trigger Encounter – Kích hoạt chạm trán,MOD-07-05,FUN-07-05-002,,Full Function ID,Target exists
+FUN-07-05-004,Spawn Monster – Sinh quái vật,MOD-07-05,FUN-07-05-003,,Full Function ID,Target exists
+FUN-07-05-005,Trigger Boss Encounter – Chạm trán Boss,MOD-07-05,FUN-07-05-003,,Full Function ID,Target exists
+FUN-07-05-006,Complete Dungeon – Hoàn thành Dungeon,MOD-07-05,FUN-07-05-005,,Full Function ID,Target exists
+FUN-07-06-001,Calculate Floor Reward – Tính thưởng tầng,MOD-07-06,FUN-07-04-005,,Full Function ID,Target exists
+FUN-07-06-002,Calculate Boss Reward – Tính thưởng Boss,MOD-07-06,FUN-07-05-005,,Full Function ID,Target exists
+FUN-07-06-003,First Clear Reward – Thưởng lần đầu,MOD-07-06,FUN-07-06-001,,Full Function ID,Target exists
+FUN-07-06-004,Distribute Dungeon Reward – Phân phối thưởng,MOD-07-06,FUN-07-06-001,,Full Function ID,Target exists
+FUN-08-01-001,Initialize Private World – Khởi tạo thế giới riêng,MOD-08-01,FUN-01-03-001,,Full Function ID,Target exists
+FUN-08-01-002,View World Overview – Xem tổng quan thế giới,MOD-08-01,FUN-08-01-001,,Full Function ID,Target exists
+FUN-08-01-003,Manage World Progress – Quản lý tiến trình,MOD-08-01,FUN-08-01-001,,Full Function ID,Target exists
+FUN-08-01-004,Expand Private World – Mở rộng thế giới,MOD-08-01,FUN-08-01-002,,Full Function ID,Target exists
+FUN-08-01-005,World Feature Unlock – Mở khóa tính năng thế giới,MOD-08-01,FUN-08-01-003,,Full Function ID,Target exists
+FUN-08-02-001,Construct Building – Xây dựng công trình,MOD-08-02,FUN-08-01-001,,Full Function ID,Target exists
+FUN-08-02-002,Upgrade Building – Nâng cấp công trình,MOD-08-02,FUN-08-02-001,,Full Function ID,Target exists
+FUN-08-02-003,Unlock Building – Mở khóa công trình,MOD-08-02,FUN-08-01-005,,Full Function ID,Target exists
+FUN-08-02-004,Demolish Building – Phá dỡ công trình,MOD-08-02,FUN-08-02-001,,Full Function ID,Target exists
+FUN-08-02-005,View Building Status – Xem trạng thái,MOD-08-02,FUN-08-02-001,,Full Function ID,Target exists
+FUN-08-03-001,Configure Production – Cấu hình sản xuất,MOD-08-03,FUN-08-02-001,,Full Function ID,Target exists
+FUN-08-03-002,Generate Resources – Sản xuất tài nguyên,MOD-08-03,FUN-08-03-001,,Full Function ID,Target exists
+FUN-08-03-003,Collect Resources – Thu thập tài nguyên,MOD-08-03,FUN-08-03-002,,Full Function ID,Target exists
+FUN-08-03-004,Upgrade Production – Nâng cấp sản xuất,MOD-08-03,FUN-08-03-001,,Full Function ID,Target exists
+FUN-08-03-005,Manage Production Capacity – Quản lý công suất,MOD-08-03,FUN-08-03-002,,Full Function ID,Target exists
+FUN-08-04-001,Assign Hero to Building – Phân công Hero,MOD-08-04,FUN-08-02-001,,Full Function ID,Target exists
+FUN-08-04-002,Remove Hero from Building – Thu hồi Hero,MOD-08-04,FUN-08-04-001,,Full Function ID,Target exists
+FUN-08-04-003,Calculate Work Efficiency – Tính hiệu suất,MOD-08-04,FUN-08-04-001,,Full Function ID,Target exists
+FUN-08-04-004,Monitor Hero Assignment – Theo dõi phân công,MOD-08-04,FUN-08-04-001,,Full Function ID,Target exists
+FUN-09-01-001,Track Hero Hunger – Theo dõi đói,MOD-09-01,FUN-03-01-001,,Full Function ID,Target exists
+FUN-09-01-002,Calculate Hunger Consumption – Tính tiêu hao,MOD-09-01,FUN-09-01-001,,Full Function ID,Target exists
+FUN-09-01-003,Distribute Food – Phân phối thức ăn,MOD-09-01,FUN-09-01-001,,Full Function ID,Target exists
+FUN-09-01-004,Process Starvation – Xử lý thiếu đói,MOD-09-01,FUN-09-01-002,,Full Function ID,Target exists
+FUN-09-01-005,View Hunger Status – Xem trạng thái đói,MOD-09-01,FUN-09-01-001,,Full Function ID,Target exists
+FUN-09-02-001,Track Hero Fatigue – Theo dõi mệt mỏi,MOD-09-02,FUN-03-01-001,,Full Function ID,Target exists
+FUN-09-02-002,Calculate Fatigue Increase – Tính mức mệt mỏi,MOD-09-02,FUN-09-02-001,,Full Function ID,Target exists
+FUN-09-02-003,Start Hero Rest – Bắt đầu nghỉ ngơi,MOD-09-02,FUN-09-02-001,,Full Function ID,Target exists
+FUN-09-02-004,Process Fatigue Recovery – Phục hồi mệt mỏi,MOD-09-02,FUN-09-02-003,,Full Function ID,Target exists
+FUN-09-02-005,View Fatigue Status – Xem trạng thái mệt mỏi,MOD-09-02,FUN-09-02-001,,Full Function ID,Target exists
+FUN-09-02-006,Prevent Overexertion – Ngăn quá sức,MOD-09-02,FUN-09-02-001,,Full Function ID,Target exists
+FUN-09-03-001,Manage Food Storage – Quản lý kho thức ăn,MOD-09-03,FUN-10-01-001,,Full Function ID,Target exists
+FUN-09-03-002,Produce Food – Sản xuất thức ăn,MOD-09-03,FUN-08-03-002,,Full Function ID,Target exists
+FUN-09-03-003,Consume Base Resources – Tiêu hao tại căn cứ,MOD-09-03,FUN-08-01-001,,Full Function ID,Target exists
+FUN-09-03-004,Consume Dungeon Resources – Tiêu hao Dungeon,MOD-09-03,FUN-07-05-002,,Full Function ID,Target exists
+FUN-09-03-005,Consume War Resources – Tiêu hao chiến tranh,MOD-09-03,FUN-13-05-001,,Full Function ID,Target exists
+FUN-10-01-001,View Inventory – Xem túi đồ,MOD-10-01,FUN-01-03-001,,Full Function ID,Target exists
+FUN-10-01-002,Filter Inventory – Lọc vật phẩm,MOD-10-01,FUN-10-01-001,,Full Function ID,Target exists
+FUN-10-01-003,Sort Inventory – Sắp xếp vật phẩm,MOD-10-01,FUN-10-01-001,,Full Function ID,Target exists
+FUN-10-01-004,Add Item – Thêm vật phẩm,MOD-10-01,FUN-10-01-001,,Full Function ID,Target exists
+FUN-10-01-005,Remove Item – Xóa vật phẩm,MOD-10-01,FUN-10-01-001,,Full Function ID,Target exists
+FUN-10-01-006,Use Item – Sử dụng vật phẩm,MOD-10-01,FUN-10-01-001,,Full Function ID,Target exists
+FUN-10-01-007,Sell Item – Bán vật phẩm,MOD-10-01,FUN-10-01-001,,Full Function ID,Target exists
+FUN-10-02-001,View Equipment – Xem trang bị,MOD-10-02,FUN-10-01-001,,Full Function ID,Target exists
+FUN-10-02-002,Equip Item – Trang bị,MOD-10-02,"FUN-10-02-001, FUN-10-02-004",,P0 flow-aligned Function dependencies,Equipment context and validation precede equip action.
+FUN-10-02-003,Unequip Item – Tháo trang bị,MOD-10-02,FUN-10-02-002,,Full Function ID,Target exists
+FUN-10-02-004,Validate Equipment – Kiểm tra trang bị,MOD-10-02,FUN-10-02-001,,P0 flow-aligned Function dependency,Validation requires the current equipment/Hero context.
+FUN-10-02-005,Calculate Equipment Stats – Tính chỉ số,MOD-10-02,FUN-10-02-002,,Full Function ID,Target exists
+FUN-10-03-001,Craft Item – Chế tạo vật phẩm,MOD-10-03,FUN-10-01-001,,Full Function ID,Target exists
+FUN-10-03-002,Upgrade Equipment – Nâng cấp trang bị,MOD-10-03,FUN-10-02-001,,Full Function ID,Target exists
+FUN-10-03-003,Item Fusion – Hợp thành vật phẩm,MOD-10-03,FUN-10-03-001,,Full Function ID,Target exists
+FUN-10-03-004,Material Requirement – Kiểm tra nguyên liệu,MOD-10-03,FUN-10-03-001,,Full Function ID,Target exists
+FUN-11-01-001,View Currency – Xem tiền tệ,MOD-11-01,FUN-01-03-001,,Full Function ID,Target exists
+FUN-11-01-002,Add Currency – Cộng tiền,MOD-11-01,FUN-11-01-001,,Full Function ID,Target exists
+FUN-11-01-003,Deduct Currency – Trừ tiền,MOD-11-01,FUN-11-01-001,,Full Function ID,Target exists
+FUN-11-01-004,Validate Balance – Kiểm tra số dư,MOD-11-01,FUN-11-01-001,,Full Function ID,Target exists
+FUN-11-01-005,Currency Transaction – Giao dịch tiền tệ,MOD-11-01,FUN-11-01-002,,Full Function ID,Target exists
+FUN-11-01-005,Currency Transaction – Giao dịch tiền tệ,MOD-11-01,FUN-11-01-003,,Full Function ID,Target exists
+FUN-11-01-006,Currency Limit – Giới hạn tiền tệ,MOD-11-01,FUN-11-01-001,,Full Function ID,Target exists
+FUN-11-01-007,Exchange Silver for Normal Summon Ticket – Đổi Xu Bạc lấy Thiên Thư thường,MOD-11-01,FUN-11-01-003,,Full Function ID,Target exists
+FUN-11-01-007,Exchange Silver for Normal Summon Ticket – Đổi Xu Bạc lấy Thiên Thư thường,MOD-11-01,FUN-11-01-006,,Full Function ID,Target exists
+FUN-11-02-001,View Shop – Xem cửa hàng,MOD-11-02,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-11-02-002,View Product Detail – Chi tiết sản phẩm,MOD-11-02,FUN-11-02-001,,Full Function ID,Target exists
+FUN-11-02-003,Purchase Item – Mua vật phẩm,MOD-11-02,FUN-11-02-001,,Full Function ID,Target exists
+FUN-11-02-004,Shop Rotation – Luân phiên cửa hàng,MOD-11-02,FUN-11-02-001,,Full Function ID,Target exists
+FUN-11-02-005,Configure Shop – Cấu hình cửa hàng,MOD-11-02,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-11-02-006,Purchase Limit – Giới hạn mua,MOD-11-02,FUN-11-02-003,,Full Function ID,Target exists
+FUN-11-03-001,View Purchase Package – Xem gói mua,MOD-11-03,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-11-03-002,Initiate Payment – Khởi tạo thanh toán,MOD-11-03,FUN-11-03-001,,Full Function ID,Target exists
+FUN-11-03-003,Process Payment – Xử lý thanh toán,MOD-11-03,FUN-11-03-002,,Full Function ID,Target exists
+FUN-11-03-004,Validate Payment – Xác minh thanh toán,MOD-11-03,FUN-11-03-003,,Full Function ID,Target exists
+FUN-11-03-005,Grant Purchase Reward – Cấp vật phẩm,MOD-11-03,FUN-11-03-004,,Full Function ID,Target exists
+FUN-11-03-006,Payment History – Lịch sử thanh toán,MOD-11-03,FUN-11-03-003,,Full Function ID,Target exists
+FUN-11-03-007,Refund Processing – Xử lý hoàn tiền,MOD-11-03,FUN-11-03-004,,Full Function ID,Target exists
+FUN-11-04-001,Generate Reward – Tạo phần thưởng,MOD-11-04,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-11-04-002,Distribute Reward – Phân phối thưởng,MOD-11-04,FUN-11-04-001,,Full Function ID,Target exists
+FUN-11-04-003,Send Mail – Gửi thư,MOD-11-04,FUN-11-04-001,,Full Function ID,Target exists
+FUN-11-04-004,View Mailbox – Xem hộp thư,MOD-11-04,FUN-11-04-003,,Full Function ID,Target exists
+FUN-11-04-005,Claim Mail Attachment – Nhận đính kèm,MOD-11-04,FUN-11-04-004,,Full Function ID,Target exists
+FUN-11-04-006,Mail Expiration – Hết hạn thư,MOD-11-04,FUN-11-04-003,,Full Function ID,Target exists
+FUN-12-01-001,View Quest List – Danh sách nhiệm vụ,MOD-12-01,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-12-01-002,Accept Quest – Nhận nhiệm vụ,MOD-12-01,FUN-12-01-001,,Full Function ID,Target exists
+FUN-12-01-003,Track Quest Progress – Theo dõi tiến độ,MOD-12-01,FUN-12-01-002,,Full Function ID,Target exists
+FUN-12-01-004,Complete Quest – Hoàn thành nhiệm vụ,MOD-12-01,FUN-12-01-003,,Full Function ID,Target exists
+FUN-12-01-005,Claim Quest Reward – Nhận thưởng,MOD-12-01,FUN-12-01-004,,Full Function ID,Target exists
+FUN-12-02-001,Generate Daily Quest – Tạo nhiệm vụ ngày,MOD-12-02,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-12-02-002,Generate Weekly Quest – Tạo nhiệm vụ tuần,MOD-12-02,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-12-02-003,Reset Daily Quest – Làm mới nhiệm vụ ngày,MOD-12-02,FUN-12-02-001,,Full Function ID,Target exists
+FUN-12-02-004,Reset Weekly Quest – Làm mới nhiệm vụ tuần,MOD-12-02,FUN-12-02-002,,Full Function ID,Target exists
+FUN-12-02-005,Track Mission Progress – Theo dõi nhiệm vụ,MOD-12-02,FUN-12-02-001,,Full Function ID,Target exists
+FUN-12-02-005,Track Mission Progress – Theo dõi nhiệm vụ,MOD-12-02,FUN-12-02-002,,Full Function ID,Target exists
+FUN-12-03-001,View Achievement – Xem thành tựu,MOD-12-03,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-12-03-002,Track Achievement – Theo dõi thành tựu,MOD-12-03,FUN-12-03-001,,Full Function ID,Target exists
+FUN-12-03-003,Unlock Achievement – Mở khóa thành tựu,MOD-12-03,FUN-12-03-002,,Full Function ID,Target exists
+FUN-12-03-004,Claim Achievement Reward – Nhận thưởng,MOD-12-03,FUN-12-03-003,,Full Function ID,Target exists
+FUN-12-04-001,Configure Event – Cấu hình sự kiện,MOD-12-04,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-12-04-002,Schedule Event – Lên lịch sự kiện,MOD-12-04,FUN-12-04-001,,Full Function ID,Target exists
+FUN-12-04-003,Activate Event – Kích hoạt sự kiện,MOD-12-04,FUN-12-04-002,,Full Function ID,Target exists
+FUN-12-04-004,View Event – Xem sự kiện,MOD-12-04,FUN-12-04-003,,Full Function ID,Target exists
+FUN-12-04-005,Event Mission – Nhiệm vụ sự kiện,MOD-12-04,FUN-12-04-003,,Full Function ID,Target exists
+FUN-12-04-006,Event Reward – Phần thưởng sự kiện,MOD-12-04,FUN-12-04-005,,Full Function ID,Target exists
+FUN-12-04-007,Close Event – Kết thúc sự kiện,MOD-12-04,FUN-12-04-003,,Full Function ID,Target exists
+FUN-12-05-001,Calculate Ranking – Tính xếp hạng,MOD-12-05,FUN-13-01-001,,Full Function ID,Target exists
+FUN-12-05-002,View Leaderboard – Xem bảng xếp hạng,MOD-12-05,FUN-12-05-001,,Full Function ID,Target exists
+FUN-12-05-003,Distribute Ranking Reward – Thưởng xếp hạng,MOD-12-05,FUN-12-05-001,,Full Function ID,Target exists
+FUN-13-01-001,Unlock Global World – Mở khóa thế giới chung,MOD-13-01,FUN-01-03-006,,Full Function ID,Target exists
+FUN-13-01-002,View Global Map – Xem bản đồ chung,MOD-13-01,FUN-13-01-001,,Full Function ID,Target exists
+FUN-13-01-003,View Region – Xem khu vực,MOD-13-01,FUN-13-01-002,,Full Function ID,Target exists
+FUN-13-01-004,Discover Region – Khám phá vùng,MOD-13-01,FUN-13-01-003,,Full Function ID,Target exists
+FUN-13-01-005,Global World Progress – Tiến trình thế giới,MOD-13-01,FUN-13-01-001,,Full Function ID,Target exists
+FUN-13-02-001,View Territory – Xem lãnh thổ,MOD-13-02,FUN-13-01-003,,Full Function ID,Target exists
+FUN-13-02-002,Claim Territory – Chiếm lãnh thổ,MOD-13-02,FUN-13-02-001,,Full Function ID,Target exists
+FUN-13-02-003,Upgrade Territory – Nâng cấp lãnh thổ,MOD-13-02,FUN-13-02-002,,Full Function ID,Target exists
+FUN-13-02-004,Abandon Territory – Bỏ lãnh thổ,MOD-13-02,FUN-13-02-002,,Full Function ID,Target exists
+FUN-13-02-005,Track Territory Ownership – Quản lý sở hữu,MOD-13-02,FUN-13-02-002,,Full Function ID,Target exists
+FUN-13-03-001,Scout Player – Trinh sát người chơi,MOD-13-03,FUN-13-01-002,,Full Function ID,Target exists
+FUN-13-03-002,Scout Territory – Trinh sát lãnh thổ,MOD-13-03,FUN-13-02-001,,Full Function ID,Target exists
+FUN-13-03-003,View Scouting Report – Xem báo cáo,MOD-13-03,FUN-13-03-001,,Full Function ID,Target exists
+FUN-13-03-003,View Scouting Report – Xem báo cáo,MOD-13-03,FUN-13-03-002,,Full Function ID,Target exists
+FUN-13-04-001,Create Army – Tạo quân đội,MOD-13-04,FUN-05-01-001,,Full Function ID,Target exists
+FUN-13-04-002,Assign Hero to Army – Phân công Hero,MOD-13-04,FUN-13-04-001,,Full Function ID,Target exists
+FUN-13-04-003,Deploy Army – Điều động quân đội,MOD-13-04,FUN-13-04-002,,Full Function ID,Target exists
+FUN-13-04-004,Recall Army – Thu hồi quân đội,MOD-13-04,FUN-13-04-003,,Full Function ID,Target exists
+FUN-13-04-005,Track Army Movement – Theo dõi di chuyển,MOD-13-04,FUN-13-04-003,,Full Function ID,Target exists
+FUN-13-05-001,Initiate Player Attack – Tấn công người chơi,MOD-13-05,FUN-13-04-003,,Full Function ID,Target exists
+FUN-13-05-002,Validate PvP Conditions – Kiểm tra điều kiện PvP,MOD-13-05,FUN-13-05-001,,Full Function ID,Target exists
+FUN-13-05-003,Execute PvP Battle – Thực hiện PvP,MOD-13-05,FUN-13-05-002,,Full Function ID,Target exists
+FUN-13-05-004,Process PvP Result – Xử lý kết quả PvP,MOD-13-05,FUN-13-05-003,,Full Function ID,Target exists
+FUN-13-05-005,Defend Territory – Phòng thủ lãnh thổ,MOD-13-05,FUN-13-02-005,,Full Function ID,Target exists
+FUN-13-05-006,PvP Protection – Bảo vệ người chơi,MOD-13-05,FUN-13-05-002,,Full Function ID,Target exists
+FUN-13-05-007,PvP Battle Report – Báo cáo PvP,MOD-13-05,FUN-13-05-004,,Full Function ID,Target exists
+FUN-13-06-001,Create Alliance – Tạo liên minh,MOD-13-06,FUN-13-01-001,,Full Function ID,Target exists
+FUN-13-06-002,Search Alliance – Tìm liên minh,MOD-13-06,FUN-13-06-001,,Full Function ID,Target exists
+FUN-13-06-003,Join Alliance – Gia nhập liên minh,MOD-13-06,FUN-13-06-002,,Full Function ID,Target exists
+FUN-13-06-004,Leave Alliance – Rời liên minh,MOD-13-06,FUN-13-06-003,,Full Function ID,Target exists
+FUN-13-06-005,Manage Alliance Member – Quản lý thành viên,MOD-13-06,FUN-13-06-001,,Full Function ID,Target exists
+FUN-13-06-006,Alliance Communication – Giao tiếp liên minh,MOD-13-06,FUN-13-06-001,,Full Function ID,Target exists
+FUN-13-07-001,Declare War – Tuyên chiến,MOD-13-07,FUN-13-06-001,,Full Function ID,Target exists
+FUN-13-07-002,Manage War Progress – Quản lý chiến tranh,MOD-13-07,FUN-13-07-001,,Full Function ID,Target exists
+FUN-13-07-003,Territory War – Chiến tranh lãnh thổ,MOD-13-07,FUN-13-05-003,,Full Function ID,Target exists
+FUN-13-07-004,Determine War Result – Kết quả chiến tranh,MOD-13-07,FUN-13-07-002,,Full Function ID,Target exists
+FUN-13-07-005,Distribute War Reward – Thưởng chiến tranh,MOD-13-07,FUN-13-07-004,,Full Function ID,Target exists
+FUN-13-07-006,World Conquest Ranking – Xếp hạng chinh phục,MOD-13-07,FUN-13-07-004,,Full Function ID,Target exists
+FUN-14-01-001,Search Player – Tìm người chơi,MOD-14-01,FUN-01-01-001,,Full Function ID,Target exists
+FUN-14-01-002,View Player Data – Xem dữ liệu,MOD-14-01,FUN-14-01-001,,Full Function ID,Target exists
+FUN-14-01-003,Restrict Account – Hạn chế tài khoản,MOD-14-01,FUN-14-01-001,,Full Function ID,Target exists
+FUN-14-01-004,Restore Account – Khôi phục tài khoản,MOD-14-01,FUN-14-01-003,,Full Function ID,Target exists
+FUN-14-01-005,Player Compensation – Bồi thường,MOD-14-01,FUN-14-01-002,,Full Function ID,Target exists
+FUN-14-02-001,Hero Template Configuration – Cấu hình Hero,MOD-14-02,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-14-02-002,Hero Stats Configuration – Cấu hình chỉ số,MOD-14-02,FUN-14-02-001,,Full Function ID,Target exists
+FUN-14-02-003,Hero Skill Configuration – Cấu hình kỹ năng,MOD-14-02,FUN-14-02-001,,Full Function ID,Target exists
+FUN-14-02-004,Monster Configuration – Cấu hình quái vật,MOD-14-02,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-14-02-005,Boss Configuration – Cấu hình Boss,MOD-14-02,FUN-14-02-004,,Full Function ID,Target exists
+FUN-14-02-006,Item Configuration – Cấu hình vật phẩm,MOD-14-02,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-14-03-001,Gacha Rule Configuration – Cấu hình Gacha,MOD-14-03,DM-02,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-03-002,Pity Configuration – Cấu hình Pity,MOD-14-03,FUN-14-03-001,,Full Function ID,Target exists
+FUN-14-03-003,Death Rule Configuration – Cấu hình tử trận,MOD-14-03,DM-04,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-03-004,Dungeon Rule Configuration – Cấu hình Dungeon,MOD-14-03,DM-07,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-03-005,Seed Algorithm Configuration – Cấu hình Seed,MOD-14-03,FUN-14-03-004,,Full Function ID,Target exists
+FUN-14-03-006,Battle Rule Configuration – Cấu hình chiến đấu,MOD-14-03,DM-06,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-04-001,Currency Configuration – Cấu hình tiền tệ,MOD-14-04,DM-11,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-04-002,Shop Configuration – Cấu hình cửa hàng,MOD-14-04,DM-11,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-04-003,Reward Configuration – Cấu hình thưởng,MOD-14-04,DM-11,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-04-004,Event Configuration – Cấu hình sự kiện,MOD-14-04,DM-12,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-04-005,Banner Configuration – Cấu hình banner,MOD-14-04,DM-02,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-05-001,Player Analytics – Phân tích người chơi,MOD-14-05,DM-01,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-05-002,Gacha Analytics – Phân tích Gacha,MOD-14-05,DM-02,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-05-003,Economy Analytics – Phân tích kinh tế,MOD-14-05,DM-11,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-05-004,Battle Analytics – Phân tích chiến đấu,MOD-14-05,DM-06,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-05-005,Retention Analytics – Phân tích duy trì,MOD-14-05,DM-01,,Domain-level reference,Retained as a Domain reference; choose a specific prerequisite Function only if required
+FUN-14-05-006,System Monitoring – Giám sát hệ thống,MOD-14-05,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-14-06-001,Support Ticket – Yêu cầu hỗ trợ,MOD-14-06,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-14-06-002,Handle Support Request – Xử lý hỗ trợ,MOD-14-06,FUN-14-06-001,,Full Function ID,Target exists
+FUN-14-06-003,Audit Log – Nhật ký hệ thống,MOD-14-06,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-14-06-004,Anti-cheat Monitoring – Giám sát gian lận,MOD-14-06,—,,Unresolved shorthand/self-reference,Unrecognized reference
+FUN-14-06-005,Abuse Detection – Phát hiện lạm dụng,MOD-14-06,FUN-14-06-004,,Full Function ID,Target exists
+FUN-14-06-006,Configuration Versioning – Quản lý phiên bản cấu hình,MOD-14-06,—,,Unresolved shorthand/self-reference,Unrecognized reference
