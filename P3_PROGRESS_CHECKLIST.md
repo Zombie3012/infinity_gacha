@@ -8,8 +8,8 @@
 ## Progress Summary
 - MOD-13-01 (Global World & Map Exploration): Done — 5 functions.
 - MOD-13-02 (Territory Control & Expansion): Done — 5 functions.
-- MOD-13-03 (Scouting & Intelligence): Not started (3).
-- MOD-13-04 (Army Management & Movement): Not started (5).
+- MOD-13-03 (Scouting & Intelligence): Done — 3 functions.
+- MOD-13-04 (Hero Expeditions & Movement, replaces the army concept): Done — 5 functions.
 - MOD-13-05 (PvP Combat & Territory Defense): Not started (7).
 - MOD-13-06 (Alliance System): Not started (6).
 - MOD-13-07 (World War & Conquest): Not started (6).
@@ -32,10 +32,28 @@
 - [x] FUN-13-02-004 Abandon Territory — `POST /api/world/territories/:id/abandon` starts a 10-minute countdown; the tile is released lazily and ownership drops.
 - [x] FUN-13-02-005 Track Territory Ownership — `GET /api/world/territories/history` returns claim/upgrade/abandon/release events, plus `GET /api/world/leaderboard` ranks owners by tile count.
 
+### Design correction (owner decision, 2026-11-04)
+- **There is no army entity.** Heroes are the only mobile unit: they personally scout and attack tiles. The former "army management" module is implemented as **hero expeditions** (`hero_expeditions`, `expedition_members`).
+- Claiming a tile now requires a **won hero attack** (`tile_clearances`) instead of a passive combat-power comparison.
+
 ### Prototype notes
 - The map is a seeded 12×12 Outer Rim grid (`world_tiles.sample.sql`); hostile PvP capture arrives with MOD-13-05.
-- Guardian combat for a claim is abstracted into a combat-power check (`requiredPower`) instead of a live battle.
+- Guardian battles resolve deterministically from party combat power vs the tile guardian (and half of the defender's power), not through the full round combat engine.
 - Territory yield is reported per hour and not yet auto-harvested into the warehouse.
+
+## Domain 13 part two: Scouting and Hero Expeditions
+
+### MOD-13-03 Scouting & Intelligence (3 functions)
+- [x] FUN-13-03-001 Scout Player — a SCOUT expedition reports the tile owner, their level and the defender Hero count/power.
+- [x] FUN-13-03-002 Scout Territory — the report includes terrain, resource type, guardian power and the party's own power.
+- [x] FUN-13-03-003 View Scouting Report — `GET /api/world/expeditions` exposes each report (`result.kind = SCOUT_REPORT`) with its countdown.
+
+### MOD-13-04 Hero Expeditions & Movement (5 functions)
+- [x] FUN-13-04-001 Create Expedition — `POST /api/world/expeditions` with 1–5 idle Heroes and a SCOUT/ATTACK mission.
+- [x] FUN-13-04-002 Assign Hero — the party is validated (ownership, alive, 1–5 slots, no duplicates); a Hero can only be in one active expedition (`ERR_EXPEDITION_HERO_BUSY`).
+- [x] FUN-13-04-003 Deploy Expedition — travel is 30s per tile; status flows TRAVELING → RETURNING → COMPLETED.
+- [x] FUN-13-04-004 Recall Expedition — `POST /api/world/expeditions/:id/recall` returns the party immediately.
+- [x] FUN-13-04-005 Track Movement — the expedition list reports phase and remaining seconds; `GET /api/world/heroes/away` lists Heroes currently away.
 
 ---
 

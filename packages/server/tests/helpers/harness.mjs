@@ -95,7 +95,8 @@ export { pool };
 
 /** Insert a bare Hero row (tests that need a body but not the gacha flow). */
 export async function createHero(masterId, overrides = {}) {
-  const template = await pool.query('select code from hero_templates order by code limit 1');
+  const templateIndex = overrides.templateIndex ?? 0;
+  const template = await pool.query('select code from hero_templates order by code limit 1 offset $1', [templateIndex]);
   const code = template.rows[0]?.code;
   if (!code) throw new Error('no hero templates seeded');
   const id = (await pool.query('select gen_random_uuid()::text as id')).rows[0].id;

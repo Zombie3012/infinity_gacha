@@ -952,3 +952,36 @@ export const territoryEvents = pgTable('territory_events', {
   detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [index('idx_territory_events_tile').on(table.tileId, table.createdAt)]);
+
+// --- Domain 13 (P3): hero expeditions (no army entity: heroes travel themselves) ---
+
+export const heroExpeditions = pgTable('hero_expeditions', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  tileId: varchar('tile_id', { length: 36 }).notNull().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  mission: varchar('mission', { length: 20 }).notNull(),
+  status: varchar('status', { length: 20 }).default('TRAVELING').notNull(),
+  departAt: timestamp('depart_at', { withTimezone: true }).defaultNow().notNull(),
+  arriveAt: timestamp('arrive_at', { withTimezone: true }).notNull(),
+  returnAt: timestamp('return_at', { withTimezone: true }),
+  result: jsonb('result').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_expedition_master').on(table.masterId, table.status),
+  check('expedition_mission_check', sql`${table.mission} IN ('SCOUT', 'ATTACK')`),
+  check('expedition_status_check', sql`${table.status} IN ('TRAVELING', 'RETURNING', 'COMPLETED', 'RECALLED')`),
+]);
+
+export const expeditionMembers = pgTable('expedition_members', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  expeditionId: varchar('expedition_id', { length: 36 }).notNull().references(() => heroExpeditions.id, { onDelete: 'cascade' }),
+  heroId: varchar('hero_id', { length: 36 }).notNull().references(() => heroes.id, { onDelete: 'cascade' }),
+  slotIndex: integer('slot_index').default(0).notNull(),
+}, (table) => [uniqueIndex('uq_expedition_hero').on(table.expeditionId, table.heroId)]);
+
+export const tileClearances = pgTable('tile_clearances', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  tileId: varchar('tile_id', { length: 36 }).notNull().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  clearedAt: timestamp('cleared_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex('uq_tile_clearance').on(table.masterId, table.tileId)]);

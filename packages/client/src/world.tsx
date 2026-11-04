@@ -35,6 +35,19 @@ type Territory = {
   tile: { x: number; y: number; resourceType: string };
 };
 
+type HeroOption = { id: string; name: string; level: number; state: string };
+
+type Expedition = {
+  id: string;
+  mission: string;
+  status: string;
+  phase: string;
+  secondsRemaining: number;
+  tile: { x: number; y: number };
+  heroes: { id: string; name: string }[];
+  result: { kind?: string; won?: boolean; guardianPower?: number; partyPower?: number; owner?: { name: string } | null };
+};
+
 async function call<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${path}`, {
     ...init,
@@ -53,6 +66,10 @@ export function WorldMapPage({ token, onError, onNotice }: { token: string; onEr
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [territories, setTerritories] = useState<Territory[]>([]);
   const [selected, setSelected] = useState<Tile | null>(null);
+  const [heroes, setHeroes] = useState<HeroOption[]>([]);
+  const [expeditions, setExpeditions] = useState<Expedition[]>([]);
+  const [mission, setMission] = useState<'SCOUT' | 'ATTACK'>('SCOUT');
+  const [party, setParty] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -63,12 +80,18 @@ export function WorldMapPage({ token, onError, onNotice }: { token: string; onEr
       setTerritories([]);
       return;
     }
-    const [map, mine] = await Promise.all([
+    const [map, mine, roster, trips, away] = await Promise.all([
       call<{ tiles: Tile[] }>('/api/world/global/map', token),
       call<{ territories: Territory[]; hourlyYield: number }>('/api/world/territories', token),
+      call<HeroOption[]>('/api/heroes', token).catch(() => []),
+      call<Expedition[]>('/api/world/expeditions', token).catch(() => []),
+      call<string[]>('/api/world/heroes/away', token).catch(() => []),
     ]);
     setTiles(map.tiles);
     setTerritories(mine.territories);
+    setExpeditions(trips);
+    const busyIds = new Set(away);
+    setHeroes(roster.filter(hero => hero.state !== 'DEAD' && hero.state !== 'DISABLED' && !busyIds.has(hero.id)));
   }, [token]);
 
   useEffect(() => { load().catch(error => onError((error as Error).message)); }, [load, onError]);
@@ -146,8 +169,53 @@ export function WorldMapPage({ token, onError, onNotice }: { token: string; onEr
             onClick={() => void run(() => call(`/api/world/global/tiles/${selected.id}/claim`, token, { method: 'POST' }), 'Đã chiếm lãnh thổ.')}>Chiếm đóng</button>}
           {selected.owner && !selected.mine && <em className="admin-badge danger">{selected.owner.name}</em>}
           {selected.mine && <em className="admin-badge ok">Lãnh thổ của bạn</em>}
+          {selected.discovered && !selected.owner && <span className="base-note">Cần một chuyến ATTACK thắng quái thủ hộ trước khi chiếm được ô này.</span>}
         </div>
       </div>}
+    </section>
+
+    <section className="panel">
+      <div className="panel-head">
+        <div><div className="eyebrow">EXPEDITIONS</div><h2>Đội thám hiểm Hero</h2></div>
+        <div className="admin-actions">
+          <select value={mission} onChange={event => setMission(event.target.value as 'SCOUT' | 'ATTACK')}>
+            <option value="SCOUT">Trinh sát</option>
+            <option value="ATTACK">Tấn công</option>
+          </select>
+          <button type="button" className="primary-button" disabled={busy || !selected || party.length === 0}
+            onClick={() => void run(() => call('/api/world/expeditions', token, {
+              method: 'POST',
+              body: JSON.stringify({ tileId: selected?.id, mission, heroIds: party }),
+            }), mission === 'SCOUT' ? 'Đã phái đội trinh sát.' : 'Đã phái đội tấn công.')}>
+            Phái đi {selected ? `(${selected.x}, ${selected.y})` : ''}
+          </button>
+        </div>
+      </div>
+      <p className="base-note">Không có army: chính các Hero hành quân. Chọn tối đa 5 Hero rảnh, mỗi ô cách 30 giây.</p>
+      <div className="party-picker">
+        {heroes.length === 0 && <small className="admin-muted">Không có Hero rảnh (đang thám hiểm hoặc đã chết).</small>}
+        {heroes.map(hero => <label key={hero.id} className={`party-chip ${party.includes(hero.id) ? ' picked' : ''}`}>
+          <input type="checkbox" checked={party.includes(hero.id)} disabled={busy}
+            onChange={event => setParty(event.target.checked
+              ? [...party, hero.id].slice(0, 5)
+              : party.filter(id => id !== hero.id))} />
+          {hero.name} <small>Lv.{hero.level}</small>
+        </label>)}
+      </div>
+      <div className="admin-table">
+        <div className="admin-row admin-row-head"><span>Ô</span><span>Nhiệm vụ</span><span>Đội</span><span>Trạng thái</span><span /></div>
+        {expeditions.length === 0 && <div className="admin-row"><span>Chưa có chuyến nào.</span></div>}
+        {expeditions.slice(0, 8).map(trip => <div className="admin-row" key={trip.id}>
+          <span>({trip.tile.x}, {trip.tile.y})</span>
+          <span>{trip.mission}</span>
+          <span>{trip.heroes.map(hero => hero.name).join(', ')}</span>
+          <span>{trip.status === 'COMPLETED' || trip.status === 'RECALLED'
+            ? <em className={`admin-badge ${trip.result.won === false ? 'danger' : 'ok'}`}>{trip.status}{trip.result.kind === 'BATTLE_REPORT' ? (trip.result.won ? ' · thắng' : ' · thua') : ''}</em>
+            : <em className="admin-badge warn">{trip.phase} · {trip.secondsRemaining}s</em>}</span>
+          <span>{(trip.phase !== 'DONE') && <button type="button" className="text-button" disabled={busy}
+            onClick={() => void run(() => call(`/api/world/expeditions/${trip.id}/recall`, token, { method: 'POST' }), 'Đã thu hồi đội.')}>Thu hồi</button>}</span>
+        </div>)}
+      </div>
     </section>
 
     <section className="panel">

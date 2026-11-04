@@ -2,9 +2,10 @@ import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
-  heroes, masterWorldStatus, masters, territories, territoryEvents, tileDiscoveries, worldTiles, worlds,
+  heroes, masterWorldStatus, masters, territories, territoryEvents, tileClearances, tileDiscoveries, worldTiles, worlds,
 } from '../../database/drizzle-schema.js';
 import { topCombatPower } from '../liveops/liveops-rules.js';
+import { expeditionService } from './expedition.service.js';
 import {
   CLAIM_COST_SILVER, DISCOVERY_RADIUS, MAX_TERRITORIES, MAX_TERRITORY_LEVEL, abandonAt, canClaim,
   canUnlockGlobal, isDiscoverable, protectionUntil, shieldUntil, territoryYield, upgradeCost,
@@ -33,12 +34,6 @@ export class WorldService {
   private async statusRow(masterId: string) {
     const [row] = await db.select().from(masterWorldStatus).where(eq(masterWorldStatus.masterId, masterId)).limit(1);
     return row;
-  }
-
-  private async combatPower(masterId: string) {
-    const rows = await db.select({ hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed })
-      .from(heroes).where(eq(heroes.masterId, masterId));
-    return topCombatPower(rows.map(row => ({ hp: row.hp, attack: row.attack, defense: row.defense, speed: row.speed })));
   }
 
   /** Lazy release of abandoned territories. */
@@ -204,6 +199,7 @@ export class WorldService {
   }
 
   async claim(masterId: string, tileId: string, now = new Date()) {
+    await expeditionService.settle(masterId, now);
     const status = await this.statusRow(masterId);
     if (!status) throw new WorldError('ERR_WORLD_LOCKED', 409);
     const [tile] = await db.select().from(worldTiles).where(eq(worldTiles.id, tileId)).limit(1);
@@ -217,13 +213,15 @@ export class WorldService {
       throw new WorldError('ERR_WORLD_SHIELD_ACTIVE', 409);
     }
 
+    // Heroes must have won the guardian battle at this tile first (no army abstraction).
+    const [clearance] = await db.select().from(tileClearances)
+      .where(and(eq(tileClearances.masterId, masterId), eq(tileClearances.tileId, tileId))).limit(1);
+    if (!clearance) throw new WorldError('ERR_TERRITORY_NOT_CLEARED', 409);
+
     const [existing] = await db.select().from(territories).where(eq(territories.tileId, tileId)).limit(1);
     const ownedCount = await this.ownedCount(masterId);
     const check = canClaim(ownedCount, Boolean(existing?.masterId));
     if (!check.ok) throw new WorldError(check.reason ?? 'ERR_TERRITORY_CLAIM_FAILED', 409);
-
-    const power = await this.combatPower(masterId);
-    if (power < tile.requiredPower) throw new WorldError('ERR_TERRITORY_POWER_TOO_LOW', 409);
 
     const master = await this.master(masterId);
     if (Number(master.silverCoins) < CLAIM_COST_SILVER) throw new WorldError('ERR_TERRITORY_INSUFFICIENT_SILVER', 409);

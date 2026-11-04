@@ -253,6 +253,13 @@
       "when": 1793752039634,
       "tag": "0035_aberrant_tony_stark",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793752572289,
+      "tag": "0036_illegal_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

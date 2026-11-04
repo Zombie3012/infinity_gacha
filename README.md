@@ -71,6 +71,7 @@ infiniti_gacha/
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
 - Phase P3 has started with the global world: unlock gating (Master 15 + floor 10), a 12x12 Outer Rim map with discovery, territory claiming with protection windows, upgrades, abandonment and an ownership leaderboard.
+- **There is no army entity.** Heroes themselves travel: expeditions of 1–5 Heroes scout or attack tiles, reports carry owner/defender/power data, and claiming a tile requires a won hero attack (`tile_clearances`).
 - Phase P2 Domain 14 (analytics & support) is implemented: player/gacha/economy/battle/retention aggregates for operators, and a support ticket flow (player opens and replies, operators answer and advance status).
 - Phase P2 Domain 14 (operations) now includes player search/restriction/compensation, and operator configuration for Hero templates, Hero stats, skills, monsters, bosses and the new item catalogue, with `CURRENCY_RULES`/`REWARD_RULES` added to the versioned configuration keys.
 - Phase P2 Domain 12 (LiveOps) is implemented: scheduled events with 48h claim grace and overlap/cooldown guards, event missions fed by gameplay events, and two PvE leaderboards (dungeon progress and combat power) whose season close pays rewards through the mailbox.
@@ -351,3 +352,13 @@ Signed: DeepSeek Harness, project assistant
 - Started Phase P3 (Multiplayer & World Conquest) with MOD-13-01 and MOD-13-02: 10 functions covering global-world unlock, discovery radius, map/region views, territory claiming with a 30-minute protection window, upgrades, abandonment and ownership tracking.
 - New tables `world_tiles`, `master_world_status`, `tile_discoveries`, `territories`, `territory_events` (migration `0035_aberrant_tony_stark.sql`), a seeded 12×12 Outer Rim map and a **Thế giới** screen in the web client.
 - Verified: `npm run verify` green — 237/237 server tests (8 world-rule tests + a 10-step HTTP world suite) and 11/11 shared tests. P3 progress is tracked in `P3_PROGRESS_CHECKLIST.md`.
+
+## Update - 2026-11-04 13:55:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Design correction from the owner: the army concept is dropped. Heroes are the only mobile unit and they scout and attack personally.
+- Implemented MOD-13-03 and MOD-13-04 as hero expeditions: `hero_expeditions`, `expedition_members`, `tile_clearances` (migration `0036_illegal_squadron_supreme.sql`), 30s-per-tile travel, SCOUT reports, ATTACK battles against the tile guardian, recall and movement tracking.
+- Territory claiming now requires a cleared tile (`ERR_TERRITORY_NOT_CLEARED`); the old combat-power shortcut was removed.
+- The **Thế giới** page gained a party picker (max 5 Heroes) and an expedition list with live countdowns and recall.
+- Verified: `npm run verify` green — 250/250 server tests (7 expedition rule tests + a 6-step HTTP expedition suite) and 11/11 shared tests.

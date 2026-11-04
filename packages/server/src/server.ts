@@ -40,6 +40,7 @@ import { ContentAdminError, contentAdminService } from './modules/admin/content-
 import { AnalyticsService, analyticsService } from './modules/analytics/analytics.service.js';
 import { SupportError, supportService } from './modules/support/support.service.js';
 import { WorldError, worldService } from './modules/world/world.service.js';
+import { ExpeditionError, expeditionService } from './modules/world/expedition.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -656,6 +657,55 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-13 (P3): hero expeditions (no army: heroes travel and fight themselves) ---
+
+  const expeditionError = (res: Response, error: unknown): boolean => {
+    if (error instanceof ExpeditionError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.post('/api/world/expeditions', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await expeditionService.dispatch(master.id, String(req.body?.tileId ?? ''), req.body?.mission, req.body?.heroIds);
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'EXPEDITION_DISPATCHED', entityType: 'EXPEDITION',
+        entityId: result.expeditionId, diff: { mission: result.mission, tileId: result.tileId, heroes: result.heroes.length },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (expeditionError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/world/expeditions', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await expeditionService.list(master.id));
+  }));
+
+  app.post('/api/world/expeditions/:expeditionId/recall', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await expeditionService.recall(master.id, String(req.params.expeditionId)));
+    } catch (error) {
+      if (expeditionError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/world/heroes/away', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await expeditionService.awayHeroes(master.id));
   }));
 
   // --- DM-13 (P3): global world, exploration and territories ---

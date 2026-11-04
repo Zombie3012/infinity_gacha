@@ -70,6 +70,10 @@ test('HTTP global world: unlock, exploration and territories', { skip: skipReaso
   await t.test('a discovered, unowned tile can be claimed', async () => {
     await sql('update master_world_status set shield_until = now() - interval \'1 hour\' where master_id = $1', [master.masterId]);
     await harness.request(`/api/world/global/tiles/${firstTileId}/discover`, { method: 'POST', token: master.token });
+    // Hero attacks are covered by the expedition suite; simulate the resulting clearance here.
+    await sql(`insert into tile_clearances (id, master_id, tile_id, cleared_at)
+               values (gen_random_uuid()::text, $1, $2, now())
+               on conflict (master_id, tile_id) do update set cleared_at = now()`, [master.masterId, firstTileId]);
 
     const claimed = await harness.request(`/api/world/global/tiles/${firstTileId}/claim`, { method: 'POST', token: master.token });
     assert.equal(claimed.status, 201);
