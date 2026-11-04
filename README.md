@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P3 has started with the global world: unlock gating (Master 15 + floor 10), a 12x12 Outer Rim map with discovery, territory claiming with protection windows, upgrades, abandonment and an ownership leaderboard.
 - Phase P2 Domain 14 (analytics & support) is implemented: player/gacha/economy/battle/retention aggregates for operators, and a support ticket flow (player opens and replies, operators answer and advance status).
 - Phase P2 Domain 14 (operations) now includes player search/restriction/compensation, and operator configuration for Hero templates, Hero stats, skills, monsters, bosses and the new item catalogue, with `CURRENCY_RULES`/`REWARD_RULES` added to the versioned configuration keys.
 - Phase P2 Domain 12 (LiveOps) is implemented: scheduled events with 48h claim grace and overlap/cooldown guards, event missions fed by gameplay events, and two PvE leaderboards (dungeon progress and combat power) whose season close pays rewards through the mailbox.
@@ -342,3 +343,11 @@ Signed: DeepSeek Harness, project assistant
 - Added `scripts/apply-seeds.mjs` (`npm run db:seed`) which applies all 18 sample seeds in dependency order and is safe to re-run; two seeds had a UTF-8 BOM stripped.
 - Added GitHub Actions CI (`.github/workflows/ci.yml`): PostgreSQL 17 service, migrations, seeds, then `npm run verify` with test files serialised (`--test-concurrency=1`) so database fixtures never collide.
 - Fixed three integration-test assumptions that the HTTP layer surfaced: restriction revokes the caller's session, the starter equipment kit counts toward crafted gear, and food storage capacity caps the kitchen.
+
+## Update - 2026-11-04 13:22:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Started Phase P3 (Multiplayer & World Conquest) with MOD-13-01 and MOD-13-02: 10 functions covering global-world unlock, discovery radius, map/region views, territory claiming with a 30-minute protection window, upgrades, abandonment and ownership tracking.
+- New tables `world_tiles`, `master_world_status`, `tile_discoveries`, `territories`, `territory_events` (migration `0035_aberrant_tony_stark.sql`), a seeded 12×12 Outer Rim map and a **Thế giới** screen in the web client.
+- Verified: `npm run verify` green — 237/237 server tests (8 world-rule tests + a 10-step HTTP world suite) and 11/11 shared tests. P3 progress is tracked in `P3_PROGRESS_CHECKLIST.md`.

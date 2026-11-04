@@ -124,3 +124,14 @@
 .ticket-messages{display:flex;flex-direction:column;gap:4px;margin:6px 0}
 .ticket-messages p{margin:0;font-size:10px;line-height:1.5;color:#c3cad9}
 .ticket-messages p.operator{color:#cfc2f5}
+/* --- P3 global world --- */
+.world-grid{display:grid;gap:3px;margin-top:14px}
+.world-cell{aspect-ratio:1/1;border-radius:3px;border:1px solid rgba(155,171,210,.12);background:#121826;color:#5f6b83;font-size:7px;padding:0;line-height:1}
+.world-cell.known{background:#1a2434;color:#8fa3c4}
+.world-cell.mine{background:rgba(131,209,165,.28);color:#bff0d2;border-color:rgba(131,209,165,.5)}
+.world-cell.enemy{background:rgba(233,154,185,.22);color:#f3c3d6;border-color:rgba(233,154,185,.45)}
+.world-cell.selected{outline:1px solid #b8a3ff;outline-offset:1px}
+.world-cell.fog{opacity:.5}
+.world-detail{display:flex;flex-direction:column;gap:4px;margin-top:14px;padding:12px;border:1px dashed var(--line);border-radius:8px}
+.world-detail b{font-size:12px;color:#e9ecf6}
+.world-detail span{font-size:10px;color:#8d92a6}

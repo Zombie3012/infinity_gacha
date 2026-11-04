@@ -28,6 +28,7 @@ const SEED_ORDER = [
   'building_types.sample.sql',
   'quests.sample.sql',
   'liveops_events.sample.sql',
+  'world_tiles.sample.sql',
 ];
 
 const seedDirectory = join(process.cwd(), 'packages', 'server', 'src', 'database', 'seeds');

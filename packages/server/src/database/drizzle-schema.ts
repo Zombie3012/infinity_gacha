@@ -899,3 +899,56 @@ export const supportTicketMessages = pgTable('support_ticket_messages', {
   index('idx_support_messages_ticket').on(table.ticketId, table.createdAt),
   check('support_message_author_check', sql`${table.authorType} IN ('PLAYER', 'OPERATOR')`),
 ]);
+
+// --- Domain 13 (P3): global world, exploration and territories ---
+
+export const worldTiles = pgTable('world_tiles', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  x: integer('x').notNull(),
+  y: integer('y').notNull(),
+  terrain: varchar('terrain', { length: 30 }).notNull(),
+  resourceType: varchar('resource_type', { length: 30 }).notNull(),
+  baseYieldPerHour: doublePrecision('base_yield_per_hour').notNull(),
+  requiredPower: integer('required_power').default(0).notNull(),
+  isOuterRim: boolean('is_outer_rim').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex('uq_world_tile_coords').on(table.x, table.y)]);
+
+export const masterWorldStatus = pgTable('master_world_status', {
+  masterId: varchar('master_id', { length: 36 }).primaryKey().references(() => masters.id, { onDelete: 'cascade' }),
+  unlockedAt: timestamp('unlocked_at', { withTimezone: true }).defaultNow().notNull(),
+  baseX: integer('base_x').notNull(),
+  baseY: integer('base_y').notNull(),
+  shieldUntil: timestamp('shield_until', { withTimezone: true }).notNull(),
+});
+
+export const tileDiscoveries = pgTable('tile_discoveries', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  tileId: varchar('tile_id', { length: 36 }).notNull().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  discoveredAt: timestamp('discovered_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex('uq_tile_discovery').on(table.masterId, table.tileId)]);
+
+export const territories = pgTable('territories', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  tileId: varchar('tile_id', { length: 36 }).notNull().unique().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).references(() => masters.id, { onDelete: 'set null' }),
+  level: integer('level').default(1).notNull(),
+  status: varchar('status', { length: 20 }).default('OWNED').notNull(),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }).defaultNow().notNull(),
+  protectedUntil: timestamp('protected_until', { withTimezone: true }),
+  releaseAt: timestamp('release_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_territory_master').on(table.masterId),
+  check('territory_status_check', sql`${table.status} IN ('OWNED', 'ABANDONING', 'UNOWNED')`),
+]);
+
+export const territoryEvents = pgTable('territory_events', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  tileId: varchar('tile_id', { length: 36 }).notNull().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).references(() => masters.id, { onDelete: 'set null' }),
+  action: varchar('action', { length: 20 }).notNull(),
+  detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index('idx_territory_events_tile').on(table.tileId, table.createdAt)]);

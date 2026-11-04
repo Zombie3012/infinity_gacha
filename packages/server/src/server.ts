@@ -39,6 +39,7 @@ import { PlayerAdminError, playerAdminService } from './modules/admin/player-adm
 import { ContentAdminError, contentAdminService } from './modules/admin/content-admin.service.js';
 import { AnalyticsService, analyticsService } from './modules/analytics/analytics.service.js';
 import { SupportError, supportService } from './modules/support/support.service.js';
+import { WorldError, worldService } from './modules/world/world.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -655,6 +656,125 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-13 (P3): global world, exploration and territories ---
+
+  const worldError = (res: Response, error: unknown): boolean => {
+    if (error instanceof WorldError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/world/global', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await worldService.status(master.id));
+  }));
+
+  app.post('/api/world/global/unlock', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await worldService.unlock(master.id);
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'GLOBAL_WORLD_UNLOCKED', entityType: 'WORLD',
+        entityId: master.id, diff: { base: result.base, shieldUntil: result.shieldUntil },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (worldError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/world/global/map', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await worldService.map(master.id));
+    } catch (error) {
+      if (worldError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/world/global/tiles/:tileId', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await worldService.tile(master.id, String(req.params.tileId)));
+    } catch (error) {
+      if (worldError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/world/global/tiles/:tileId/discover', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await worldService.discover(master.id, String(req.params.tileId)));
+    } catch (error) {
+      if (worldError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/world/global/tiles/:tileId/claim', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await worldService.claim(master.id, String(req.params.tileId));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'TERRITORY_CLAIMED', entityType: 'TERRITORY',
+        entityId: result.territory.id, diff: { tileId: result.territory.tileId, silverSpent: result.silverSpent },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (worldError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/world/territories', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await worldService.listTerritories(master.id));
+  }));
+
+  app.post('/api/world/territories/:territoryId/upgrade', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await worldService.upgrade(master.id, String(req.params.territoryId)));
+    } catch (error) {
+      if (worldError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/world/territories/:territoryId/abandon', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await worldService.abandon(master.id, String(req.params.territoryId)));
+    } catch (error) {
+      if (worldError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/world/territories/history', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await worldService.history(master.id));
+  }));
+
+  app.get('/api/world/leaderboard', requireAccount, asyncRoute(async (_req, res) => {
+    return res.json(await worldService.leaderboard());
   }));
 
   // --- DM-14 (P2): analytics and customer support ---
