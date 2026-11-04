@@ -9,7 +9,9 @@
 - Domain 11 / MOD-11-03 (Payment & IAP): Done — 7 functions.
 - Domain 12 / MOD-12-04, MOD-12-05 (LiveOps Events, Leaderboards): Done — 10 functions.
 - Domain 14 / MOD-14-01, -02, -04 (Player admin + content/economy config): Done — 16 functions.
-- Domain 14 / MOD-14-05, -06 (Analytics, Customer Support): Not started (7 functions).
+- Domain 14 / MOD-14-05, -06 (Analytics, Customer Support): Done — 7 functions.
+
+**All 40 P2 functions across 3 domains / 8 modules are implemented.**
 
 ---
 
@@ -75,6 +77,23 @@
 ### Operator UI
 - Admin console gained **Người chơi** (search, restrict/ban/restore, compensation) and **Nội dung** (item catalogue create, Hero template table) tabs.
 
+## Domain 14: Analytics and Customer Support (part two)
+
+### MOD-14-05 Game Analytics (5 functions)
+- [x] FUN-14-05-001 Player Analytics — registrations (24h/7d), active accounts, restricted accounts and Master conversion.
+- [x] FUN-14-05-002 Gacha Analytics — total rolls, five-star rate, duplicate rate, average pity at five-star and per-banner breakdown.
+- [x] FUN-14-05-003 Economy Analytics — inflow/outflow per currency, IAP revenue, refund rate and outstanding Gem debt.
+- [x] FUN-14-05-004 Battle Analytics — completed/active sessions, victories/defeats, win rate, average rounds and Hero deaths (7d/all).
+- [x] FUN-14-05-005 Retention Analytics — active accounts this week vs last week, returning players and week-over-week retention.
+- Aggregated in `GET /api/admin/analytics` and per-section via `/api/admin/analytics/:section`.
+
+### MOD-14-06 Customer Support (2 functions)
+- [x] FUN-14-06-001 Support Ticket — `POST /api/support/tickets` (player) with validation, first message stored, listing per account.
+- [x] FUN-14-06-002 Handle Support Request — operator list/detail/reply and status transitions guarded by `ERR_SUPPORT_INVALID_TRANSITION`; CLOSED is terminal.
+
+### Operator UI
+- Admin console gained a **Phân tích** tab with the aggregate cards and the economy/retention tables; players get a **Hỗ trợ** page to open tickets and reply.
+
 ---
 
 ## Open items carried forward
@@ -83,7 +102,7 @@
 
 ---
 
-Verification: `npm run verify` passes; 165/165 server tests (12 payment, 12 liveops, 7 admin rule tests) and 11/11 shared tests. Migrations `0031` … `0033_messy_giant_girl.sql` applied, with `iap_products`, `liveops_events` and `item_templates` seeds. Live smoke: valid receipt credited 1.000 Gems, bad signature refused, replaying a used store receipt returned `ERR_IAP_DUPLICATE_RECEIPT`, a refund with balance left 500 → 0 debt, and a refund after spending left 200 Gems clawed plus 800 Gem debt.
+Verification: `npm run verify` passes; 174/174 server tests (12 payment, 12 liveops, 7 admin, 9 support/analytics rule tests) and 11/11 shared tests. Migrations `0031` … `0034_tidy_valeria_richards.sql` applied, with `iap_products`, `liveops_events` and `item_templates` seeds. Live smoke: valid receipt credited 1.000 Gems, bad signature refused, replaying a used store receipt returned `ERR_IAP_DUPLICATE_RECEIPT`, a refund with balance left 500 → 0 debt, and a refund after spending left 200 Gems clawed plus 800 Gem debt.
 
-Updated: 2026-11-04 11:50:00 UTC+7
+Updated: 2026-11-04 12:25:00 UTC+7
 Signed: DeepSeek Harness, project assistant

@@ -869,3 +869,33 @@ export const itemTemplates = pgTable('item_templates', {
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// --- Domain 14 (P2): customer support tickets ---
+
+export const supportTickets = pgTable('support_tickets', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  accountId: varchar('account_id', { length: 36 }).notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  subject: varchar('subject', { length: 150 }).notNull(),
+  body: text('body').notNull(),
+  category: varchar('category', { length: 30 }).default('GENERAL').notNull(),
+  status: varchar('status', { length: 20 }).default('OPEN').notNull(),
+  priority: varchar('priority', { length: 10 }).default('NORMAL').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+}, (table) => [
+  index('idx_support_tickets_status').on(table.status, table.createdAt),
+  check('support_ticket_status_check', sql`${table.status} IN ('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')`),
+]);
+
+export const supportTicketMessages = pgTable('support_ticket_messages', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  ticketId: varchar('ticket_id', { length: 36 }).notNull().references(() => supportTickets.id, { onDelete: 'cascade' }),
+  authorType: varchar('author_type', { length: 10 }).notNull(),
+  authorId: varchar('author_id', { length: 64 }).notNull(),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_support_messages_ticket').on(table.ticketId, table.createdAt),
+  check('support_message_author_check', sql`${table.authorType} IN ('PLAYER', 'OPERATOR')`),
+]);

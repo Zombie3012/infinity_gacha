@@ -37,6 +37,8 @@ import { EventError, eventService } from './modules/liveops/event.service.js';
 import { LeaderboardError, leaderboardService } from './modules/liveops/leaderboard.service.js';
 import { PlayerAdminError, playerAdminService } from './modules/admin/player-admin.service.js';
 import { ContentAdminError, contentAdminService } from './modules/admin/content-admin.service.js';
+import { AnalyticsService, analyticsService } from './modules/analytics/analytics.service.js';
+import { SupportError, supportService } from './modules/support/support.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -653,6 +655,95 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-14 (P2): analytics and customer support ---
+
+  const supportError = (res: Response, error: unknown): boolean => {
+    if (error instanceof SupportError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/admin/analytics', requireAdminApiKey, asyncRoute(async (_req, res) => {
+    return res.json(await analyticsService.summary());
+  }));
+
+  app.get('/api/admin/analytics/:section', requireAdminApiKey, asyncRoute(async (req, res) => {
+    const section = String(req.params.section);
+    const service = new AnalyticsService();
+    if (section === 'players') return res.json(await service.players());
+    if (section === 'gacha') return res.json(await service.gacha());
+    if (section === 'economy') return res.json(await service.economy());
+    if (section === 'battle') return res.json(await service.battle());
+    if (section === 'retention') return res.json(await service.retention());
+    return res.status(404).json({ error: 'Không có nhóm phân tích này.' });
+  }));
+
+  app.post('/api/support/tickets', requireAccount, asyncRoute(async (req, res) => {
+    try {
+      return res.status(201).json(await supportService.create(req.accountId!, req.body?.subject, req.body?.body, req.body?.category));
+    } catch (error) {
+      if (supportError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/support/tickets', requireAccount, asyncRoute(async (req, res) => {
+    return res.json(await supportService.listForAccount(req.accountId!));
+  }));
+
+  app.post('/api/support/tickets/:ticketId/messages', requireAccount, asyncRoute(async (req, res) => {
+    try {
+      return res.json(await supportService.replyAsPlayer(req.accountId!, String(req.params.ticketId), req.body?.body));
+    } catch (error) {
+      if (supportError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/admin/support/tickets', requireAdminApiKey, asyncRoute(async (req, res) => {
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    return res.json(await supportService.listForOperators(status));
+  }));
+
+  app.get('/api/admin/support/tickets/:ticketId', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.json(await supportService.detail(String(req.params.ticketId)));
+    } catch (error) {
+      if (supportError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/support/tickets/:ticketId/reply', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      const result = await supportService.replyAsOperator(String(req.params.ticketId), req.body?.body, adminActor(req));
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'SUPPORT_REPLIED', entityType: 'TICKET',
+        entityId: String(req.params.ticketId), diff: {},
+      });
+      return res.json(result);
+    } catch (error) {
+      if (supportError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/support/tickets/:ticketId/status', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      const ticket = await supportService.changeStatus(String(req.params.ticketId), req.body?.status);
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'SUPPORT_STATUS_CHANGED', entityType: 'TICKET',
+        entityId: ticket.id, diff: { status: ticket.status },
+      });
+      return res.json(ticket);
+    } catch (error) {
+      if (supportError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-14 (P2): player administration and content configuration ---

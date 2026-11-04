@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P2 Domain 14 (analytics & support) is implemented: player/gacha/economy/battle/retention aggregates for operators, and a support ticket flow (player opens and replies, operators answer and advance status).
 - Phase P2 Domain 14 (operations) now includes player search/restriction/compensation, and operator configuration for Hero templates, Hero stats, skills, monsters, bosses and the new item catalogue, with `CURRENCY_RULES`/`REWARD_RULES` added to the versioned configuration keys.
 - Phase P2 Domain 12 (LiveOps) is implemented: scheduled events with 48h claim grace and overlap/cooldown guards, event missions fed by gameplay events, and two PvE leaderboards (dungeon progress and combat power) whose season close pays rewards through the mailbox.
 - Phase P2 has started with Domain 11 (IAP): package catalogue, simulated store receipts with replay protection, gem-debt settlement on purchase, and operator refunds that claw Gems back or book debt.
@@ -314,3 +315,13 @@ Signed: DeepSeek Harness, project assistant
 - Admin console gained **Người chơi** and **Nội dung** tabs.
 - Verified live: suspend blocked login with `ERR_AUTH_ACCOUNT_RESTRICTED`, restore re-enabled it, compensation mailed 5.000 Silver and credited 10 Gems, item/Hero/stats/boss upserts worked, and `CURRENCY_RULES` published as version 1.
 - `npm run verify` green — 165/165 server tests (7 new admin rules), 11/11 shared tests.
+
+## Update - 2026-11-04 12:27:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Completed P2 Domain 14 part two (7 functions): analytics for players, gacha, economy, battles and retention, plus customer-support tickets with operator replies and guarded status transitions.
+- New tables `support_tickets` and `support_ticket_messages` (migration `0034_tidy_valeria_richards.sql`), an admin **Phân tích** tab and a player **Hỗ trợ** page.
+- **Phase P2 is now complete: 40/40 functions across 3 domains and 8 modules**, tracked in `P2_PROGRESS_CHECKLIST.md`.
+- Verified live: a ticket went OPEN → IN_PROGRESS (operator reply) → RESOLVED → CLOSED, reopening was refused with `ERR_SUPPORT_INVALID_TRANSITION`, and the analytics summary reported accounts, rolls, win rate and retention from real data.
+- `npm run verify` green — 174/174 server tests (9 new support/analytics rules), 11/11 shared tests.

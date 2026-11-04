@@ -12,6 +12,7 @@ import { QuestPage } from './quest';
 import { AccountPage } from './account';
 import { PaymentPage } from './payment';
 import { LiveOpsPage } from './liveops';
+import { SupportPage } from './support';
 
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 type Session = { token: string; accountId: string; username: string };
@@ -591,6 +592,7 @@ function App() {
     { id: 'account', icon: '◈', label: 'Tài khoản' },
     { id: 'payment', icon: '◆', label: 'Nạp Ngọc' },
     { id: 'liveops', icon: '✧', label: 'Sự kiện' },
+    { id: 'support', icon: '✉', label: 'Hỗ trợ' },
     { id: 'admin', icon: '⚙', label: 'Quản trị' },
   ];
 
@@ -618,6 +620,7 @@ function App() {
         {page === 'account' && <AccountPage token={session.token} username={session.username} onError={setError} onNotice={setNotice} />}
         {page === 'payment' && <PaymentPage token={session.token} onError={setError} onNotice={setNotice} />}
         {page === 'liveops' && <LiveOpsPage token={session.token} onError={setError} onNotice={setNotice} />}
+        {page === 'support' && <SupportPage token={session.token} onError={setError} onNotice={setNotice} />}
 
         {page === 'admin' && <AdminPage onError={setError} onNotice={setNotice} />}
 

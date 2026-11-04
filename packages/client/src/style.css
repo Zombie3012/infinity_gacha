@@ -115,3 +115,12 @@
 .recovery-box{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding:12px 14px;border:1px dashed rgba(154,126,239,.4);border-radius:8px;background:rgba(154,126,239,.08)}
 .recovery-box code{font-family:ui-monospace,Menlo,monospace;font-size:14px;letter-spacing:2px;color:#d9cff7}
 .recovery-box small{font-size:9px;color:#98a2b8}
+/* --- P2 analytics & support --- */
+.ticket-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.ticket-card{padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:rgba(20,26,39,.6);display:flex;flex-direction:column;gap:6px}
+.ticket-card header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ticket-card header b{font-size:12px;color:#e9ecf6}
+.ticket-card > small{font-size:9px;color:#8d92a6}
+.ticket-messages{display:flex;flex-direction:column;gap:4px;margin:6px 0}
+.ticket-messages p{margin:0;font-size:10px;line-height:1.5;color:#c3cad9}
+.ticket-messages p.operator{color:#cfc2f5}
