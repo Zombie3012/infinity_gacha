@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "node --watch dist/server.js",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

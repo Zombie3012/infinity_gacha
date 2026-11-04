@@ -1,4 +1,4 @@
-﻿-- Sample starter equipment for local development. Reapply after creating new Masters to grant each one missing starter items.
+-- Sample starter equipment for local development. Reapply after creating new Masters to grant each one missing starter items.
 BEGIN;
 
 INSERT INTO equipment_templates

@@ -1,4 +1,4 @@
-﻿-- Editable sample World floor events. Probabilities and effects are prototype tuning.
+-- Editable sample World floor events. Probabilities and effects are prototype tuning.
 INSERT INTO dungeon_event_templates
     (id, code, name, description, event_type, weight, silver_reward, heal_percent, enemy_attack_multiplier, is_active)
 VALUES

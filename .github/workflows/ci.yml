@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  verify:
+    name: Verify (build, unit + HTTP tests)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: infinite_gacha
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d infinite_gacha"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5433/infinite_gacha
+      AUTH_SECRET: ci-auth-secret-for-tests-only
+      ADMIN_API_KEY: ci-admin-key
+      LINK_PROVIDER_SECRET: ci-link-secret
+      PAYMENT_GATEWAY_SECRET: ci-payment-secret
+      PORT: 3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply database migrations
+        run: npm run db:migrate
+
+      - name: Seed sample data
+        run: npm run db:seed
+
+      - name: Verify (encoding guard, build, unit + HTTP tests)
+        run: npm run verify

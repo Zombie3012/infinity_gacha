@@ -84,6 +84,14 @@ infiniti_gacha/
 - Phase P1 has started with Domain 08 (base, construction and production): zone expansion, a seven-entry building catalogue, offline resource accrual with capacity pause, harvesting into the Master inventory, and Hero work assignments that raise output.
 - Redis is part of the selected architecture for later caching, distributed locks, leaderboards, and timers; it is not connected in this step.
 
+## Automated tests and CI
+
+- `npm run verify` runs the encoding guard, builds every workspace and executes the full test suite.
+- `npm test` runs **216 server tests** — domain-rule unit tests plus HTTP integration suites (`packages/server/tests/http.*.test.mjs`) that boot the real Express app, register a throwaway account and exercise base construction, crafting, survival, medical, economy/IAP, LiveOps and administration flows against PostgreSQL — and **11 shared** formula tests.
+- HTTP suites skip automatically when the database is unreachable, so the unit suite still works offline.
+- Fresh database in two commands: `npm run db:migrate` then `npm run db:seed` (18 idempotent sample seeds).
+- CI (`.github/workflows/ci.yml`) starts PostgreSQL 17 as a service, migrates, seeds and runs `npm run verify` on every push and pull request.
+
 ## Run locally
 
 Requirements: Node.js 20.19+ and Docker Compose.
@@ -325,3 +333,12 @@ Signed: DeepSeek Harness, project assistant
 - **Phase P2 is now complete: 40/40 functions across 3 domains and 8 modules**, tracked in `P2_PROGRESS_CHECKLIST.md`.
 - Verified live: a ticket went OPEN → IN_PROGRESS (operator reply) → RESOLVED → CLOSED, reopening was refused with `ERR_SUPPORT_INVALID_TRANSITION`, and the analytics summary reported accounts, rolls, win rate and retention from real data.
 - `npm run verify` green — 174/174 server tests (9 new support/analytics rules), 11/11 shared tests.
+
+## Update - 2026-11-04 12:55:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Added HTTP integration coverage: six suites (`http.base`, `http.crafting`, `http.survival`, `http.medical`, `http.economy`, `http.liveops`, `http.admin`) drive the real API in-process and clean up after themselves. Total suite is now 216 tests.
+- Added `scripts/apply-seeds.mjs` (`npm run db:seed`) which applies all 18 sample seeds in dependency order and is safe to re-run; two seeds had a UTF-8 BOM stripped.
+- Added GitHub Actions CI (`.github/workflows/ci.yml`): PostgreSQL 17 service, migrations, seeds, then `npm run verify` with test files serialised (`--test-concurrency=1`) so database fixtures never collide.
+- Fixed three integration-test assumptions that the HTTP layer surfaced: restriction revokes the caller's session, the starter equipment kit counts toward crafted gear, and food storage capacity caps the kitchen.

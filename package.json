@@ -15,7 +15,8 @@
     "db:generate": "npm run db:generate -w packages/server",
     "db:migrate": "npm run db:migrate -w packages/server",
     "check:encoding": "node scripts/check-encoding.mjs",
-    "verify": "npm run check:encoding && npm run build && npm test"
+    "verify": "npm run check:encoding && npm run build && npm test",
+    "db:seed": "node scripts/apply-seeds.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
