@@ -659,6 +659,20 @@ export function createApp() {
     return res.json(updated);
   }));
 
+  // --- DM-13 (P3): hero-vs-hero PvP reports and territory defense ---
+
+  app.get('/api/world/pvp/battles', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await expeditionService.battles(master.id));
+  }));
+
+  app.get('/api/world/tiles/:tileId/defense', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await expeditionService.defenseEstimate(String(req.params.tileId)));
+  }));
+
   // --- DM-13 (P3): hero expeditions (no army: heroes travel and fight themselves) ---
 
   const expeditionError = (res: Response, error: unknown): boolean => {

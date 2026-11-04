@@ -37,6 +37,18 @@ type Territory = {
 
 type HeroOption = { id: string; name: string; level: number; state: string };
 
+type PvpBattle = {
+  id: string;
+  tileId: string;
+  attackerMasterId: string;
+  defenderMasterId: string | null;
+  winner: string;
+  attackerPower: number;
+  defenderPower: number;
+  rounds: number;
+  createdAt: string;
+};
+
 type Expedition = {
   id: string;
   mission: string;
@@ -68,6 +80,7 @@ export function WorldMapPage({ token, onError, onNotice }: { token: string; onEr
   const [selected, setSelected] = useState<Tile | null>(null);
   const [heroes, setHeroes] = useState<HeroOption[]>([]);
   const [expeditions, setExpeditions] = useState<Expedition[]>([]);
+  const [battles, setBattles] = useState<PvpBattle[]>([]);
   const [mission, setMission] = useState<'SCOUT' | 'ATTACK'>('SCOUT');
   const [party, setParty] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -80,16 +93,18 @@ export function WorldMapPage({ token, onError, onNotice }: { token: string; onEr
       setTerritories([]);
       return;
     }
-    const [map, mine, roster, trips, away] = await Promise.all([
+    const [map, mine, roster, trips, away, pvp] = await Promise.all([
       call<{ tiles: Tile[] }>('/api/world/global/map', token),
       call<{ territories: Territory[]; hourlyYield: number }>('/api/world/territories', token),
       call<HeroOption[]>('/api/heroes', token).catch(() => []),
       call<Expedition[]>('/api/world/expeditions', token).catch(() => []),
       call<string[]>('/api/world/heroes/away', token).catch(() => []),
+      call<PvpBattle[]>('/api/world/pvp/battles', token).catch(() => []),
     ]);
     setTiles(map.tiles);
     setTerritories(mine.territories);
     setExpeditions(trips);
+    setBattles(pvp);
     const busyIds = new Set(away);
     setHeroes(roster.filter(hero => hero.state !== 'DEAD' && hero.state !== 'DISABLED' && !busyIds.has(hero.id)));
   }, [token]);
@@ -215,6 +230,24 @@ export function WorldMapPage({ token, onError, onNotice }: { token: string; onEr
           <span>{(trip.phase !== 'DONE') && <button type="button" className="text-button" disabled={busy}
             onClick={() => void run(() => call(`/api/world/expeditions/${trip.id}/recall`, token, { method: 'POST' }), 'Đã thu hồi đội.')}>Thu hồi</button>}</span>
         </div>)}
+      </div>
+    </section>
+
+    <section className="panel">
+      <div className="panel-head"><div><div className="eyebrow">PVP</div><h2>Báo cáo PvP gần đây</h2></div></div>
+      <div className="admin-table">
+        <div className="admin-row admin-row-head"><span>Kết quả</span><span>Vai trò</span><span>Lực chiến</span><span>Số vòng</span><span>Thời điểm</span></div>
+        {battles.length === 0 && <div className="admin-row"><span>Chưa có trận PvP nào.</span></div>}
+        {battles.slice(0, 8).map(battle => {
+          const asAttacker = battle.attackerMasterId === battle.attackerMasterId;
+          return <div className="admin-row" key={battle.id}>
+            <span><em className={`admin-badge ${battle.winner === 'ATTACKER' ? 'warn' : 'ok'}`}>{battle.winner === 'ATTACKER' ? 'Attacker thắng' : 'Defender thắng'}</em></span>
+            <span>{asAttacker ? 'Tấn công' : 'Phòng thủ'}</span>
+            <span>{numberFormat.format(battle.attackerPower)} vs {numberFormat.format(battle.defenderPower)}</span>
+            <span>{battle.rounds}</span>
+            <span>{when(battle.createdAt)}</span>
+          </div>;
+        })}
       </div>
     </section>
 

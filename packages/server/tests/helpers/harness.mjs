@@ -66,6 +66,8 @@ export async function createMaster(request, prefix = 'it') {
 export async function cleanupAccount(accountId) {
   if (!accountId) return;
   await pool.query('delete from accounts where id = $1', [accountId]).catch(() => {});
+  // Territories survive owner deletion (FK SET NULL); drop the orphaned rows.
+  await pool.query('delete from territories where master_id is null').catch(() => {});
 }
 
 export async function sql(query, params = []) {

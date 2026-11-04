@@ -71,6 +71,7 @@ infiniti_gacha/
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
 - Phase P3 has started with the global world: unlock gating (Master 15 + floor 10), a 12x12 Outer Rim map with discovery, territory claiming with protection windows, upgrades, abandonment and an ownership leaderboard.
+- Phase P3 PvP is implemented as Hero-vs-Hero: an ATTACK expedition can strike another Master's territory, protected by claim windows and the Novice Shield, with deterministic battle reports and ownership transfer on victory.
 - **There is no army entity.** Heroes themselves travel: expeditions of 1–5 Heroes scout or attack tiles, reports carry owner/defender/power data, and claiming a tile requires a won hero attack (`tile_clearances`).
 - Phase P2 Domain 14 (analytics & support) is implemented: player/gacha/economy/battle/retention aggregates for operators, and a support ticket flow (player opens and replies, operators answer and advance status).
 - Phase P2 Domain 14 (operations) now includes player search/restriction/compensation, and operator configuration for Hero templates, Hero stats, skills, monsters, bosses and the new item catalogue, with `CURRENCY_RULES`/`REWARD_RULES` added to the versioned configuration keys.
@@ -362,3 +363,11 @@ Signed: DeepSeek Harness, project assistant
 - Territory claiming now requires a cleared tile (`ERR_TERRITORY_NOT_CLEARED`); the old combat-power shortcut was removed.
 - The **Thế giới** page gained a party picker (max 5 Heroes) and an expedition list with live countdowns and recall.
 - Verified: `npm run verify` green — 250/250 server tests (7 expedition rule tests + a 6-step HTTP expedition suite) and 11/11 shared tests.
+
+## Update - 2026-11-04 14:30:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Completed P3 MOD-13-05 (PvP & Territory Defense): 7 functions — hero raids on enemy territories, protection/shield validation, deterministic hero-vs-hero battles, ownership transfer with a fresh protection window, a defence estimate endpoint and a PvP battle log.
+- New table `pvp_battles` (migration `0037_zippy_solo.sql`); the **Thế giới** page now shows recent PvP reports.
+- Verified: `npm run verify` green — 268/268 server tests (8 PvP rule tests + a 6-step HTTP PvP suite) and 11/11 shared tests.

@@ -10,7 +10,7 @@
 - MOD-13-02 (Territory Control & Expansion): Done — 5 functions.
 - MOD-13-03 (Scouting & Intelligence): Done — 3 functions.
 - MOD-13-04 (Hero Expeditions & Movement, replaces the army concept): Done — 5 functions.
-- MOD-13-05 (PvP Combat & Territory Defense): Not started (7).
+- MOD-13-05 (PvP Combat & Territory Defense): Done — 7 functions.
 - MOD-13-06 (Alliance System): Not started (6).
 - MOD-13-07 (World War & Conquest): Not started (6).
 
@@ -55,9 +55,20 @@
 - [x] FUN-13-04-004 Recall Expedition — `POST /api/world/expeditions/:id/recall` returns the party immediately.
 - [x] FUN-13-04-005 Track Movement — the expedition list reports phase and remaining seconds; `GET /api/world/heroes/away` lists Heroes currently away.
 
+## Domain 13 part three: PvP and Territory Defense
+
+### MOD-13-05 PvP Combat & Territory Defense (7 functions)
+- [x] FUN-13-05-001 Initiate Player Attack — an `ATTACK` expedition can target another Master's owned tile; the party is the attacker's Heroes.
+- [x] FUN-13-05-002 Validate PvP Conditions — dispatches are refused while the tile has claim protection (`ERR_TERRITORY_PROTECTED`), while the victim holds a Novice Shield (`ERR_TARGET_SHIELDED`), against your own tile, or when the attacker is at the 10-territory cap.
+- [x] FUN-13-05-003 Execute PvP Battle — on arrival the party fights the defender's five strongest Heroes with a +20% defence bonus and +10% per territory level; the outcome is deterministic per expedition seed with a ±10% swing.
+- [x] FUN-13-05-004 Process PvP Result — a winning attacker takes ownership (keeping the level), gains a fresh 30-minute protection window and a tile clearance; a losing attacker returns home and the defender keeps the tile.
+- [x] FUN-13-05-005 Defend Territory — `GET /api/world/tiles/:tileId/defense` exposes the garrison power, level and protection state of a tile.
+- [x] FUN-13-05-006 PvP Protection — claim protection and the Novice Shield both block attacks; every capture refreshes the 30-minute window.
+- [x] FUN-13-05-007 PvP Battle Report — `pvp_battles` stores winner, both powers, rounds and a JSON report; `GET /api/world/pvp/battles` lists the caller's attacks and defences.
+
 ---
 
-Verification: `npm run verify` passes; 237/237 server tests (8 world rules + 10 world HTTP tests added) and 11/11 shared tests. Migration `0035_aberrant_tony_stark.sql` applied; `world_tiles.sample.sql` seeded (144 tiles).
+Verification: `npm run verify` passes; 268/268 server tests (8 world + 7 expedition + 8 PvP rule tests; 10 world + 6 expedition + 6 PvP HTTP suites) and 11/11 shared tests. Migrations `0035` … `0037_zippy_solo.sql` applied; `world_tiles.sample.sql` seeded (144 tiles).
 
-Updated: 2026-11-04 13:20:00 UTC+7
+Updated: 2026-11-04 14:28:00 UTC+7
 Signed: DeepSeek Harness, project assistant

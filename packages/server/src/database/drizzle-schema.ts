@@ -985,3 +985,23 @@ export const tileClearances = pgTable('tile_clearances', {
   tileId: varchar('tile_id', { length: 36 }).notNull().references(() => worldTiles.id, { onDelete: 'cascade' }),
   clearedAt: timestamp('cleared_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [uniqueIndex('uq_tile_clearance').on(table.masterId, table.tileId)]);
+
+// --- Domain 13 (P3): hero-vs-hero PvP battles ---
+
+export const pvpBattles = pgTable('pvp_battles', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  tileId: varchar('tile_id', { length: 36 }).notNull().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  attackerMasterId: varchar('attacker_master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  defenderMasterId: varchar('defender_master_id', { length: 36 }).references(() => masters.id, { onDelete: 'set null' }),
+  expeditionId: varchar('expedition_id', { length: 36 }).references(() => heroExpeditions.id, { onDelete: 'set null' }),
+  winner: varchar('winner', { length: 10 }).notNull(),
+  attackerPower: integer('attacker_power').notNull(),
+  defenderPower: integer('defender_power').notNull(),
+  rounds: integer('rounds').default(0).notNull(),
+  report: jsonb('report').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_pvp_attacker').on(table.attackerMasterId, table.createdAt),
+  index('idx_pvp_defender').on(table.defenderMasterId, table.createdAt),
+  check('pvp_winner_check', sql`${table.winner} IN ('ATTACKER', 'DEFENDER')`),
+]);

@@ -2,8 +2,8 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
-  expeditionMembers, heroExpeditions, heroes, masters, masterWorldStatus, territories, tileDiscoveries,
-  tileClearances, worldTiles,
+  expeditionMembers, heroExpeditions, heroes, masters, masterWorldStatus, pvpBattles, territories,
+  tileDiscoveries, tileClearances, territoryEvents, worldTiles,
 } from '../../database/drizzle-schema.js';
 import { topCombatPower } from '../liveops/liveops-rules.js';
 import { tileDistance } from './world-rules.js';
@@ -11,6 +11,9 @@ import {
   expeditionProgress, resolveGuardianBattle, travelSeconds, validateParty,
   type ExpeditionMission, type ExpeditionStatus,
 } from './expedition-rules.js';
+import {
+  canAttack, canHoldMoreTerritories, defenderPower, protectionAfterCapture, resolvePvp,
+} from './pvp-rules.js';
 
 export class ExpeditionError extends Error {
   constructor(message: string, readonly statusCode = 400) {
@@ -67,6 +70,27 @@ export class ExpeditionService {
     const busy = new Set(await this.busyHeroIds(masterId));
     if (heroIds.some(id => busy.has(id))) throw new ExpeditionError('ERR_EXPEDITION_HERO_BUSY', 409);
 
+    // Attacking another Master's territory is a hero-vs-hero fight (no army).
+    if (mission === 'ATTACK') {
+      const [targetTerritory] = await db.select().from(territories).where(eq(territories.tileId, tileId)).limit(1);
+      if (targetTerritory?.masterId && targetTerritory.masterId !== masterId) {
+        const [ownerStatus] = await db.select().from(masterWorldStatus)
+          .where(eq(masterWorldStatus.masterId, targetTerritory.masterId)).limit(1);
+        const check = canAttack({
+          tileOwned: true,
+          ownedBySelf: false,
+          territoryProtectedUntil: targetTerritory.protectedUntil,
+          ownerShieldUntil: ownerStatus?.shieldUntil ?? null,
+          now,
+        });
+        if (!check.ok) throw new ExpeditionError(check.reason ?? 'ERR_TARGET_UNATTACKABLE', 409);
+
+        const [row] = await db.select({ total: sql<number>`count(*)::int` }).from(territories)
+          .where(and(eq(territories.masterId, masterId), inArray(territories.status, ['OWNED', 'ABANDONING'])));
+        if (!canHoldMoreTerritories(row?.total ?? 0)) throw new ExpeditionError('ERR_TERRITORY_LIMIT_REACHED', 409);
+      }
+    }
+
     const distance = tileDistance({ x: status.baseX, y: status.baseY }, { x: tile.x, y: tile.y });
     const travel = travelSeconds(distance);
     const id = uuidv4();
@@ -113,7 +137,7 @@ export class ExpeditionService {
         ? await db.select({ hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed })
           .from(heroes).where(eq(heroes.masterId, territoryRow.masterId))
         : [];
-      const defenderPower = topCombatPower(defenderHeroes.map(row => ({
+      const defenderPowerBase = topCombatPower(defenderHeroes.map(row => ({
         hp: row.hp, attack: row.attack, defense: row.defense, speed: row.speed,
       })));
 
@@ -129,14 +153,51 @@ export class ExpeditionService {
           partyPower: power,
           scoutedAt: now.toISOString(),
         };
+      } else if (territoryRow?.masterId && territoryRow.masterId !== expedition.masterId) {
+        // Hero-vs-Hero: the defender fights with their strongest five Heroes.
+        const strength = defenderPower(defenderPowerBase, territoryRow.level);
+        const battle = resolvePvp(power, strength, expedition.id);
+        const won = battle.winner === 'ATTACKER';
+        result = {
+          kind: 'PVP_REPORT',
+          won,
+          winner: battle.winner,
+          partyPower: power,
+          defenderPower: strength,
+          rounds: battle.rounds,
+          owner: owner ? { masterId: owner.id, name: owner.name } : null,
+          resolvedAt: now.toISOString(),
+        };
+        await db.insert(pvpBattles).values({
+          id: uuidv4(), tileId: expedition.tileId, attackerMasterId: expedition.masterId,
+          defenderMasterId: territoryRow.masterId, expeditionId: expedition.id,
+          winner: battle.winner, attackerPower: power, defenderPower: strength, rounds: battle.rounds,
+          report: { ...result, ownerName: owner?.name ?? null }, createdAt: now,
+        });
+        if (won && tile) {
+          await db.update(territories).set({
+            masterId: expedition.masterId,
+            protectedUntil: protectionAfterCapture(now),
+            updatedAt: now,
+          }).where(eq(territories.id, territoryRow.id));
+          await db.insert(tileClearances).values({
+            id: uuidv4(), masterId: expedition.masterId, tileId: tile.id, clearedAt: now,
+          }).onConflictDoUpdate({ target: [tileClearances.masterId, tileClearances.tileId], set: { clearedAt: now } });
+        }
+        await db.insert(territoryEvents).values({
+          id: uuidv4(), tileId: expedition.tileId, masterId: expedition.masterId,
+          action: won ? 'PVP_CAPTURED' : 'PVP_REPELLED',
+          detail: { defenderMasterId: territoryRow.masterId, attackerPower: power, defenderPower: strength, rounds: battle.rounds },
+          createdAt: now,
+        });
       } else {
-        const battle = resolveGuardianBattle(power, Math.max(tile?.requiredPower ?? 0, defenderPower * 0.5));
+        const battle = resolveGuardianBattle(power, Math.max(tile?.requiredPower ?? 0, defenderPowerBase * 0.5));
         result = {
           kind: 'BATTLE_REPORT',
           won: battle.won,
           partyPower: power,
           guardianPower: tile?.requiredPower ?? 0,
-          defenderPower,
+          defenderPower: defenderPowerBase,
           owner: owner ? { masterId: owner.id, name: owner.name } : null,
           resolvedAt: now.toISOString(),
         };
@@ -202,6 +263,33 @@ export class ExpeditionService {
     const [updated] = await db.update(heroExpeditions).set({ status: 'RECALLED', returnAt: now })
       .where(eq(heroExpeditions.id, expeditionId)).returning();
     return { expedition: updated, recalledAt: now };
+  }
+
+  async battles(masterId: string) {
+    const rows = await db.select().from(pvpBattles)
+      .where(sql`${pvpBattles.attackerMasterId} = ${masterId} or ${pvpBattles.defenderMasterId} = ${masterId}`)
+      .orderBy(desc(pvpBattles.createdAt)).limit(30);
+    return rows;
+  }
+
+  async defenseEstimate(tileId: string, now = new Date()) {
+    const [row] = await db.select({ territory: territories, tile: worldTiles })
+      .from(territories).innerJoin(worldTiles, eq(worldTiles.id, territories.tileId))
+      .where(eq(territories.tileId, tileId)).limit(1);
+    if (!row?.territory.masterId) return { owned: false, defensePower: 0, protected: false, protectedUntil: null };
+    const defenders = await db.select({ hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed })
+      .from(heroes).where(eq(heroes.masterId, row.territory.masterId));
+    const base = topCombatPower(defenders.map(defender => ({
+      hp: defender.hp, attack: defender.attack, defense: defender.defense, speed: defender.speed,
+    })));
+    return {
+      owned: true,
+      ownerMasterId: row.territory.masterId,
+      level: row.territory.level,
+      defensePower: defenderPower(base, row.territory.level),
+      protected: Boolean(row.territory.protectedUntil && row.territory.protectedUntil > now),
+      protectedUntil: row.territory.protectedUntil,
+    };
   }
 
   /** Heroes currently away from the base (used by the client roster). */
