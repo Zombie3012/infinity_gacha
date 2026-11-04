@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P2 has started with Domain 11 (IAP): package catalogue, simulated store receipts with replay protection, gem-debt settlement on purchase, and operator refunds that claw Gems back or book debt.
 - Phase P1 Domain 01 (accounts) is implemented: provider identity linking (Google/Apple, HMAC-simulated hand-off) and single-use recovery tokens that rotate the password and revoke sessions.
 - Phase P1 Domain 12 (quests) is implemented: main/side quests with explicit acceptance, daily quests rotating at 00:00 UTC+7, weekly quests rolling on Thursday, and lifetime achievements that pay Gems.
 - Phase P1 Domain 10 (crafting) is implemented: recipe-based equipment crafting with rolled substats, enhancement by stones and Silver, and three-into-one fusion that raises star rarity by 30% per star.
@@ -282,3 +283,13 @@ Signed: DeepSeek Harness, project assistant
 - **Phase P1 is now complete: 93/93 functions across 8 domains and 19 modules**, tracked in `P1_PROGRESS_CHECKLIST.md`.
 - Verified live: a tampered provider token was rejected, a valid link was stored, a second account was refused with `ERR_AUTH_EXTERNAL_ID_ALREADY_LINKED`, recovery rotated the password, and replaying the used token failed.
 - `npm run verify` green — 134/134 server tests (9 new account rules), 11/11 shared tests.
+
+## Update - 2026-11-04 10:42:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Started Phase P2 with Domain 11 (Payment & IAP): 7 functions — package catalogue, checkout, receipt validation, reward granting with Gem-debt settlement, payment history and operator refunds.
+- New tables `iap_products` and `payment_transactions` (migration `0031_broken_whiplash.sql`), seeded with four packages, `PAYMENT_GATEWAY_SECRET` added to the example environment, plus a **Nạp Ngọc** screen in the web client.
+- Store receipts are simulated with an HMAC hand-off (no Apple/Google SDK), and refunds claw back Gems or book them as Gem debt without locking the account.
+- Verified live: 1.000 Gems credited, invalid signature refused, reused store receipt returned `ERR_IAP_DUPLICATE_RECEIPT`, refund with balance reached 0/0, refund after spending produced 800 Gem debt.
+- `npm run verify` green — 146/146 server tests (12 new payment rules), 11/11 shared tests. P2 progress is tracked in `P2_PROGRESS_CHECKLIST.md`.

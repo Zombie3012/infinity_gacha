@@ -746,3 +746,42 @@ export const accountRecoveryTokens = pgTable('account_recovery_tokens', {
 }, (table) => [
   index('idx_recovery_tokens_account').on(table.accountId, table.expiresAt),
 ]);
+
+// --- Domain 11 (P2): IAP packages, receipts and refunds ---
+
+export const iapProducts = pgTable('iap_products', {
+  code: varchar('code', { length: 50 }).primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description').notNull(),
+  priceCents: integer('price_cents').notNull(),
+  currency: varchar('currency', { length: 3 }).default('USD').notNull(),
+  gems: integer('gems').default(0).notNull(),
+  silver: integer('silver').default(0).notNull(),
+  items: jsonb('items').$type<{ itemId: string; quantity: number }[]>().notNull().default(sql`'[]'::jsonb`),
+  isActive: boolean('is_active').default(true).notNull(),
+  sortOrder: integer('sort_order').default(100).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const paymentTransactions = pgTable('payment_transactions', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  productCode: varchar('product_code', { length: 50 }).notNull().references(() => iapProducts.code),
+  store: varchar('store', { length: 10 }).notNull(),
+  storeTransactionId: varchar('store_transaction_id', { length: 128 }),
+  status: varchar('status', { length: 20 }).default('PENDING').notNull(),
+  gems: integer('gems').default(0).notNull(),
+  silver: integer('silver').default(0).notNull(),
+  items: jsonb('items').$type<{ itemId: string; quantity: number }[]>().notNull().default(sql`'[]'::jsonb`),
+  priceCents: integer('price_cents').default(0).notNull(),
+  currency: varchar('currency', { length: 3 }).default('USD').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  refundedAt: timestamp('refunded_at', { withTimezone: true }),
+  refundReason: text('refund_reason'),
+}, (table) => [
+  uniqueIndex('uq_payment_store_receipt').on(table.store, table.storeTransactionId),
+  index('idx_payment_master').on(table.masterId, table.createdAt),
+  check('payment_status_check', sql`${table.status} IN ('PENDING', 'COMPLETED', 'REFUNDED', 'FAILED')`),
+  check('payment_store_check', sql`${table.store} IN ('APPLE', 'GOOGLE')`),
+]);

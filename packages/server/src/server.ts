@@ -32,6 +32,7 @@ import { MailboxError, mailboxService } from './modules/shop/mailbox.service.js'
 import { CraftingError, craftingService } from './modules/crafting/crafting.service.js';
 import { QuestError, questService } from './modules/quest/quest.service.js';
 import { AccountError, accountLinkService } from './modules/auth/account.service.js';
+import { PaymentError, paymentService } from './modules/payment/payment.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -648,6 +649,76 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-11 (P2): IAP packages, receipts and refunds ---
+
+  const paymentError = (res: Response, error: unknown): boolean => {
+    if (error instanceof PaymentError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/iap/products', requireAccount, asyncRoute(async (_req, res) => {
+    return res.json(await paymentService.products());
+  }));
+
+  app.post('/api/iap/checkout', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await paymentService.checkout(master.id, String(req.body?.productCode ?? ''), String(req.body?.store ?? 'APPLE'));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'IAP_CHECKOUT_STARTED', entityType: 'PAYMENT',
+        entityId: result.transactionId, diff: { productCode: result.product.code, store: result.store },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (paymentError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/iap/receipt', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await paymentService.confirmReceipt(master.id, req.body ?? {});
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'IAP_RECEIPT_CONFIRMED', entityType: 'PAYMENT',
+        entityId: result.transactionId, diff: { gemsGranted: result.gemsGranted, gemDebtSettled: result.gemDebtSettled },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (paymentError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/iap/transactions', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await paymentService.history(master.id));
+  }));
+
+  app.get('/api/admin/iap/transactions', requireAdminApiKey, asyncRoute(async (_req, res) => {
+    return res.json(await paymentService.allTransactions());
+  }));
+
+  app.post('/api/admin/iap/refund', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      const result = await paymentService.refund(String(req.body?.transactionId ?? ''), req.body?.reason);
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'IAP_REFUNDED', entityType: 'PAYMENT',
+        entityId: result.transactionId, diff: { gemsClawedBack: result.gemsClawedBack, gemDebtAdded: result.gemDebtAdded },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (paymentError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-01 (P1): account linking and recovery ---
