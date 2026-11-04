@@ -276,6 +276,7 @@ export const enemyTemplates = pgTable('enemy_templates', {
   baseExpReward: integer('base_exp_reward').notNull(),
   baseSilverReward: integer('base_silver_reward').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
+  isBoss: boolean('is_boss').default(false).notNull(),
 });
 
 
@@ -856,3 +857,15 @@ export const leaderboardRewards = pgTable('leaderboard_rewards', {
   reward: jsonb('reward').$type<{ silver?: number; gems?: number; items?: { itemId: string; quantity: number }[] }>().notNull().default({}),
   claimedAt: timestamp('claimed_at', { withTimezone: true }),
 }, (table) => [uniqueIndex('uq_leaderboard_reward').on(table.seasonId, table.masterId)]);
+
+// --- Domain 14 (P2): content catalogue (items) ---
+
+export const itemTemplates = pgTable('item_templates', {
+  code: varchar('code', { length: 50 }).primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  category: varchar('category', { length: 30 }).notNull(),
+  rarity: integer('rarity').default(1).notNull(),
+  description: text('description').notNull().default(''),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});

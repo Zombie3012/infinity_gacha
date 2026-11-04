@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P2 Domain 14 (operations) now includes player search/restriction/compensation, and operator configuration for Hero templates, Hero stats, skills, monsters, bosses and the new item catalogue, with `CURRENCY_RULES`/`REWARD_RULES` added to the versioned configuration keys.
 - Phase P2 Domain 12 (LiveOps) is implemented: scheduled events with 48h claim grace and overlap/cooldown guards, event missions fed by gameplay events, and two PvE leaderboards (dungeon progress and combat power) whose season close pays rewards through the mailbox.
 - Phase P2 has started with Domain 11 (IAP): package catalogue, simulated store receipts with replay protection, gem-debt settlement on purchase, and operator refunds that claw Gems back or book debt.
 - Phase P1 Domain 01 (accounts) is implemented: provider identity linking (Google/Apple, HMAC-simulated hand-off) and single-use recovery tokens that rotate the password and revoke sessions.
@@ -303,3 +304,13 @@ Signed: DeepSeek Harness, project assistant
 - New tables `live_events`, `event_missions`, `event_mission_progress`, `floor_records`, `leaderboard_seasons`, `leaderboard_rewards` (migration `0032_pretty_morg.sql`), seeded sample event, and a **Sự kiện** screen in the web client.
 - Verified live: two crafts completed the event craft mission and paid its reward, a dungeon victory advanced both event missions and ranked the Master #1 by floor/rounds, and closing the season delivered a rank-1 reward mail.
 - `npm run verify` green — 158/158 server tests (12 new liveops rules), 11/11 shared tests.
+
+## Update - 2026-11-04 11:52:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Delivered P2 Domain 14 part one (16 functions): player administration (search, detail, restrict/restore, compensation) and content/economy configuration (Hero templates, stats, skills, enemies, bosses, item catalogue, currency/reward config keys).
+- New `item_templates` table and `enemy_templates.is_boss` (migration `0033_messy_giant_girl.sql`), seeded with 13 items shared by the shop, crafting and reward flows.
+- Admin console gained **Người chơi** and **Nội dung** tabs.
+- Verified live: suspend blocked login with `ERR_AUTH_ACCOUNT_RESTRICTED`, restore re-enabled it, compensation mailed 5.000 Silver and credited 10 Gems, item/Hero/stats/boss upserts worked, and `CURRENCY_RULES` published as version 1.
+- `npm run verify` green — 165/165 server tests (7 new admin rules), 11/11 shared tests.

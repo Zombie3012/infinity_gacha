@@ -35,6 +35,8 @@ import { AccountError, accountLinkService } from './modules/auth/account.service
 import { PaymentError, paymentService } from './modules/payment/payment.service.js';
 import { EventError, eventService } from './modules/liveops/event.service.js';
 import { LeaderboardError, leaderboardService } from './modules/liveops/leaderboard.service.js';
+import { PlayerAdminError, playerAdminService } from './modules/admin/player-admin.service.js';
+import { ContentAdminError, contentAdminService } from './modules/admin/content-admin.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -651,6 +653,132 @@ export function createApp() {
       entityType: 'BANNER', entityId: bannerId, diff: { previous: { isActive: true }, next: { isActive: false } },
     });
     return res.json(updated);
+  }));
+
+  // --- DM-14 (P2): player administration and content configuration ---
+
+  const operatorError = (res: Response, error: unknown): boolean => {
+    if (error instanceof PlayerAdminError || error instanceof ContentAdminError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/admin/players', requireAdminApiKey, asyncRoute(async (req, res) => {
+    return res.json(await playerAdminService.search(req.query.query));
+  }));
+
+  app.get('/api/admin/players/:accountId', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.json(await playerAdminService.detail(String(req.params.accountId)));
+    } catch (error) {
+      if (operatorError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/players/:accountId/restrict', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      const result = await playerAdminService.restrict(String(req.params.accountId), req.body?.status, req.body?.reason, adminActor(req));
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'PLAYER_RESTRICTED', entityType: 'ACCOUNT',
+        entityId: String(req.params.accountId), diff: { status: result.status, reason: result.reason },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (operatorError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/players/:accountId/restore', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      const result = await playerAdminService.restore(String(req.params.accountId), adminActor(req));
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'PLAYER_RESTORED', entityType: 'ACCOUNT',
+        entityId: String(req.params.accountId), diff: { status: result.status },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (operatorError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/players/:accountId/compensation', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      const result = await playerAdminService.compensate(String(req.params.accountId), req.body, req.body?.subject, req.body?.body);
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'PLAYER_COMPENSATED', entityType: 'ACCOUNT',
+        entityId: String(req.params.accountId), diff: { compensation: result.compensation, messageId: result.messageId },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (operatorError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/admin/content/heroes', requireAdminApiKey, asyncRoute(async (_req, res) => {
+    return res.json(await contentAdminService.listHeroes());
+  }));
+
+  app.post('/api/admin/content/heroes', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.status(201).json(await contentAdminService.upsertHero(req.body ?? {}));
+    } catch (error) {
+      if (operatorError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/content/heroes/:code/stats', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.json(await contentAdminService.updateHeroStats(String(req.params.code), req.body ?? {}));
+    } catch (error) {
+      if (operatorError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/admin/content/hero-skills', requireAdminApiKey, asyncRoute(async (_req, res) => {
+    return res.json(await contentAdminService.listHeroSkills());
+  }));
+
+  app.post('/api/admin/content/hero-skills', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.status(201).json(await contentAdminService.upsertHeroSkill(req.body ?? {}));
+    } catch (error) {
+      if (operatorError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/admin/content/enemies', requireAdminApiKey, asyncRoute(async (req, res) => {
+    return res.json(await contentAdminService.listEnemies(req.query.boss === 'true'));
+  }));
+
+  app.post('/api/admin/content/enemies', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.status(201).json(await contentAdminService.upsertEnemy(req.body ?? {}));
+    } catch (error) {
+      if (operatorError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/admin/content/items', requireAdminApiKey, asyncRoute(async (_req, res) => {
+    return res.json(await contentAdminService.listItems());
+  }));
+
+  app.post('/api/admin/content/items', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.status(201).json(await contentAdminService.upsertItem(req.body ?? {}));
+    } catch (error) {
+      if (operatorError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-12 (P2): LiveOps events and dual PVE leaderboards ---

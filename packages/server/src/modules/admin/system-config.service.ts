@@ -12,6 +12,8 @@ export const CONFIG_KEYS = [
   'DUNGEON_RULES',
   'SEED_ALGORITHM',
   'BATTLE_RULES',
+  'CURRENCY_RULES',
+  'REWARD_RULES',
 ] as const;
 
 export type ConfigKey = (typeof CONFIG_KEYS)[number];

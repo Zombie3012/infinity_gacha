@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { OperatorTools } from './operator-tools';
 
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 const KEY_STORAGE = 'ig-admin-key';
@@ -61,6 +62,8 @@ const AUDIT_ACTIONS = [
 ];
 const TABS = [
   { id: 'config', label: 'Cấu hình' },
+  { id: 'players', label: 'Người chơi' },
+  { id: 'content', label: 'Nội dung' },
   { id: 'audit', label: 'Audit log' },
   { id: 'monitor', label: 'Giám sát' },
   { id: 'alerts', label: 'Cảnh báo' },
@@ -212,6 +215,8 @@ export function AdminPage({ onError, onNotice }: { onError: (message: string) =>
       ? <section className="panel"><div className="empty-state"><span className="empty-symbol">⚙</span><h3>Cần khoá quản trị</h3><p>Nhập giá trị <code>ADMIN_API_KEY</code> của server để mở các công cụ vận hành.</p></div></section>
       : <>
         <div className="admin-tabs">{TABS.map(item => <button key={item.id} type="button" className={`admin-tab ${tab === item.id ? 'active' : ''}`} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
+
+        {(tab === 'players' || tab === 'content') && <OperatorTools section={tab} adminKey={adminKey} onError={onError} onNotice={onNotice} />}
 
         {tab === 'config' && <section className="panel">
           <div className="panel-head"><div><div className="eyebrow">VERSIONED RULES</div><h2>Cấu hình luật chơi</h2></div><span className="sample-tag">Active: {activeConfig ? `v${activeConfig.version}` : '—'}</span></div>

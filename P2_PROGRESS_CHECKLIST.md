@@ -8,7 +8,8 @@
 ## Progress Summary
 - Domain 11 / MOD-11-03 (Payment & IAP): Done — 7 functions.
 - Domain 12 / MOD-12-04, MOD-12-05 (LiveOps Events, Leaderboards): Done — 10 functions.
-- Domain 14 / MOD-14-01, -02, -04, -05, -06 (Administration, content config, analytics, support): Not started (23 functions).
+- Domain 14 / MOD-14-01, -02, -04 (Player admin + content/economy config): Done — 16 functions.
+- Domain 14 / MOD-14-05, -06 (Analytics, Customer Support): Not started (7 functions).
 
 ---
 
@@ -47,6 +48,33 @@
 - Combat victories now write `floor_records` (best rounds per floor) and push WIN_BATTLE/CLEAR_FLOOR into event missions.
 - `liveops_events.sample.sql` seeds one running STANDARD event with three missions.
 
+## Domain 14: Player Administration, Content & Economy Configuration
+
+### MOD-14-01 Player Administration (5 functions)
+- [x] FUN-14-01-001 Search Player — `GET /api/admin/players?query=` matches username or Master name.
+- [x] FUN-14-01-002 View Player Data — `GET /api/admin/players/:accountId` returns account, profile, Master currencies, world, Hero count, recent payments and sessions.
+- [x] FUN-14-01-003 Restrict Account — `POST .../restrict` sets SUSPENDED/BANNED, revokes live sessions and audits the action; login then fails with `ERR_AUTH_ACCOUNT_RESTRICTED`.
+- [x] FUN-14-01-004 Restore Account — `POST .../restore` returns the account to ACTIVE.
+- [x] FUN-14-01-005 Player Compensation — `POST .../compensation` mails Silver/items and credits Gems directly, with caps (`ERR_COMPENSATION_*_TOO_HIGH`).
+
+### MOD-14-02 Hero & World Master Configuration (6 functions)
+- [x] FUN-14-02-001 Hero Template Configuration — `GET/POST /api/admin/content/heroes` upserts templates.
+- [x] FUN-14-02-002 Hero Stats Configuration — `POST /api/admin/content/heroes/:code/stats` changes base stats only.
+- [x] FUN-14-02-003 Hero Skill Configuration — `GET/POST /api/admin/content/hero-skills`.
+- [x] FUN-14-02-004 Monster Configuration — `GET/POST /api/admin/content/enemies`.
+- [x] FUN-14-02-005 Boss Configuration — bosses are enemies with `is_boss = true`, filterable via `?boss=true`.
+- [x] FUN-14-02-006 Item Configuration — new `item_templates` catalogue with `GET/POST /api/admin/content/items` (13 seeded items).
+
+### MOD-14-04 Economy & Event Operational Configuration (5 functions)
+- [x] FUN-14-04-001 Currency Configuration — `CURRENCY_RULES` added to the versioned configuration keys; published through the existing `/api/admin/configs` flow.
+- [x] FUN-14-04-002 Shop Configuration — existing `POST /api/admin/shop/items` (DM-11 P1).
+- [x] FUN-14-04-003 Reward Configuration — `REWARD_RULES` added to the configuration keys.
+- [x] FUN-14-04-004 Event Configuration — existing `POST /api/admin/events` (DM-12 P2).
+- [x] FUN-14-04-005 Banner Configuration — existing `POST /api/admin/banners` (P0 DM-14).
+
+### Operator UI
+- Admin console gained **Người chơi** (search, restrict/ban/restore, compensation) and **Nội dung** (item catalogue create, Hero template table) tabs.
+
 ---
 
 ## Open items carried forward
@@ -55,7 +83,7 @@
 
 ---
 
-Verification: `npm run verify` passes; 158/158 server tests (12 payment + 12 liveops rule tests) and 11/11 shared tests. Migrations `0031_broken_whiplash.sql` and `0032_pretty_morg.sql` applied, with `iap_products.sample.sql` and `liveops_events.sample.sql` seeded. Live smoke: valid receipt credited 1.000 Gems, bad signature refused, replaying a used store receipt returned `ERR_IAP_DUPLICATE_RECEIPT`, a refund with balance left 500 → 0 debt, and a refund after spending left 200 Gems clawed plus 800 Gem debt.
+Verification: `npm run verify` passes; 165/165 server tests (12 payment, 12 liveops, 7 admin rule tests) and 11/11 shared tests. Migrations `0031` … `0033_messy_giant_girl.sql` applied, with `iap_products`, `liveops_events` and `item_templates` seeds. Live smoke: valid receipt credited 1.000 Gems, bad signature refused, replaying a used store receipt returned `ERR_IAP_DUPLICATE_RECEIPT`, a refund with balance left 500 → 0 debt, and a refund after spending left 200 Gems clawed plus 800 Gem debt.
 
-Updated: 2026-11-04 11:15:00 UTC+7
+Updated: 2026-11-04 11:50:00 UTC+7
 Signed: DeepSeek Harness, project assistant
