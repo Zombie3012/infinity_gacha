@@ -785,3 +785,74 @@ export const paymentTransactions = pgTable('payment_transactions', {
   check('payment_status_check', sql`${table.status} IN ('PENDING', 'COMPLETED', 'REFUNDED', 'FAILED')`),
   check('payment_store_check', sql`${table.store} IN ('APPLE', 'GOOGLE')`),
 ]);
+
+// --- Domain 12 (P2): LiveOps events and dual PVE leaderboards ---
+
+export const liveEvents = pgTable('live_events', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  code: varchar('code', { length: 50 }).notNull().unique(),
+  name: varchar('name', { length: 150 }).notNull(),
+  description: text('description').notNull(),
+  eventType: varchar('event_type', { length: 10 }).notNull(),
+  status: varchar('status', { length: 12 }).default('SCHEDULED').notNull(),
+  startAt: timestamp('start_at', { withTimezone: true }).notNull(),
+  endAt: timestamp('end_at', { withTimezone: true }).notNull(),
+  claimDeadline: timestamp('claim_deadline', { withTimezone: true }).notNull(),
+  activatedAt: timestamp('activated_at', { withTimezone: true }),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check('live_events_type_check', sql`${table.eventType} IN ('STANDARD', 'MAJOR', 'MINOR')`),
+  check('live_events_status_check', sql`${table.status} IN ('SCHEDULED', 'ACTIVE', 'CLOSED')`),
+]);
+
+export const eventMissions = pgTable('event_missions', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  eventId: varchar('event_id', { length: 36 }).notNull().references(() => liveEvents.id, { onDelete: 'cascade' }),
+  code: varchar('code', { length: 50 }).notNull(),
+  name: varchar('name', { length: 150 }).notNull(),
+  objectiveType: varchar('objective_type', { length: 30 }).notNull(),
+  targetCount: integer('target_count').default(1).notNull(),
+  reward: jsonb('reward').$type<{ silver?: number; gems?: number; items?: { itemId: string; quantity: number }[] }>().notNull().default({}),
+  sortOrder: integer('sort_order').default(100).notNull(),
+}, (table) => [uniqueIndex('uq_event_mission_code').on(table.eventId, table.code)]);
+
+export const eventMissionProgress = pgTable('event_mission_progress', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  missionId: varchar('mission_id', { length: 36 }).notNull().references(() => eventMissions.id, { onDelete: 'cascade' }),
+  progress: integer('progress').default(0).notNull(),
+  status: varchar('status', { length: 20 }).default('ACTIVE').notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+}, (table) => [uniqueIndex('uq_event_mission_progress').on(table.masterId, table.missionId)]);
+
+export const floorRecords = pgTable('floor_records', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  floor: integer('floor').notNull(),
+  rounds: integer('rounds').notNull(),
+  achievedAt: timestamp('achieved_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex('uq_floor_record').on(table.masterId, table.floor)]);
+
+export const leaderboardSeasons = pgTable('leaderboard_seasons', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  board: varchar('board', { length: 30 }).notNull(),
+  periodKey: varchar('period_key', { length: 20 }).notNull(),
+  status: varchar('status', { length: 12 }).default('OPEN').notNull(),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('uq_leaderboard_season').on(table.board, table.periodKey),
+  check('leaderboard_board_check', sql`${table.board} IN ('DUNGEON_PROGRESS', 'COMBAT_POWER')`),
+]);
+
+export const leaderboardRewards = pgTable('leaderboard_rewards', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  seasonId: varchar('season_id', { length: 36 }).notNull().references(() => leaderboardSeasons.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  rank: integer('rank').notNull(),
+  score: integer('score').notNull(),
+  reward: jsonb('reward').$type<{ silver?: number; gems?: number; items?: { itemId: string; quantity: number }[] }>().notNull().default({}),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+}, (table) => [uniqueIndex('uq_leaderboard_reward').on(table.seasonId, table.masterId)]);

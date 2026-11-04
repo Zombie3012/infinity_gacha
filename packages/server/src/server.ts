@@ -33,6 +33,8 @@ import { CraftingError, craftingService } from './modules/crafting/crafting.serv
 import { QuestError, questService } from './modules/quest/quest.service.js';
 import { AccountError, accountLinkService } from './modules/auth/account.service.js';
 import { PaymentError, paymentService } from './modules/payment/payment.service.js';
+import { EventError, eventService } from './modules/liveops/event.service.js';
+import { LeaderboardError, leaderboardService } from './modules/liveops/leaderboard.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -651,6 +653,116 @@ export function createApp() {
     return res.json(updated);
   }));
 
+  // --- DM-12 (P2): LiveOps events and dual PVE leaderboards ---
+
+  const liveopsError = (res: Response, error: unknown): boolean => {
+    if (error instanceof EventError || error instanceof LeaderboardError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/events', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await eventService.forMaster(master.id));
+  }));
+
+  app.post('/api/events/missions/:missionId/claim', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await eventService.claimMission(master.id, String(req.params.missionId)));
+    } catch (error) {
+      if (liveopsError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/leaderboards', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const board = req.query.board === 'COMBAT_POWER' ? 'COMBAT_POWER' : 'DUNGEON_PROGRESS';
+    return res.json(await leaderboardService.view(board, master.id));
+  }));
+
+  app.get('/api/leaderboards/me', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await leaderboardService.combatPowerFor(master.id));
+  }));
+
+  app.get('/api/admin/events', requireAdminApiKey, asyncRoute(async (_req, res) => {
+    return res.json(await eventService.list());
+  }));
+
+  app.post('/api/admin/events', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.status(201).json(await eventService.createEvent(req.body ?? {}));
+    } catch (error) {
+      if (liveopsError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/events/:eventId/missions', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      return res.status(201).json(await eventService.addMission(String(req.params.eventId), req.body ?? {}));
+    } catch (error) {
+      if (liveopsError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/events/:eventId/activate', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      const event = await eventService.activate(String(req.params.eventId));
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'LIVEOPS_EVENT_ACTIVATED', entityType: 'EVENT',
+        entityId: event.id, diff: { code: event.code, type: event.eventType },
+      });
+      return res.json(event);
+    } catch (error) {
+      if (liveopsError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/admin/events/:eventId/close', requireAdminApiKey, asyncRoute(async (req, res) => {
+    try {
+      const event = await eventService.close(String(req.params.eventId));
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'LIVEOPS_EVENT_CLOSED', entityType: 'EVENT',
+        entityId: event.id, diff: { code: event.code },
+      });
+      return res.json(event);
+    } catch (error) {
+      if (liveopsError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/admin/leaderboards/seasons', requireAdminApiKey, asyncRoute(async (req, res) => {
+    const board = req.query.board === 'COMBAT_POWER' ? 'COMBAT_POWER' : req.query.board === 'DUNGEON_PROGRESS' ? 'DUNGEON_PROGRESS' : undefined;
+    return res.json(await leaderboardService.seasons(board));
+  }));
+
+  app.post('/api/admin/leaderboards/:board/close', requireAdminApiKey, asyncRoute(async (req, res) => {
+    const board = req.params.board === 'COMBAT_POWER' ? 'COMBAT_POWER' : 'DUNGEON_PROGRESS';
+    try {
+      const result = await leaderboardService.closeSeason(board, adminActor(req));
+      void auditService.record({
+        actorId: adminActor(req), actorType: 'ADMIN', action: 'LEADERBOARD_SEASON_CLOSED', entityType: 'LEADERBOARD',
+        entityId: result.seasonId, diff: { board, periodKey: result.periodKey, rewarded: result.rewarded },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (liveopsError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
   // --- DM-11 (P2): IAP packages, receipts and refunds ---
 
   const paymentError = (res: Response, error: unknown): boolean => {
@@ -872,6 +984,7 @@ export function createApp() {
     try {
       const result = await craftingService.craft(master.id, String(req.body?.recipeCode ?? ''));
       void questService.recordEvent(master.id, 'CRAFT_ITEM', 1).catch(error => console.error('[quest] craft progress failed', error));
+      void eventService.recordEvent(master.id, 'CRAFT_ITEM', 1).catch(error => console.error('[liveops] craft progress failed', error));
       void auditService.record({
         actorId: master.id, actorType: 'MASTER', action: 'ITEM_CRAFTED', entityType: 'EQUIPMENT',
         entityId: result.instanceId, diff: { recipeCode: String(req.body?.recipeCode ?? ''), templateCode: result.templateCode, silverSpent: result.silverSpent },
@@ -942,6 +1055,7 @@ export function createApp() {
     try {
       const result = await shopService.purchase(master.id, String(req.body?.itemCode ?? ''), req.body?.quantity);
       void questService.recordEvent(master.id, 'SPEND_SILVER', result.silverSpent).catch(error => console.error('[quest] spend progress failed', error));
+      void eventService.recordEvent(master.id, 'SPEND_SILVER', result.silverSpent).catch(error => console.error('[liveops] spend progress failed', error));
       void auditService.record({
         actorId: master.id, actorType: 'MASTER', action: 'SHOP_PURCHASE', entityType: 'SHOP_ITEM',
         entityId: String(req.body?.itemCode ?? ''), diff: { purchased: result.purchased, silverSpent: result.silverSpent },
@@ -1299,6 +1413,7 @@ export function createApp() {
       const result = await buildingService.collect(master.id, String(req.params.buildingId));
       if (result.collected > 0) {
         void questService.recordEvent(master.id, 'COLLECT_RESOURCE', result.collected).catch(error => console.error('[quest] collect progress failed', error));
+        void eventService.recordEvent(master.id, 'COLLECT_RESOURCE', result.collected).catch(error => console.error('[liveops] collect progress failed', error));
       }
       if (result.collected > 0) {
         void auditService.record({
@@ -1816,7 +1931,7 @@ export function createApp() {
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
     try {
       const session = await combatService.advance(master.id, String(req.params.sessionId));
-      const report = session.battleReport as { result?: string; floor?: number; nextFloor?: number; survivors?: { id: string; hp: number; maxHp: number }[] } | null;
+      const report = session.battleReport as { result?: string; floor?: number; nextFloor?: number; rounds?: number; survivors?: { id: string; hp: number; maxHp: number }[] } | null;
       if (report?.survivors?.length) {
         await medicalService.recordBattleInjuries(master.id, report.survivors).catch(error => console.error('[medical] injury recording failed', error));
       }
@@ -1827,9 +1942,15 @@ export function createApp() {
       if (report?.result === 'VICTORY') {
         await questService.recordEvent(master.id, 'WIN_BATTLE', 1)
           .catch(error => console.error('[quest] victory progress failed', error));
+        await eventService.recordEvent(master.id, 'WIN_BATTLE', 1)
+          .catch(error => console.error('[liveops] victory progress failed', error));
         if ((report.nextFloor ?? 0) > (report.floor ?? 0)) {
           await questService.recordEvent(master.id, 'CLEAR_FLOOR', 1)
             .catch(error => console.error('[quest] floor progress failed', error));
+          await eventService.recordEvent(master.id, 'CLEAR_FLOOR', 1)
+            .catch(error => console.error('[liveops] floor progress failed', error));
+          await leaderboardService.recordFloor(master.id, report.nextFloor ?? 0, report.rounds ?? 0)
+            .catch(error => console.error('[leaderboard] floor record failed', error));
         }
       }
       return res.json(session);

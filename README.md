@@ -70,6 +70,7 @@ infiniti_gacha/
 - DM-14 administration is implemented as an API-only operator plane guarded by `x-admin-api-key`: versioned rule configuration (`system_configs`), audit logging (`audit_logs`), system monitoring, and rate-based anti-cheat alerts (`security_alerts`).
 - The web client includes a **Quản trị** screen for that plane: enter the admin key once per browser session, then publish or roll back configuration versions, review the audit trail, read monitoring counters, and resolve security alerts.
 - Active configuration is consumed at runtime: `GACHA_PITY` drives the five-star pity curve in summoning and the banner rate preview, and `BATTLE_RULES.tacticalBuffCooldownSeconds` drives the Tactical Buff cooldown. Both fall back to the approved constants when no version is active or the database is unreachable.
+- Phase P2 Domain 12 (LiveOps) is implemented: scheduled events with 48h claim grace and overlap/cooldown guards, event missions fed by gameplay events, and two PvE leaderboards (dungeon progress and combat power) whose season close pays rewards through the mailbox.
 - Phase P2 has started with Domain 11 (IAP): package catalogue, simulated store receipts with replay protection, gem-debt settlement on purchase, and operator refunds that claw Gems back or book debt.
 - Phase P1 Domain 01 (accounts) is implemented: provider identity linking (Google/Apple, HMAC-simulated hand-off) and single-use recovery tokens that rotate the password and revoke sessions.
 - Phase P1 Domain 12 (quests) is implemented: main/side quests with explicit acceptance, daily quests rotating at 00:00 UTC+7, weekly quests rolling on Thursday, and lifetime achievements that pay Gems.
@@ -293,3 +294,12 @@ Signed: DeepSeek Harness, project assistant
 - Store receipts are simulated with an HMAC hand-off (no Apple/Google SDK), and refunds claw back Gems or book them as Gem debt without locking the account.
 - Verified live: 1.000 Gems credited, invalid signature refused, reused store receipt returned `ERR_IAP_DUPLICATE_RECEIPT`, refund with balance reached 0/0, refund after spending produced 800 Gem debt.
 - `npm run verify` green — 146/146 server tests (12 new payment rules), 11/11 shared tests. P2 progress is tracked in `P2_PROGRESS_CHECKLIST.md`.
+
+## Update - 2026-11-04 11:17:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Completed P2 Domain 12 (LiveOps & Leaderboards): 10 functions — event scheduling/activation/closure with overlap and MAJOR-cool-down guards, event missions fed by the gameplay event pipeline, mission claims with a 48h grace window, dual PVE leaderboards and season settlement paid via mailbox.
+- New tables `live_events`, `event_missions`, `event_mission_progress`, `floor_records`, `leaderboard_seasons`, `leaderboard_rewards` (migration `0032_pretty_morg.sql`), seeded sample event, and a **Sự kiện** screen in the web client.
+- Verified live: two crafts completed the event craft mission and paid its reward, a dungeon victory advanced both event missions and ranked the Master #1 by floor/rounds, and closing the season delivered a rank-1 reward mail.
+- `npm run verify` green — 158/158 server tests (12 new liveops rules), 11/11 shared tests.
