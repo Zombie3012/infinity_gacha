@@ -41,6 +41,8 @@ import { AnalyticsService, analyticsService } from './modules/analytics/analytic
 import { SupportError, supportService } from './modules/support/support.service.js';
 import { WorldError, worldService } from './modules/world/world.service.js';
 import { ExpeditionError, expeditionService } from './modules/world/expedition.service.js';
+import { AllianceError, allianceService } from './modules/world/alliance.service.js';
+import { ConquestError, conquestService } from './modules/world/conquest.service.js';
 import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
@@ -839,6 +841,249 @@ export function createApp() {
 
   app.get('/api/world/leaderboard', requireAccount, asyncRoute(async (_req, res) => {
     return res.json(await worldService.leaderboard());
+  }));
+
+  // --- DM-13 (P3): alliances (MOD-13-06) ---
+
+  const allianceError = (res: Response, error: unknown): boolean => {
+    if (error instanceof AllianceError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  const requireMasterOrFail = async (req: AuthRequest, res: Response) => {
+    const master = await requireMaster(req);
+    if (!master) res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return master;
+  };
+
+  app.get('/api/alliance', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    return res.json(await allianceService.overview(master.id));
+  }));
+
+  app.get('/api/alliance/search', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    return res.json(await allianceService.search(master.id, {
+      query: req.query.query, language: req.query.language,
+      minCombatPower: req.query.minCombatPower, hasSlots: req.query.hasSlots,
+    }));
+  }));
+
+  app.post('/api/alliance', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      const result = await allianceService.create(master.id, req.body ?? {});
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'ALLIANCE_CREATED', entityType: 'ALLIANCE',
+        entityId: result.alliance?.id ?? master.id, diff: { name: result.alliance?.name, cost: result.cost, currency: result.currencySpent },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/alliance/join', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.status(201).json(await allianceService.requestJoin(
+        master.id, String(req.body?.allianceId ?? ''), req.body?.message,
+      ));
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/alliance/requests/:requestId/cancel', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await allianceService.cancelRequest(master.id, String(req.params.requestId)));
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  for (const [path, approve] of [['approve', true], ['reject', false]] as const) {
+    app.post(`/api/alliance/requests/:requestId/${path}`, requireAccount, asyncRoute(async (req, res) => {
+      const master = await requireMasterOrFail(req, res);
+      if (!master) return undefined;
+      try {
+        return res.json(await allianceService.resolveRequest(master.id, String(req.params.requestId), approve));
+      } catch (error) {
+        if (allianceError(res, error)) return undefined;
+        throw error;
+      }
+    }));
+  }
+
+  app.post('/api/alliance/leave', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      const result = await allianceService.leave(master.id);
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'ALLIANCE_LEFT', entityType: 'ALLIANCE',
+        entityId: result.allianceId, diff: { disbanded: result.disbanded, cooldownUntil: result.cooldownUntil },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/alliance/members/:masterId/manage', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await allianceService.manage(master.id, String(req.params.masterId), req.body?.action));
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.patch('/api/alliance/notice', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await allianceService.updateNotice(master.id, req.body?.noticeBoard));
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/alliance/tech/upgrade', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await allianceService.upgradeTech(master.id));
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.delete('/api/alliance', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await allianceService.disband(master.id));
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/alliance/chat', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await allianceService.messages(master.id));
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/alliance/chat', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.status(201).json(await allianceService.sendMessage(
+        master.id, { body: req.body?.body, coordinates: req.body?.coordinates },
+      ));
+    } catch (error) {
+      if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  // --- DM-13 (P3): world war and conquest (MOD-13-07) ---
+
+  const conquestError = (res: Response, error: unknown): boolean => {
+    if (error instanceof ConquestError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/world/conquest', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    return res.json(await conquestService.overview(master.id));
+  }));
+
+  app.get('/api/world/conquest/ranking', requireAccount, asyncRoute(async (req, res) => {
+    const seasonId = req.query.seasonId ? String(req.query.seasonId) : undefined;
+    const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 10));
+    return res.json(await conquestService.ranking(seasonId, limit));
+  }));
+
+  app.get('/api/world/conquest/seasons', requireAccount, asyncRoute(async (req, res) => {
+    return res.json(await conquestService.seasons());
+  }));
+
+  app.post('/api/world/conquest/wonder/siege', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      const result = await conquestService.siegeWonder(master.id);
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'WONDER_SIEGED', entityType: 'WONDER',
+        entityId: 'imperial-wonder', diff: { won: result.won, attackerPower: result.attackerPower, defenderPower: result.defenderPower },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (conquestError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/alliance/wars', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      const result = await conquestService.declareWar(master.id, String(req.body?.targetAllianceId ?? ''));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'ALLIANCE_WAR_DECLARED', entityType: 'ALLIANCE_WAR',
+        entityId: result.id, diff: { targetAllianceId: result.targetAllianceId, endsAt: result.endsAt },
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (conquestError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/alliance/wars', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    return res.json(await conquestService.listWars(master.id));
+  }));
+
+  app.get('/api/alliance/wars/:warId', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await conquestService.warDetail(master.id, String(req.params.warId)));
+    } catch (error) {
+      if (conquestError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   // --- DM-14 (P2): analytics and customer support ---

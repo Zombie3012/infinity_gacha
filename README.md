@@ -1,4 +1,4 @@
-﻿# Infinite Gacha
+# Infinite Gacha
 
 Infinite Gacha is a Hero Management and Survival Strategy RPG. The repository contains phase-based business specifications and an early web prototype backed by a Node.js API and PostgreSQL.
 
@@ -73,6 +73,8 @@ infiniti_gacha/
 - Phase P3 has started with the global world: unlock gating (Master 15 + floor 10), a 12x12 Outer Rim map with discovery, territory claiming with protection windows, upgrades, abandonment and an ownership leaderboard.
 - Phase P3 PvP is implemented as Hero-vs-Hero: an ATTACK expedition can strike another Master's territory, protected by claim windows and the Novice Shield, with deterministic battle reports and ownership transfer on victory.
 - **There is no army entity.** Heroes themselves travel: expeditions of 1–5 Heroes scout or attack tiles, reports carry owner/defender/power data, and claiming a tile requires a won hero attack (`tile_clearances`).
+- Phase P3 MOD-13-06 (Alliances) is implemented: founding with Gems or Silver at level 20, search/join requests, the Officer/Leader role matrix, promote/demote/kick/transfer, Alliance Tech member-cap growth, a notice board and guild chat with map-coordinate pings. Leaving or being removed starts a 24-hour re-join cooldown.
+- Phase P3 MOD-13-07 (World War & Conquest) is implemented: Leader-declared 24-hour alliance wars scored by hero raids and repelled defences, lazy war settlement with mailbox rewards, dual season rankings, and the Central Imperial Wonder at (500, 500) that can be stormed in the final three days of a 30-day season and held for 8 continuous hours to crown the Conqueror Alliance.
 - Phase P2 Domain 14 (analytics & support) is implemented: player/gacha/economy/battle/retention aggregates for operators, and a support ticket flow (player opens and replies, operators answer and advance status).
 - Phase P2 Domain 14 (operations) now includes player search/restriction/compensation, and operator configuration for Hero templates, Hero stats, skills, monsters, bosses and the new item catalogue, with `CURRENCY_RULES`/`REWARD_RULES` added to the versioned configuration keys.
 - Phase P2 Domain 12 (LiveOps) is implemented: scheduled events with 48h claim grace and overlap/cooldown guards, event missions fed by gameplay events, and two PvE leaderboards (dungeon progress and combat power) whose season close pays rewards through the mailbox.
@@ -90,7 +92,7 @@ infiniti_gacha/
 ## Automated tests and CI
 
 - `npm run verify` runs the encoding guard, builds every workspace and executes the full test suite.
-- `npm test` runs **216 server tests** — domain-rule unit tests plus HTTP integration suites (`packages/server/tests/http.*.test.mjs`) that boot the real Express app, register a throwaway account and exercise base construction, crafting, survival, medical, economy/IAP, LiveOps and administration flows against PostgreSQL — and **11 shared** formula tests.
+- `npm test` runs **325 server tests** — domain-rule unit tests plus HTTP integration suites (`packages/server/tests/http.*.test.mjs`) that boot the real Express app, register a throwaway account and exercise base construction, crafting, survival, medical, economy/IAP, LiveOps, alliances, world conquest and administration flows against PostgreSQL — and **11 shared** formula tests.
 - HTTP suites skip automatically when the database is unreachable, so the unit suite still works offline.
 - Fresh database in two commands: `npm run db:migrate` then `npm run db:seed` (18 idempotent sample seeds).
 - CI (`.github/workflows/ci.yml`) starts PostgreSQL 17 as a service, migrates, seeds and runs `npm run verify` on every push and pull request.
@@ -111,11 +113,13 @@ Requirements: Node.js 20.19+ and Docker Compose.
 
 ## Next steps
 
-1. Review sample Hero/enemy/equipment/event balance, Hero EXP thresholds and stat growth, and production battle reward amounts.
-2. Add production equipment progression and richer floor exploration after the sample loop is reviewed.
-3. Expand the sample Master skill set and add Hero skills, critical hits, and status effects after their rules are defined.
-4. Review remaining P0 TBD business rules before treating the prototype as a production implementation.
-5. Add Redis when a feature requires distributed locks, shared timers, or live leaderboards.
+1. Move alliance chat, war countdowns and Wonder hold timers to Redis (pub/sub and shared TTLs) so multiple API instances agree on time.
+2. Review the sample alliance/war/season reward amounts and the Alliance Tech Silver cost before treating them as economy balance.
+3. Replace the aggregate-power Wonder siege with the round combat engine once multi-party siege formations are defined.
+4. Review sample Hero/enemy/equipment/event balance, Hero EXP thresholds and stat growth, and production battle reward amounts.
+5. Add production equipment progression and richer floor exploration after the sample loop is reviewed.
+6. Expand the sample Master skill set and add Hero skills, critical hits, and status effects after their rules are defined.
+7. Review remaining P0 TBD business rules before treating the prototype as a production implementation.
 
 ## Update record
 
@@ -371,3 +375,15 @@ Signed: DeepSeek Harness, project assistant
 - Completed P3 MOD-13-05 (PvP & Territory Defense): 7 functions — hero raids on enemy territories, protection/shield validation, deterministic hero-vs-hero battles, ownership transfer with a fresh protection window, a defence estimate endpoint and a PvP battle log.
 - New table `pvp_battles` (migration `0037_zippy_solo.sql`); the **Thế giới** page now shows recent PvP reports.
 - Verified: `npm run verify` green — 268/268 server tests (8 PvP rule tests + a 6-step HTTP PvP suite) and 11/11 shared tests.
+
+## Update - 2026-11-04 08:18:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Completed P3 MOD-13-06 (Alliance System) and MOD-13-07 (World War & Conquest): 12 functions, closing Phase P3 at **37/37 functions**.
+- Alliances: level-20 founding paid in 5,000 Gems or 500,000 Silver, search, join requests with officer approval, the Leader/Officer/Member matrix, promote/demote/kick/leadership transfer, Alliance Tech (30 → 100 members), notice board, guild chat plus coordinate pings, and a 24-hour re-join cooldown.
+- World conquest: Leader-declared 24-hour wars scored by hero raids and repelled defences (`war_engagements`), lazy settlement with mailbox rewards, 30-day seasons, dual season ranking, and the Central Imperial Wonder at (500, 500) — stormable in the final 3 days and conquerable after an 8-hour continuous hold.
+- New tables `alliances`, `alliance_members`, `alliance_join_requests`, `alliance_cooldowns`, `alliance_messages`, `alliance_wars`, `war_engagements`, `world_conquest_seasons`, `world_conquest_rankings`, `wonder_holdings` (migration `0038_clear_wong.sql`); `world_tiles.sample.sql` now seeds the Wonder tile.
+- New API surface under `/api/alliance` (overview, search, create, join/approve/reject/cancel, leave, member management, notice, tech, disband, chat) and `/api/world/conquest` (overview, ranking, seasons, Wonder siege) plus `/api/alliance/wars`; a **Liên minh** screen was added to the web client with overview, roster, chat and war tabs.
+- PvP settlement now feeds war scoring, and the Wonder tile is excluded from the client's local map grid.
+- Verified: `npm run verify` green — 325/325 server tests (20 alliance rule tests, 17 conquest rule tests, an 11-step HTTP alliance suite and a 9-step HTTP conquest suite) and 11/11 shared tests.

@@ -1,4 +1,4 @@
--- P3 global world map (6x6 outer-rim grid, sample yields).
+-- P3 global world map (12x12 outer-rim grid, sample yields).
 INSERT INTO world_tiles (id, x, y, terrain, resource_type, base_yield_per_hour, required_power, is_outer_rim)
 SELECT
   'tile-' || x || '-' || y,
@@ -15,5 +15,15 @@ ON CONFLICT (x, y) DO UPDATE SET
   terrain = EXCLUDED.terrain,
   resource_type = EXCLUDED.resource_type,
   base_yield_per_hour = EXCLUDED.base_yield_per_hour,
+  required_power = EXCLUDED.required_power,
+  is_outer_rim = EXCLUDED.is_outer_rim;
+
+-- Central Imperial Wonder at the map centre (500, 500). It is not part of the
+-- outer-rim spawn pool; MOD-13-07 sieges it during the last 3 days of a season.
+INSERT INTO world_tiles (id, x, y, terrain, resource_type, base_yield_per_hour, required_power, is_outer_rim)
+VALUES ('tile-wonder-500-500', 500, 500, 'WONDER', 'WONDER', 0, 25000, false)
+ON CONFLICT (x, y) DO UPDATE SET
+  terrain = EXCLUDED.terrain,
+  resource_type = EXCLUDED.resource_type,
   required_power = EXCLUDED.required_power,
   is_outer_rim = EXCLUDED.is_outer_rim;

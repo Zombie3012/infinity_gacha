@@ -6,6 +6,7 @@ import {
   tileDiscoveries, tileClearances, territoryEvents, worldTiles,
 } from '../../database/drizzle-schema.js';
 import { topCombatPower } from '../liveops/liveops-rules.js';
+import { conquestService } from './conquest.service.js';
 import { tileDistance } from './world-rules.js';
 import {
   expeditionProgress, resolveGuardianBattle, travelSeconds, validateParty,
@@ -190,6 +191,11 @@ export class ExpeditionService {
           detail: { defenderMasterId: territoryRow.masterId, attackerPower: power, defenderPower: strength, rounds: battle.rounds },
           createdAt: now,
         });
+        // MOD-13-07: won raids and repelled defences score alliance-war points.
+        await conquestService.recordPvp({
+          attackerMasterId: expedition.masterId, defenderMasterId: territoryRow.masterId,
+          tileId: expedition.tileId, attackerWon: won, now,
+        }).catch(error => console.error('[expedition] war scoring failed', error));
       } else {
         const battle = resolveGuardianBattle(power, Math.max(tile?.requiredPower ?? 0, defenderPowerBase * 0.5));
         result = {

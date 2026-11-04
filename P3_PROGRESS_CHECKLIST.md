@@ -11,8 +11,8 @@
 - MOD-13-03 (Scouting & Intelligence): Done — 3 functions.
 - MOD-13-04 (Hero Expeditions & Movement, replaces the army concept): Done — 5 functions.
 - MOD-13-05 (PvP Combat & Territory Defense): Done — 7 functions.
-- MOD-13-06 (Alliance System): Not started (6).
-- MOD-13-07 (World War & Conquest): Not started (6).
+- MOD-13-06 (Alliance System): Done — 6 functions.
+- MOD-13-07 (World War & Conquest): Done — 6 functions.
 
 ---
 
@@ -66,9 +66,33 @@
 - [x] FUN-13-05-006 PvP Protection — claim protection and the Novice Shield both block attacks; every capture refreshes the 30-minute window.
 - [x] FUN-13-05-007 PvP Battle Report — `pvp_battles` stores winner, both powers, rounds and a JSON report; `GET /api/world/pvp/battles` lists the caller's attacks and defences.
 
+## Domain 13 part four: Alliances and World Conquest
+
+### MOD-13-06 Alliance System (6 functions)
+- [x] FUN-13-06-001 Create Alliance — `POST /api/alliance` requires Master level 20 and charges 5,000 Gems or 500,000 Silver (Gems first); the founder becomes Leader. Names are 3–20 characters and names/tags are unique case-insensitively.
+- [x] FUN-13-06-002 Search Alliance — `GET /api/alliance/search` filters by name/tag, language, minimum combat power and free slots, and marks the caller's pending request.
+- [x] FUN-13-06-003 Join Alliance — `POST /api/alliance/join` opens a `PENDING` request; officers approve or reject it, and the requester can cancel (`/api/alliance/requests/:id/cancel`).
+- [x] FUN-13-06-004 Leave Alliance — `POST /api/alliance/leave` starts a 24-hour re-join cooldown (`alliance_cooldowns`); a Leader with members must transfer first, while a sole Leader disbands the alliance.
+- [x] FUN-13-06-005 Manage Alliance Member — approve/reject, promote/demote, kick, transfer leadership, edit the notice board, upgrade Alliance Tech (+10 member slots per level, 30 → 100, paid in Silver) and disband. Enforced by a role matrix (`alliance-rules.ts`).
+- [x] FUN-13-06-006 Alliance Communication — `GET/POST /api/alliance/chat` stores text and `(x, y)` coordinate pings (0–1000) with a 300-character cap.
+
+### MOD-13-07 World War & Conquest (6 functions)
+- [x] FUN-13-07-001 Declare War — `POST /api/alliance/wars` is Leader-only, lasts 24 hours (`alliance_wars`), and refuses alliances already in an active war.
+- [x] FUN-13-07-002 Manage War Progress — `GET /api/alliance/wars` and `/api/alliance/wars/:id` expose both scores, the countdown and the `war_engagements` log.
+- [x] FUN-13-07-003 Territory War — winning a hero raid against a member of an enemy alliance scores 100 points for the attacker (repelled attacks score 50 for the defender); the Central Imperial Wonder at (500, 500) can be stormed with `POST /api/world/conquest/wonder/siege` during the final 3 days of a season.
+- [x] FUN-13-07-004 Determine War Result — wars settle lazily at `ends_at`: higher score wins, equal scores draw. Holding the Wonder for 8 continuous hours during the contest window concludes the season and crowns the Conqueror Alliance.
+- [x] FUN-13-07-005 Distribute War Reward — winner/loser war bundles are mailed, and season bundles (Silver by mail, Gems credited directly, Seven-Color scrolls into the summon inventory) are paid to the top ranks plus the Conqueror.
+- [x] FUN-13-07-006 World Conquest Ranking — `GET /api/world/conquest/ranking` (optionally by `seasonId`) ranks alliances by conquest points with shared ranks, and `GET /api/world/conquest/seasons` lists concluded seasons.
+
+### Prototype notes
+- Seasons are 30 days and roll over lazily: the first read after `end_time` concludes the old season, pays its rewards and opens the next season with an unclaimed Wonder.
+- Wonder siege power is the sum of the five strongest Heroes across the alliance; the defence is the guardian power (25,000) plus half of the holder's power, resolved deterministically with the PvP swing.
+- `alliance_cooldowns` and `wonder_holdings` are additional tables beyond the P3 data-model draft (the draft kept the cooldown on the membership row, which is deleted on leave).
+- War and season rewards are sample amounts (`conquest-rules.ts`), not approved economy balance.
+
 ---
 
-Verification: `npm run verify` passes; 268/268 server tests (8 world + 7 expedition + 8 PvP rule tests; 10 world + 6 expedition + 6 PvP HTTP suites) and 11/11 shared tests. Migrations `0035` … `0037_zippy_solo.sql` applied; `world_tiles.sample.sql` seeded (144 tiles).
+Verification: `npm run verify` passes; 325/325 server tests (20 alliance rule tests, 17 conquest rule tests, 11-step HTTP alliance suite, 9-step HTTP conquest suite; the rest of P0–P3) and 11/11 shared tests. Migrations `0035` … `0038_clear_wong.sql` applied; `world_tiles.sample.sql` seeds 144 outer-rim tiles plus the Wonder at (500, 500).
 
-Updated: 2026-11-04 14:28:00 UTC+7
+Updated: 2026-11-04 08:18:00 UTC+7
 Signed: DeepSeek Harness, project assistant

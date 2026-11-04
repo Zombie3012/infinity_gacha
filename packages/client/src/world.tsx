@@ -150,7 +150,10 @@ export function WorldMapPage({ token, onError, onNotice }: { token: string; onEr
     </>;
   }
 
-  const columns = Math.max(...tiles.map(tile => tile.x)) - Math.min(...tiles.map(tile => tile.x)) + 1;
+  // The Imperial Wonder lives at (500, 500); keep the local grid on the Outer Rim.
+  const gridTiles = tiles.filter(tile => tile.x < 200 && tile.y < 200);
+  const xs = gridTiles.map(tile => tile.x);
+  const columns = xs.length > 0 ? Math.max(...xs) - Math.min(...xs) + 1 : 1;
 
   return <>
     <div className="page-heading">
@@ -167,7 +170,7 @@ export function WorldMapPage({ token, onError, onNotice }: { token: string; onEr
         <button type="button" className="secondary-button" onClick={() => void load().catch(error => onError((error as Error).message))}>Làm mới</button>
       </div>
       <div className="world-grid" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
-        {tiles.map(tile => <button key={tile.id} type="button"
+        {gridTiles.map(tile => <button key={tile.id} type="button"
           className={`world-cell ${tile.mine ? 'mine' : tile.owner ? 'enemy' : tile.discovered ? 'known' : 'fog'} ${selected?.id === tile.id ? 'selected' : ''}`}
           title={`(${tile.x}, ${tile.y}) · ${tile.resourceType} · ${tile.discovered ? 'đã biết' : 'sương mù'}`}
           onClick={() => setSelected(tile)}>

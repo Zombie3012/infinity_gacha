@@ -141,3 +141,14 @@
 .party-chip.picked{border-color:rgba(184,163,255,.5);background:rgba(154,126,239,.16);color:#e2d9ff}
 .party-chip input{accent-color:#b8a3ff}
 .party-chip small{color:#8d92a6;font-size:8px}
+/* Alliance & world-conquest screens (P3 MOD-13-06 / MOD-13-07) */
+.chat-list{display:grid;gap:8px;margin:12px 0;max-height:300px;overflow:auto}
+.chat-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:rgba(17,22,33,.6);font-size:10px;color:#c9cfdd}
+.chat-row b{color:#cfc2f0;font-weight:600}
+.chat-row small{margin-left:auto;color:var(--muted)}
+.progress-track{height:8px;margin:12px 0;border:1px solid var(--line);border-radius:999px;background:#151b27;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#8e74d0,#e8c77b);transition:width .3s}
+.panel .admin-actions input,.panel .admin-actions select{min-height:34px;padding:0 9px;border:1px solid rgba(163,177,206,.15);border-radius:6px;background:#101622;color:#e9ebf2;font-size:10px}
+.coord-input{width:74px}
+.text-button.danger{color:#e99ab9}
+.compact-empty{padding:26px 15px}

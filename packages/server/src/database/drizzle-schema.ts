@@ -1005,3 +1005,150 @@ export const pvpBattles = pgTable('pvp_battles', {
   index('idx_pvp_defender').on(table.defenderMasterId, table.createdAt),
   check('pvp_winner_check', sql`${table.winner} IN ('ATTACKER', 'DEFENDER')`),
 ]);
+
+// --- Domain 13 (P3): alliances (MOD-13-06) ---
+
+export const alliances = pgTable('alliances', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  name: varchar('name', { length: 50 }).notNull(),
+  tag: varchar('tag', { length: 10 }).notNull(),
+  emblemIcon: varchar('emblem_icon', { length: 100 }).default('⚔').notNull(),
+  motto: varchar('motto', { length: 120 }).default('').notNull(),
+  language: varchar('language', { length: 10 }).default('vi').notNull(),
+  minCombatPower: integer('min_combat_power').default(0).notNull(),
+  leaderMasterId: varchar('leader_master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  memberCount: integer('member_count').default(1).notNull(),
+  maxMembers: integer('max_members').default(30).notNull(),
+  allianceLevel: integer('alliance_level').default(1).notNull(),
+  noticeBoard: text('notice_board').default('').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique('uq_alliance_name').on(table.name),
+  unique('uq_alliance_tag').on(table.tag),
+  index('idx_alliance_leader').on(table.leaderMasterId),
+]);
+
+export const allianceMembers = pgTable('alliance_members', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  allianceId: varchar('alliance_id', { length: 36 }).notNull().references(() => alliances.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  role: varchar('role', { length: 20 }).default('MEMBER').notNull(),
+  contributionPoints: bigint('contribution_points', { mode: 'bigint' }).default(sql`0`).notNull(),
+  joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique('uq_alliance_member_master').on(table.masterId),
+  index('idx_alliance_members_alliance').on(table.allianceId),
+  check('alliance_member_role_check', sql`${table.role} IN ('LEADER', 'OFFICER', 'MEMBER')`),
+]);
+
+export const allianceJoinRequests = pgTable('alliance_join_requests', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  allianceId: varchar('alliance_id', { length: 36 }).notNull().references(() => alliances.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 20 }).default('PENDING').notNull(),
+  message: varchar('message', { length: 200 }).default('').notNull(),
+  resolvedBy: varchar('resolved_by', { length: 36 }).references(() => masters.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_alliance_requests_pending').on(table.allianceId, table.status, table.createdAt),
+  index('idx_alliance_requests_master').on(table.masterId, table.status),
+  check('alliance_request_status_check', sql`${table.status} IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')`),
+]);
+
+/** 24h re-join lock after leaving or being removed from an alliance. */
+export const allianceCooldowns = pgTable('alliance_cooldowns', {
+  masterId: varchar('master_id', { length: 36 }).primaryKey().references(() => masters.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  reason: varchar('reason', { length: 20 }).default('LEFT').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index('idx_alliance_cooldown_expiry').on(table.expiresAt)]);
+
+export const allianceMessages = pgTable('alliance_messages', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  allianceId: varchar('alliance_id', { length: 36 }).notNull().references(() => alliances.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  messageType: varchar('message_type', { length: 10 }).default('TEXT').notNull(),
+  body: varchar('body', { length: 300 }).default('').notNull(),
+  coordinates: jsonb('coordinates').$type<{ x: number; y: number } | null>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_alliance_messages_alliance').on(table.allianceId, table.createdAt),
+  check('alliance_message_type_check', sql`${table.messageType} IN ('TEXT', 'PING')`),
+]);
+
+// --- Domain 13 (P3): world war and conquest (MOD-13-07) ---
+
+export const allianceWars = pgTable('alliance_wars', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  declaringAllianceId: varchar('declaring_alliance_id', { length: 36 }).notNull().references(() => alliances.id, { onDelete: 'cascade' }),
+  targetAllianceId: varchar('target_alliance_id', { length: 36 }).notNull().references(() => alliances.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 20 }).default('ACTIVE').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+  declaringPoints: integer('declaring_points').default(0).notNull(),
+  targetPoints: integer('target_points').default(0).notNull(),
+  winnerAllianceId: varchar('winner_alliance_id', { length: 36 }).references(() => alliances.id, { onDelete: 'set null' }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_alliance_wars_status').on(table.status, table.endsAt),
+  index('idx_alliance_wars_declaring').on(table.declaringAllianceId),
+  index('idx_alliance_wars_target').on(table.targetAllianceId),
+  check('alliance_war_status_check', sql`${table.status} IN ('ACTIVE', 'RESOLVED', 'CANCELLED')`),
+]);
+
+export const warEngagements = pgTable('war_engagements', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  warId: varchar('war_id', { length: 36 }).notNull().references(() => allianceWars.id, { onDelete: 'cascade' }),
+  attackerAllianceId: varchar('attacker_alliance_id', { length: 36 }).notNull().references(() => alliances.id, { onDelete: 'cascade' }),
+  defenderAllianceId: varchar('defender_alliance_id', { length: 36 }).notNull().references(() => alliances.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).references(() => masters.id, { onDelete: 'set null' }),
+  tileId: varchar('tile_id', { length: 36 }).references(() => worldTiles.id, { onDelete: 'set null' }),
+  kind: varchar('kind', { length: 30 }).notNull(),
+  points: integer('points').default(0).notNull(),
+  detail: jsonb('detail').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_war_engagements_war').on(table.warId, table.createdAt),
+  check('war_engagement_kind_check', sql`${table.kind} IN ('TERRITORY_CAPTURE', 'DEFENSE_HOLD', 'WONDER_SEIZURE', 'WAR_VICTORY')`),
+]);
+
+export const worldConquestSeasons = pgTable('world_conquest_seasons', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  seasonNumber: integer('season_number').notNull().unique(),
+  startTime: timestamp('start_time', { withTimezone: true }).notNull(),
+  endTime: timestamp('end_time', { withTimezone: true }).notNull(),
+  status: varchar('status', { length: 20 }).default('ACTIVE').notNull(),
+  conqueringAllianceId: varchar('conquering_alliance_id', { length: 36 }).references(() => alliances.id, { onDelete: 'set null' }),
+  concludedAt: timestamp('concluded_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_conquest_seasons_status').on(table.status, table.endTime),
+  check('conquest_season_status_check', sql`${table.status} IN ('UPCOMING', 'ACTIVE', 'CONCLUDED')`),
+]);
+
+export const worldConquestRankings = pgTable('world_conquest_rankings', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  seasonId: varchar('season_id', { length: 36 }).notNull().references(() => worldConquestSeasons.id, { onDelete: 'cascade' }),
+  allianceId: varchar('alliance_id', { length: 36 }).notNull().references(() => alliances.id, { onDelete: 'cascade' }),
+  finalRank: integer('final_rank'),
+  totalConquestPoints: integer('total_conquest_points').default(0).notNull(),
+  rewardClaimed: boolean('reward_claimed').default(false).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique('uq_conquest_ranking').on(table.seasonId, table.allianceId),
+  index('idx_conquest_rankings_points').on(table.seasonId, table.totalConquestPoints),
+]);
+
+/** Central Imperial Wonder control: an alliance holds the tile by accumulating continuous seconds. */
+export const wonderHoldings = pgTable('wonder_holdings', {
+  tileId: varchar('tile_id', { length: 36 }).primaryKey().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  allianceId: varchar('alliance_id', { length: 36 }).references(() => alliances.id, { onDelete: 'set null' }),
+  heldSince: timestamp('held_since', { withTimezone: true }),
+  accumulatedSeconds: integer('accumulated_seconds').default(0).notNull(),
+  lastSettledAt: timestamp('last_settled_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});

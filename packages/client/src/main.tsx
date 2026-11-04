@@ -14,6 +14,7 @@ import { PaymentPage } from './payment';
 import { LiveOpsPage } from './liveops';
 import { SupportPage } from './support';
 import { WorldMapPage } from './world';
+import { AlliancePage } from './alliance';
 
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 type Session = { token: string; accountId: string; username: string };
@@ -595,6 +596,7 @@ function App() {
     { id: 'liveops', icon: '✧', label: 'Sự kiện' },
     { id: 'support', icon: '✉', label: 'Hỗ trợ' },
     { id: 'world', icon: '◍', label: 'Thế giới' },
+    { id: 'alliance', icon: '⚑', label: 'Liên minh' },
     { id: 'admin', icon: '⚙', label: 'Quản trị' },
   ];
 
@@ -624,6 +626,7 @@ function App() {
         {page === 'liveops' && <LiveOpsPage token={session.token} onError={setError} onNotice={setNotice} />}
         {page === 'support' && <SupportPage token={session.token} onError={setError} onNotice={setNotice} />}
         {page === 'world' && <WorldMapPage token={session.token} onError={setError} onNotice={setNotice} />}
+        {page === 'alliance' && <AlliancePage token={session.token} onError={setError} onNotice={setNotice} />}
 
         {page === 'admin' && <AdminPage onError={setError} onNotice={setNotice} />}
 
