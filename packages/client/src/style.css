@@ -152,3 +152,23 @@
 .coord-input{width:74px}
 .text-button.danger{color:#e99ab9}
 .compact-empty{padding:26px 15px}
+
+.combat-v2-party{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;padding:6px 0}
+.combat-v2-hero{display:flex;flex-direction:column;gap:3px;text-align:left;padding:11px;border:1px solid rgba(163,177,206,.16);border-radius:8px;background:#121926;color:#e9ebf2;cursor:pointer;transition:border-color .15s,background .15s}
+.combat-v2-hero:hover{border-color:rgba(232,199,123,.5)}
+.combat-v2-hero.selected{border-color:#e8c77b;background:#1a2130}
+.combat-v2-hero b{font-size:12px}
+.combat-v2-hero small{color:#9aa6bf;font-size:10px;line-height:1.4}
+.combat-v2-hero i{margin-top:4px;color:#e8c77b;font-size:9px;font-style:normal;letter-spacing:.08em}
+.combat-v2-stars{color:#e8c77b;font-size:10px}
+.combat-v2-badges{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.combat-v2-badges span{padding:2px 7px;border:1px solid rgba(232,199,123,.28);border-radius:999px;background:rgba(232,199,123,.07);color:#e8c77b;font-size:9px;white-space:nowrap}
+.combat-v2-log-head{margin-top:14px}
+.combat-v2-log{max-height:420px;overflow:auto;border:1px solid rgba(163,177,206,.12);border-radius:8px}
+.combat-v2-log table{width:100%;border-collapse:collapse;font-size:10px}
+.combat-v2-log th{position:sticky;top:0;background:#151d2b;color:#9aa6bf;text-align:left;padding:8px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;font-size:9px}
+.combat-v2-log td{padding:6px 8px;border-top:1px solid rgba(163,177,206,.08);color:#d7dbe7}
+.combat-v2-log tr.crit td{color:#e8c77b}
+.combat-v2-log tr.revive td{color:#8fd6a4;background:rgba(143,214,164,.06)}
+.seed-field{display:flex;align-items:center;gap:6px;font-size:10px;color:#9aa6bf}
+.seed-field input{width:90px}

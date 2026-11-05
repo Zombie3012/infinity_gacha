@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './style.css';
 import { AdminPage } from './admin';
 import { BasePage } from './base';
+import { CombatV2Page } from './combat-v2';
 import { SurvivalPage } from './survival';
 import { MedicalPage } from './medical';
 import { PersonalityPage } from './personality';
@@ -584,6 +585,7 @@ function App() {
     { id: 'summon', icon: '✦', label: 'Thiên Thư' },
     { id: 'heroes', icon: '♙', label: 'Hero' },
     { id: 'battle', icon: '⚔', label: 'Chiến đấu' },
+    { id: 'combat-v2', icon: '⚡', label: 'Combat v2' },
     { id: 'base', icon: '⌂', label: 'Căn cứ' },
     { id: 'survival', icon: '☘', label: 'Sinh tồn' },
     { id: 'medical', icon: '✚', label: 'Y tế' },
@@ -615,6 +617,7 @@ function App() {
         {notice && <div className="toast success-toast"><span>✓</span>{notice}<button onClick={() => setNotice('')}>×</button></div>}
 
         {page === 'base' && <BasePage token={session.token} onError={setError} onNotice={setNotice} />}
+        {page === 'combat-v2' && <CombatV2Page token={session.token} onError={setError} onNotice={setNotice} />}
         {page === 'survival' && <SurvivalPage token={session.token} onError={setError} onNotice={setNotice} />}
         {page === 'medical' && <MedicalPage token={session.token} onError={setError} onNotice={setNotice} />}
         {page === 'personality' && <PersonalityPage token={session.token} onError={setError} onNotice={setNotice} />}

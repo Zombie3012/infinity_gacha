@@ -415,3 +415,15 @@ Signed: DeepSeek Harness, project assistant
 - New docs: `Combat_V2_Spec.md`, `openapi.combat-v2.yaml`, `API_Routes.md` (203 routes via `npm run docs:routes`) and `UNITY_BACKLOG.md`.
 - Database migrated through `0041`; 23 seeds applied. Last full verify: 363 server / 56 shared (before the imprint additions); targeted progression + Combat v2 suites are 19/19 after them.
 - Remaining: imprint ability effects, full OpenAPI coverage, Redis locks/timers, TTK-10 balance, Rank Promotion flow.
+
+## Update - 2026-11-05 11:05:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Imprint abilities are now executable instead of free text. Migration `0042_woozy_drax.sql` adds `ability_code` + `ability_params` (jsonb) to `imprint_definitions`; the six seeded imprints carry structured hooks and the seed upsert refreshes them in place.
+- New shared module `packages/shared/src/combat/imprints.ts` folds owned imprints into one effect bundle (rank 1-3 scales magnitudes, shared caps applied once). Hooks: `LOW_HP_EMPOWER`, `PHOENIX_REVIVE`, `CC_RESISTANCE`, `CRIT_EVASION`, `ARCANE_EMPOWER`, `ACCURACY_EMPOWER`.
+- Combat v2 engine applies crit/evasion/accuracy, ATK/MATK %, per-round MP regen, the low-HP damage bonus and a once-per-battle revive (logged as `REVIVE`). `POST /api/combat/v2/simulate` returns `heroes[].imprintEffects` and `GET /api/imprints` exposes the new columns.
+- Added a **Combat v2 web page** (`packages/client/src/combat-v2.tsx` + nav entry): party picker, seed, simulation, two-step session with Silver/deaths, replayable history, battle log and imprint badges.
+- Tests: shared imprint aggregation suite (6), engine revive/low-HP/crit/MP-regen cases (4) and HTTP coverage for imprint effects + end-to-end Phoenix revive (2).
+- Verified: `npm run verify` green - **373/373 server tests**, **63/63 shared tests**, encoding check 334 files; 23 seeds applied; migrations through `0042`.
+- Remaining: Rank Promotion flow, full OpenAPI coverage for the non-combat groups, Redis locks/timers, TTK-10 balance pass.

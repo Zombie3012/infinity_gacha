@@ -5,8 +5,10 @@ here so the Unity team owns them when the real client starts. The API/DB side
 already exposes the data or is ready to be extended.
 
 ## 1. Hero Awakening presentation
-- Imprint Evolution (rank S/A/B, extra Trait/Ability) needs a content design and
-  new tables (`imprint_definitions`, `hero_imprints`). Backend currently skips it.
+- Imprint Evolution (rank S/A/B, extra Trait/Ability): the backend now ships
+  `imprint_definitions` / `hero_imprints` and six ability hooks (see
+  `Combat_V2_Spec.md` §10); Unity still needs the evolution/rank-up UI and the
+  final content pass over the imprint catalogue.
 - Trait tiers: awakening currently assigns a random special trait; Unity should
   show the new trait card, before/after comparison, and animation.
 - Skill Awakening selection: backend upgrades the first unlocked skill below max
@@ -19,6 +21,9 @@ already exposes the data or is ready to be extended.
   current `promotionRank` level cap.
 
 ## 3. Combat v2 client
+- A Web prototype page exists (`packages/client/src/combat-v2.tsx`: party picker,
+  simulation, two-step session, battle log, imprint badges). Unity still owns the
+  real client below.
 - Stat sheet: STR/INT/STA/AGI, derived stats, class, affinity table, training
   budget, awakening rank.
 - Combat HUD: HP/MP bars, skill cooldowns, crit/block numbers, turn order by AGI.
