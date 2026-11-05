@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BASE_STAT_BUDGET, CAPS, affinityMultiplier, budgetAtLevel, classGrowthPoints,
-  computeHeroBaseStats, deriveStats, eligibleClasses, growthCompensation, mulberry32,
-  rollBaseStats, rollElementAffinity, rollSummonClass, trainingPointsForLevel, TARGET_BUDGET,
+  computeHeroBaseStats, deriveStats, eligibleClasses, growthCompensation, isStarEnabled,
+  isStarRating, mulberry32, rollBaseStats, rollElementAffinity, rollSummonClass,
+  targetBudgetAt50, trainingPointsForLevel, TARGET_BUDGET,
 } from '../dist/combat/stats.js';
 import {
   applyShield, elementMultiplierFor, finalCritMultiplier, hitChance, lifestealAmount,
@@ -146,20 +147,39 @@ test('Combat v2 - class rules', async (t) => {
     }
   });
 
-  await t.test('Mage only appears on SPECIAL/LIMITED banners', () => {
-    const standard = mulberry32(5);
-    let standardMages = 0;
-    for (let index = 0; index < 2_000; index += 1) {
-      if (rollSummonClass(5, 'STANDARD', standard) === 'MAGE') standardMages += 1;
+  await t.test('Mage can appear on STANDARD and SPECIAL banners', () => {
+    for (const banner of ['STANDARD', 'SPECIAL', 'LIMITED']) {
+      const random = mulberry32(5);
+      let mages = 0;
+      for (let index = 0; index < 2_000; index += 1) {
+        if (rollSummonClass(5, banner, random) === 'MAGE') mages += 1;
+      }
+      assert.ok(mages > 0, `expected Mage rolls on ${banner}`);
     }
-    assert.equal(standardMages, 0);
+  });
+});
 
-    const special = mulberry32(5);
-    let specialMages = 0;
-    for (let index = 0; index < 2_000; index += 1) {
-      if (rollSummonClass(5, 'SPECIAL', special) === 'MAGE') specialMages += 1;
-    }
-    assert.ok(specialMages > 0);
+test('Combat v2 - future 6/7 star tiers (locked)', async (t) => {
+  await t.test('star progression continues the budget curve', () => {
+    assert.equal(budgetAtLevel(6, 1), 350); // 280 + 70
+    assert.equal(budgetAtLevel(7, 1), 430); // 350 + 80
+    assert.equal(Math.round(budgetAtLevel(6, 50)), 742);
+    assert.equal(Math.round(budgetAtLevel(7, 50)), 822);
+    assert.equal(targetBudgetAt50(5), 672);
+    assert.equal(targetBudgetAt50(6), 742);
+    assert.equal(growthCompensation(6, 25), 0);
+    assert.equal(growthCompensation(7, 50), 0);
+  });
+
+  await t.test('6-7 star Heroes are data-ready but disabled in play', () => {
+    assert.equal(isStarRating(6), true);
+    assert.equal(isStarRating(7), true);
+    assert.equal(isStarRating(8), false);
+    assert.equal(isStarEnabled(5), true);
+    assert.equal(isStarEnabled(6), false);
+    assert.equal(isStarEnabled(7), false);
+    const roll = rollBaseStats(6, { str: 0.3, int: 0.2, sta: 0.3, agi: 0.2 }, mulberry32(11));
+    assert.equal(roll.str + roll.int + roll.sta + roll.agi, 350);
   });
 });
 

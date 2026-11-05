@@ -23,7 +23,7 @@ export interface BaseStats {
   agi: number;
 }
 
-export type StarRating = 1 | 2 | 3 | 4 | 5;
+export type StarRating = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type HeroClass = 'UNCLASSIFIED' | 'WARRIOR' | 'THIEF' | 'SPEARMAN' | 'ARCHER' | 'MAGE';
 
@@ -70,7 +70,13 @@ export const BASE_STAT_BUDGET: Record<StarRating, number> = {
   3: 170,
   4: 220,
   5: 280,
+  6: 350,
+  7: 430,
 };
+
+/** 6-7 star Heroes exist in data but stay locked until a future release. */
+export const ENABLED_STARS: StarRating[] = [1, 2, 3, 4, 5];
+export const LOCKED_STARS: StarRating[] = [6, 7];
 
 /** Total stat points every rarity shares at level 50. */
 export const TARGET_LEVEL = 50;
@@ -107,7 +113,9 @@ export const CLASS_BASE_CRIT: Record<HeroClass, number> = {
 };
 
 /** Classed chance at summon; 1-2 star Heroes are always unclassified. */
-export const SUMMON_CLASS_CHANCE: Record<StarRating, number> = { 1: 0, 2: 0, 3: 0.4, 4: 0.7, 5: 1 };
+export const SUMMON_CLASS_CHANCE: Record<StarRating, number> = {
+  1: 0, 2: 0, 3: 0.4, 4: 0.7, 5: 1, 6: 1, 7: 1,
+};
 
 export const SUMMON_CLASS_WEIGHTS: { heroClass: HeroClass; weight: number }[] = [
   { heroClass: 'WARRIOR', weight: 35 },
@@ -201,7 +209,11 @@ export function statTotal(stats: BaseStats): number {
 }
 
 export function isStarRating(value: number): value is StarRating {
-  return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
+  return Number.isInteger(value) && value >= 1 && value <= 7;
+}
+
+export function isStarEnabled(star: StarRating): boolean {
+  return ENABLED_STARS.includes(star);
 }
 
 /** Rounds each stat while keeping the integer total equal to `total`. */
@@ -248,13 +260,22 @@ function normalizeWeights(weights: Partial<BaseStats>): BaseStats {
 }
 
 /**
+ * Total stat points a rarity reaches at level 50. 1-5 star Heroes share the
+ * 672-point target; 6-7 star Heroes keep the same per-level growth and simply
+ * start (and finish) higher, so their L50 budget continues the star curve.
+ */
+export function targetBudgetAt50(star: StarRating): number {
+  return Math.max(TARGET_BUDGET, BASE_STAT_BUDGET[star] + GROWTH_PER_LEVEL * (TARGET_LEVEL - 1));
+}
+
+/**
  * Growth compensation: lower rarities receive extra points while levelling so
  * every rarity reaches the same 672-point budget at level 50.
  */
 export function growthCompensation(star: StarRating, level: number): number {
   const safeLevel = clamp(Math.floor(level) || 1, 1, TARGET_LEVEL);
   const base = BASE_STAT_BUDGET[star];
-  const compensationPool = Math.max(0, TARGET_BUDGET - base - GROWTH_PER_LEVEL * (TARGET_LEVEL - 1));
+  const compensationPool = Math.max(0, targetBudgetAt50(star) - base - GROWTH_PER_LEVEL * (TARGET_LEVEL - 1));
   const progress = (safeLevel - 1) / (TARGET_LEVEL - 1);
   return compensationPool * progress * progress;
 }
@@ -408,17 +429,13 @@ export function rollSummonClass(
   if (random() >= SUMMON_CLASS_CHANCE[star]) return 'UNCLASSIFIED';
 
   const allowed = options && options.length > 0 ? new Set(options) : null;
+  // Owner decision: Mage can appear on every banner, including STANDARD.
+  // `bannerKind` is kept for future banner-specific modifiers.
+  void bannerKind;
   const pool = SUMMON_CLASS_WEIGHTS
-    .filter(entry => entry.heroClass !== 'MAGE' || bannerKind !== 'STANDARD')
     .filter(entry => !allowed || allowed.has(entry.heroClass))
     .map(entry => ({ ...entry }));
   if (pool.length === 0) return 'UNCLASSIFIED';
-
-  // Standard banners keep the Mage weight by giving it to Warriors.
-  if (!pool.some(entry => entry.heroClass === 'MAGE')) {
-    const warrior = pool.find(entry => entry.heroClass === 'WARRIOR');
-    if (warrior) warrior.weight += 5;
-  }
 
   const total = pool.reduce((sum, entry) => sum + entry.weight, 0);
   let cursor = random() * total;
