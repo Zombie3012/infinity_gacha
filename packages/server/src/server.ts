@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { timingSafeEqual } from 'node:crypto';
 import { calculateFiveStarRate, roleForClass, rollElementAffinity, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
 import { db, pool } from './database/db.js';
-import { accounts, accountSessions, playerProfiles, banners, masterBannerPity, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits } from './database/drizzle-schema.js';
+import { accounts, accountSessions, playerProfiles, banners, masterBannerPity, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits, heroImprints, imprintDefinitions } from './database/drizzle-schema.js';
 import { CLASS_CHANGE_ITEM, CLASS_CHANGE_SILVER, ProgressionError, allocateTraining, classChangeCheck, isV2Origin, originOf, progressionFor } from './modules/hero/hero-progression.js';
 import { createAccessToken, hashPassword, readAccessToken, TOKEN_LIFETIME_SECONDS, verifyPassword } from './modules/auth/auth.js';
 import { PersistentGachaService, SummonError } from './modules/gacha/persistent-gacha.service.js';
@@ -2574,6 +2574,7 @@ export function createApp() {
       let updated;
       let skillAwakened: { code: string; level: number } | null = null;
       let newTrait: string | null = null;
+      let imprintGranted: { code: string; rankLevel: number } | null = null;
       if (isV2Origin(hero.originStats)) {
         // Awakening v2: stat growth + skill level + a new special trait.
         const snapshot = progressionFor({
@@ -2603,6 +2604,24 @@ export function createApp() {
           await tx.update(heroPersonalityTraits).set({ specialTrait: newTrait, updatedAt: new Date() })
             .where(eq(heroPersonalityTraits.heroId, hero.id));
         }
+        const ownedImprints = await tx.select().from(heroImprints).where(eq(heroImprints.heroId, hero.id));
+        if (ownedImprints.length === 0) {
+          const [imprint] = await tx.select().from(imprintDefinitions)
+            .where(eq(imprintDefinitions.isEnabled, true)).orderBy(asc(imprintDefinitions.tier)).limit(1);
+          if (imprint) {
+            await tx.insert(heroImprints).values({
+              id: uuidv4(), heroId: hero.id, imprintCode: imprint.code, rankLevel: 1, acquiredAt: new Date(),
+            });
+            imprintGranted = { code: imprint.code, rankLevel: 1 };
+          }
+        } else {
+          const upgradeImprint = ownedImprints.find(row => row.rankLevel < 3);
+          if (upgradeImprint) {
+            await tx.update(heroImprints).set({ rankLevel: upgradeImprint.rankLevel + 1 })
+              .where(eq(heroImprints.id, upgradeImprint.id));
+            imprintGranted = { code: upgradeImprint.imprintCode, rankLevel: upgradeImprint.rankLevel + 1 };
+          }
+        }
         [updated] = await tx.update(heroes).set({
           awakeningRank: config.rank,
           baseStr: snapshot.base.str, baseInt: snapshot.base.int,
@@ -2615,7 +2634,7 @@ export function createApp() {
         [updated] = await tx.update(heroes).set({ awakeningRank: config.rank, maxHp, hp: Math.min(maxHp, hero.hp + maxHp - hero.maxHp), attack: Math.floor(hero.attack * multiplier), defense: Math.floor(hero.defense * multiplier), speed: Math.floor(hero.speed * multiplier), updatedAt: new Date() }).where(eq(heroes.id, hero.id)).returning();
       }
       await tx.update(masterItems).set({ quantity: material.quantity - config.materialQuantity, updatedAt: new Date() }).where(eq(masterItems.id, material.id));
-      return { status: 200, heroId: updated.id, awakeningRank: updated.awakeningRank, skillAwakened, newTrait, stats: { hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }, materialQuantity: material.quantity - config.materialQuantity } as const;
+      return { status: 200, heroId: updated.id, awakeningRank: updated.awakeningRank, skillAwakened, newTrait, imprintGranted, stats: { hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }, materialQuantity: material.quantity - config.materialQuantity } as const;
     });
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     return res.json(result);
@@ -2624,6 +2643,23 @@ export function createApp() {
   app.get('/api/hero-templates', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (_req, res) => {
     const templates = await db.select().from(heroTemplates).orderBy(heroTemplates.defaultRarity, heroTemplates.name);
     return res.json(templates);
+  }));
+
+  app.get('/api/imprints', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (_req, res) => {
+    return res.json(await db.select().from(imprintDefinitions)
+      .where(eq(imprintDefinitions.isEnabled, true))
+      .orderBy(asc(imprintDefinitions.rank), asc(imprintDefinitions.tier)));
+  }));
+
+  app.get('/api/heroes/:heroId/imprints', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    const rows = await db.select({ owned: heroImprints, definition: imprintDefinitions })
+      .from(heroImprints).innerJoin(imprintDefinitions, eq(imprintDefinitions.code, heroImprints.imprintCode))
+      .innerJoin(heroes, eq(heroes.id, heroImprints.heroId))
+      .where(and(eq(heroImprints.heroId, String(req.params.heroId)), eq(heroes.masterId, master.id)))
+      .orderBy(asc(imprintDefinitions.rank), asc(imprintDefinitions.tier));
+    return res.json(rows);
   }));
 
   app.get('/api/equipment', requireAccount, requireFeature('EQUIPMENT'), asyncRoute(async (req, res) => {
