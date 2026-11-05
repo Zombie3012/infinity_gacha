@@ -159,6 +159,9 @@ export const heroes = pgTable('heroes', {
   combatRole: varchar('combat_role', { length: 20 }).default('PHYSICAL_DPS').notNull(),
   trainingStats: jsonb('training_stats').$type<{ str: number; int: number; sta: number; agi: number }>()
     .notNull().default({ str: 0, int: 0, sta: 0, agi: 0 }),
+  /** Level-1 rolled stats; keeps level/class changes reproducible. */
+  originStats: jsonb('origin_stats').$type<{ str: number; int: number; sta: number; agi: number }>()
+    .notNull().default({ str: 0, int: 0, sta: 0, agi: 0 }),
   mp: integer('mp').default(0).notNull(),
   maxMp: integer('max_mp').default(0).notNull(),
   currentHpPct: doublePrecision('current_hp_pct').default(1).notNull(),

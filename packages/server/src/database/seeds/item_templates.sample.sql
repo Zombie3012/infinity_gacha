@@ -13,7 +13,8 @@ VALUES
   ('MOON_CAKE', 'Bánh Trăng', 'CONSUMABLE', 3, 'Món ăn đặc biệt bán vào cuối tuần.', true),
   ('ROAST_CHICKEN', 'Gà Quay', 'FOOD', 3, 'Món khoái khẩu của một số Hero.', true),
   ('HONEY_BREAD', 'Bánh Mật Ong', 'FOOD', 2, 'Món khoái khẩu của một số Hero.', true),
-  ('SPICED_STEW', 'Hầm Gia Vị', 'FOOD', 3, 'Món khoái khẩu của một số Hero.', true)
+  ('SPICED_STEW', 'Hầm Gia Vị', 'FOOD', 3, 'Món khoái khẩu của một số Hero.', true),
+  ('CLASS_CHANGE_TOKEN', 'Ấn Chuyển Nghề', 'CONSUMABLE', 4, 'Vật phẩm bắt buộc để đổi Class cho Hero.', true)
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
   category = EXCLUDED.category,

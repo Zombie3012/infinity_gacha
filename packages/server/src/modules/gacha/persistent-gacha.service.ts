@@ -139,6 +139,7 @@ export class PersistentGachaService {
               baseSta: build.base.sta, baseAgi: build.base.agi,
               classCode: build.classCode, combatRole: build.combatRole,
               trainingStats: { str: 0, int: 0, sta: 0, agi: 0 },
+              originStats: build.base,
               mp: build.derived.maxMp, maxMp: build.derived.maxMp,
               currentHpPct: 1, currentMpPct: 1,
               talentPoints: 0, thienMenh: 0, hunger: 0, fatigue: 0, loyalty: 100,

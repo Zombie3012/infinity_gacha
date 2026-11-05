@@ -4,9 +4,10 @@ import cors from 'cors';
 import { and, asc, count, desc, eq, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { timingSafeEqual } from 'node:crypto';
-import { calculateFiveStarRate } from '@infiniti-gacha/shared';
+import { calculateFiveStarRate, roleForClass, rollElementAffinity, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
 import { db, pool } from './database/db.js';
-import { accounts, accountSessions, playerProfiles, banners, masterBannerPity, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs } from './database/drizzle-schema.js';
+import { accounts, accountSessions, playerProfiles, banners, masterBannerPity, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities } from './database/drizzle-schema.js';
+import { CLASS_CHANGE_ITEM, CLASS_CHANGE_SILVER, ProgressionError, allocateTraining, classChangeCheck, isV2Origin, originOf, progressionFor } from './modules/hero/hero-progression.js';
 import { createAccessToken, hashPassword, readAccessToken, TOKEN_LIFETIME_SECONDS, verifyPassword } from './modules/auth/auth.js';
 import { PersistentGachaService, SummonError } from './modules/gacha/persistent-gacha.service.js';
 import { WorldSeedGenerator } from './modules/dungeon/world-seed.generator.js';
@@ -2332,12 +2333,201 @@ export function createApp() {
         speed = Math.floor(speed * config.statGrowthMultiplier);
         level = config.level;
       }
+      const isV2 = isV2Origin(hero.originStats);
       await tx.update(masterItems).set({ quantity: material.quantity - 1, updatedAt: new Date() }).where(eq(masterItems.id, material.id));
-      const [updated] = await tx.update(heroes).set({ exp: totalExp, level, maxHp, hp, attack, defense, speed, updatedAt: new Date() }).where(eq(heroes.id, hero.id)).returning();
+      const updateValues = isV2
+        ? (() => {
+          const snapshot = progressionFor({
+            origin: originOf(hero.originStats),
+            star: hero.rarity as StarRating,
+            level,
+            classCode: hero.classCode as HeroClass,
+            training: hero.trainingStats,
+            hpPct: hero.currentHpPct,
+            mpPct: hero.currentMpPct,
+          });
+          return {
+            exp: totalExp, level,
+            baseStr: snapshot.base.str, baseInt: snapshot.base.int,
+            baseSta: snapshot.base.sta, baseAgi: snapshot.base.agi,
+            maxHp: snapshot.maxHp, hp: snapshot.hp,
+            attack: snapshot.attack, defense: snapshot.defense, speed: snapshot.speed,
+            mp: snapshot.mp, maxMp: snapshot.maxMp,
+            updatedAt: new Date(),
+          };
+        })()
+        : { exp: totalExp, level, maxHp, hp, attack, defense, speed, updatedAt: new Date() };
+      const [updated] = await tx.update(heroes).set(updateValues).where(eq(heroes.id, hero.id)).returning();
       return { status: 200, hero: { id: updated.id, level: updated.level, maxLevel: heroLevelCap, exp: updated.exp.toString(), hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }, materialQuantity: material.quantity - 1 } as const;
     });
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     return res.json(result);
+  }));
+
+  const progressionError = (res: Response, error: unknown): boolean => {
+    if (error instanceof ProgressionError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  const heroAffinity = (row: { fire: number; water: number; wind: number; earth: number; light: number; dark: number; lightning: number }) => ({
+    FIRE: row.fire, WATER: row.water, WIND: row.wind, EARTH: row.earth,
+    LIGHT: row.light, DARK: row.dark, LIGHTNING: row.lightning,
+  });
+
+  app.post('/api/heroes/:heroId/train', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    try {
+      const result = await db.transaction(async tx => {
+        const [hero] = await tx.select().from(heroes)
+          .where(and(eq(heroes.id, String(req.params.heroId)), eq(heroes.masterId, master.id))).for('update').limit(1);
+        if (!hero) throw new ProgressionError('ERR_HERO_NOT_FOUND', 404);
+        if (hero.isLocked) throw new ProgressionError('ERR_HERO_LOCKED', 409);
+        if (hero.state === 'DEAD') throw new ProgressionError('ERR_HERO_PERMANENTLY_DEAD', 409);
+        if (hero.state === 'DISABLED' || hero.hp <= 0) throw new ProgressionError('ERR_HERO_UNAVAILABLE', 409);
+        if (!isV2Origin(hero.originStats)) throw new ProgressionError('ERR_HERO_V2_REQUIRED', 409);
+
+        const { snapshot, training } = allocateTraining({
+          origin: originOf(hero.originStats),
+          star: hero.rarity as StarRating,
+          level: hero.level,
+          classCode: hero.classCode as HeroClass,
+          training: hero.trainingStats,
+          stat: String(req.body?.stat ?? ''),
+          points: Number(req.body?.points ?? 0),
+          hpPct: hero.currentHpPct,
+          mpPct: hero.currentMpPct,
+        });
+
+        const [updated] = await tx.update(heroes).set({
+          trainingStats: training,
+          baseStr: snapshot.base.str, baseInt: snapshot.base.int,
+          baseSta: snapshot.base.sta, baseAgi: snapshot.base.agi,
+          maxHp: snapshot.maxHp, hp: snapshot.hp,
+          attack: snapshot.attack, defense: snapshot.defense, speed: snapshot.speed,
+          mp: snapshot.mp, maxMp: snapshot.maxMp,
+          updatedAt: new Date(),
+        }).where(eq(heroes.id, hero.id)).returning();
+
+        return {
+          heroId: updated.id, level: updated.level,
+          base: snapshot.base, derived: snapshot.derived, training,
+          trainingRemaining: snapshot.trainingRemaining,
+          stats: { hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed },
+        };
+      });
+      return res.json(result);
+    } catch (error) {
+      if (progressionError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/heroes/:heroId/class-change', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    try {
+      const result = await db.transaction(async tx => {
+        const [masterRow] = await tx.select().from(masters).where(eq(masters.id, master.id)).for('update').limit(1);
+        const [hero] = await tx.select().from(heroes)
+          .where(and(eq(heroes.id, String(req.params.heroId)), eq(heroes.masterId, master.id))).for('update').limit(1);
+        if (!hero || !masterRow) throw new ProgressionError('ERR_HERO_NOT_FOUND', 404);
+        if (hero.isLocked) throw new ProgressionError('ERR_HERO_LOCKED', 409);
+        if (hero.state === 'DEAD') throw new ProgressionError('ERR_HERO_PERMANENTLY_DEAD', 409);
+        if (hero.state === 'DISABLED' || hero.hp <= 0) throw new ProgressionError('ERR_HERO_UNAVAILABLE', 409);
+        if (!isV2Origin(hero.originStats)) throw new ProgressionError('ERR_HERO_V2_REQUIRED', 409);
+
+        const targetClass = String(req.body?.targetClass ?? '').toUpperCase();
+        const currentBase = originOf({
+          str: hero.baseStr, int: hero.baseInt, sta: hero.baseSta, agi: hero.baseAgi,
+        });
+        const [item] = await tx.select().from(masterItems).where(and(
+          eq(masterItems.masterId, master.id), eq(masterItems.itemId, CLASS_CHANGE_ITEM),
+        )).for('update').limit(1);
+
+        const check = classChangeCheck({
+          level: hero.level,
+          star: hero.rarity as StarRating,
+          base: currentBase,
+          currentClass: hero.classCode as HeroClass,
+          targetClass,
+          silver: masterRow.silverCoins,
+          itemQuantity: item?.quantity ?? 0,
+        });
+        if (!check.ok) throw new ProgressionError(check.reason ?? 'ERR_CLASS_NOT_ELIGIBLE', 409);
+
+        const snapshot = progressionFor({
+          origin: originOf(hero.originStats),
+          star: hero.rarity as StarRating,
+          level: hero.level,
+          classCode: targetClass as HeroClass,
+          training: hero.trainingStats,
+          hpPct: hero.currentHpPct,
+          mpPct: hero.currentMpPct,
+        });
+
+        await tx.update(masters).set({
+          silverCoins: sql`${masters.silverCoins} - ${CLASS_CHANGE_SILVER}`, updatedAt: new Date(),
+        }).where(eq(masters.id, master.id));
+        await tx.update(masterItems).set({
+          quantity: item!.quantity - 1, updatedAt: new Date(),
+        }).where(eq(masterItems.id, item!.id));
+
+        let affinity = null;
+        if (targetClass === 'MAGE') {
+          const [existing] = await tx.select().from(heroElementAffinities)
+            .where(eq(heroElementAffinities.heroId, hero.id)).limit(1);
+          if (existing) {
+            affinity = heroAffinity(existing);
+          } else {
+            const rolled = rollElementAffinity();
+            await tx.insert(heroElementAffinities).values({
+              heroId: hero.id,
+              fire: rolled.FIRE, water: rolled.WATER, wind: rolled.WIND, earth: rolled.EARTH,
+              light: rolled.LIGHT, dark: rolled.DARK, lightning: rolled.LIGHTNING,
+              updatedAt: new Date(),
+            });
+            affinity = rolled;
+          }
+        } else {
+          await tx.delete(heroElementAffinities).where(eq(heroElementAffinities.heroId, hero.id));
+        }
+
+        const [updated] = await tx.update(heroes).set({
+          classCode: targetClass,
+          combatRole: roleForClass(targetClass as HeroClass),
+          baseStr: snapshot.base.str, baseInt: snapshot.base.int,
+          baseSta: snapshot.base.sta, baseAgi: snapshot.base.agi,
+          maxHp: snapshot.maxHp, hp: snapshot.hp,
+          attack: snapshot.attack, defense: snapshot.defense, speed: snapshot.speed,
+          mp: snapshot.mp, maxMp: snapshot.maxMp,
+          updatedAt: new Date(),
+        }).where(eq(heroes.id, hero.id)).returning();
+
+        return {
+          heroId: updated.id,
+          previousClass: hero.classCode,
+          classCode: updated.classCode,
+          combatRole: updated.combatRole,
+          base: snapshot.base,
+          derived: snapshot.derived,
+          affinity,
+          cost: { silver: CLASS_CHANGE_SILVER, item: CLASS_CHANGE_ITEM, quantity: 1 },
+          stats: { hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed },
+        };
+      });
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: 'HERO_CLASS_CHANGED', entityType: 'HERO',
+        entityId: result.heroId, diff: { from: result.previousClass, to: result.classCode, cost: result.cost },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (progressionError(res, error)) return undefined;
+      throw error;
+    }
   }));
 
   app.post('/api/heroes/:heroId/promote', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {

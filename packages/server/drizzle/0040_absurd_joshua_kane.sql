@@ -1,0 +1,1 @@
+ALTER TABLE "heroes" ADD COLUMN "origin_stats" jsonb DEFAULT '{"str":0,"int":0,"sta":0,"agi":0}'::jsonb NOT NULL;
