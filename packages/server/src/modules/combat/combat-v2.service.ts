@@ -314,6 +314,13 @@ export class CombatV2Service {
       }).catch(error => console.error('[combat-v2] silver reward failed', error));
     }
 
+    // P1 medical hook: survivors below the injury threshold are admitted.
+    const survivors = report.units
+      .filter(unit => unit.side === 'HERO' && unit.alive)
+      .map(unit => ({ id: unit.id, hp: unit.hp, maxHp: unit.maxHp }));
+    await medicalService.recordBattleInjuries(masterId, survivors)
+      .catch(error => console.error('[combat-v2] injury recording failed', error));
+
     return { sessionId, status: 'COMPLETED', silverReward, report };
   }
 }
