@@ -5,7 +5,7 @@
 | Version | 1.0 |
 | Status | Implemented prototype; PvP/expedition still on legacy stats (decision b) |
 | Code | `packages/shared/src/combat`, `packages/server/src/modules/combat`, `packages/server/src/modules/hero` |
-| Migrations | `0039_same_spyke.sql`, `0040_absurd_joshua_kane.sql` |
+| Migrations | `0039_same_spyke.sql`, `0040_absurd_joshua_kane.sql`, `0041_curly_mandroid.sql`, `0042_woozy_drax.sql` |
 
 ## 1. Base stats
 Four persisted base stats: **STR, INT, STA, AGI**. Every other stat is derived at runtime.
@@ -88,12 +88,33 @@ Legacy columns `hp/attack/defense/speed` remain as mirrored display data (decisi
 - `GET /api/combat/v2/sessions`
 
 ## 10. Imprints
-- `imprint_definitions`: rank **S/A/B**, tier, bonus STR/INT/STA/AGI/HP/ATK/DEF, ability text.
+- `imprint_definitions`: rank **S/A/B**, tier, bonus STR/INT/STA/AGI/HP/ATK/DEF, ability text,
+  `ability_code` + `ability_params` (migration `0042_woozy_drax.sql`).
 - `hero_imprints`: one row per (Hero, imprint), `rank_level` 1–3.
 - Awakening grants the first enabled imprint (rankLevel 1) or raises an owned imprint below rank 3; response returns `imprintGranted`.
-- Imprint bonuses are added to base stats before derivation in level-up, training, class change, awakening and Combat v2 sessions.
-- APIs: `GET /api/imprints`, `GET /api/heroes/:heroId/imprints`.
-- Pending: slot limits by star/rank promotion and ability execution (Phoenix revive, Iron Will CC reduction).
+- Imprint flat bonuses are added to base stats before derivation in level-up, training, class change, awakening and Combat v2 sessions.
+
+### 10.1 Ability hooks (`packages/shared/src/combat/imprints.ts`)
+
+Six structured hooks replace the old free-text-only abilities. Numeric magnitudes scale
+**×rank_level** (1–3) and are capped with the shared stat caps.
+
+| Code | Effect | Seed parameters |
+|---|---|---|
+| `LOW_HP_EMPOWER` | Below the HP threshold: +final damage %, +Tenacity | `hpThresholdPct` 40, `damageBonus` 15, `tenacity` 20 |
+| `PHOENIX_REVIVE` | Revives once per battle at % MaxHP | `hpPct` 30, `times` 1 |
+| `CC_RESISTANCE` | Flat Tenacity (crowd-control duration) | `tenacity` 10 |
+| `CRIT_EVASION` | Flat crit rate + evasion | `critRate` 5, `evasion` 5 |
+| `ARCANE_EMPOWER` | +MATK %, MP restored at the end of each round | `matkPercent` 10, `mpRegenPct` 5 |
+| `ACCURACY_EMPOWER` | +ATK %, flat accuracy | `atkPercent` 8, `accuracy` 5 |
+
+The engine applies them at the profile level (crit/evasion/accuracy/damage bonus, MP regen)
+and on a lethal hit (`REVIVE` log entry). `Tenacity` feeds `statusDuration()` once
+crowd-control skills exist; it is aggregated and reported but has no damage effect today.
+`POST /api/combat/v2/simulate` returns the aggregated bundle as `heroes[].imprintEffects`.
+
+- APIs: `GET /api/imprints` (now includes `abilityCode`/`abilityParams`), `GET /api/heroes/:heroId/imprints`.
+- Pending: slot limits by star/rank promotion, rank-up UI.
 
 ## 11. Known gaps (Unity backlog)
 Imprint Evolution UI, trait tiers, skill-choice UI, Rank Promotion flow, client UI/VFX, TTK tuning. See `UNITY_BACKLOG.md`.

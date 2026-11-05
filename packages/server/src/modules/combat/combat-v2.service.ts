@@ -15,7 +15,8 @@ import {
   heroImprints, heroLevelConfigs, heroSkillInstances, heroSkillTemplates, heroTemplates, imprintDefinitions, masterLevelConfigs, masters, worlds,
 } from '../../database/drizzle-schema.js';
 import {
-  combatPowerV2, deriveStats, mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
+  combatPowerV2, combineImprintEffects, deriveStats, isEmptyImprintEffects, mulberry32,
+  type DerivedStats, type ElementAffinity, type HeroClass, type ImprintCombatEffects, type StarRating,
 } from '@infiniti-gacha/shared';
 import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.js';
 import { currencyService } from '../economy/currency.service.js';
@@ -117,6 +118,15 @@ export class CombatV2Service {
         def: sum.def + row.definition.bonusDef,
       }), { str: 0, int: 0, sta: 0, agi: 0, hp: 0, atk: 0, def: 0 });
 
+    const imprintEffectsFor = (heroId: string): ImprintCombatEffects => combineImprintEffects(
+      imprintRows
+        .filter(row => row.owned.heroId === heroId)
+        .map(row => ({
+          abilityCode: row.definition.abilityCode,
+          abilityParams: row.definition.abilityParams,
+          rankLevel: row.owned.rankLevel,
+        })),
+    );
     const gearRows = await db.select({ item: equipmentInstances, template: equipmentTemplates })
       .from(equipmentInstances).innerJoin(equipmentTemplates, eq(equipmentInstances.templateCode, equipmentTemplates.code))
       .where(and(
@@ -199,6 +209,7 @@ export class CombatV2Service {
       const affinityRow = affinities.find(row => row.heroId === hero.id);
       const affinity = affinityRow ? affinityFromRow(affinityRow) : null;
       const element = affinity ? strongestElement(affinity) : undefined;
+      const imprintEffects = imprintEffectsFor(hero.id);
 
       const unitSkills: CombatV2Skill[] = skills
         .filter(row => row.instance.heroId === hero.id)
@@ -221,6 +232,7 @@ export class CombatV2Service {
         damageType: classCode === 'MAGE' ? 'MAGICAL' : 'PHYSICAL',
         affinity,
         skills: unitSkills,
+        imprintEffects: isEmptyImprintEffects(imprintEffects) ? undefined : imprintEffects,
       };
     });
 
@@ -278,6 +290,7 @@ export class CombatV2Service {
         name: unit.name,
         classCode: unit.side === 'HERO' ? rows.find(row => row.hero.id === unit.id)?.hero.classCode : undefined,
         combatPower: combatPowerV2(unit.stats),
+        imprintEffects: unit.imprintEffects ?? null,
       })),
     };
   }

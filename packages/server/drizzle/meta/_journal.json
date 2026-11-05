@@ -295,6 +295,13 @@
       "when": 1793849338290,
       "tag": "0041_curly_mandroid",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1793851038368,
+      "tag": "0042_woozy_drax",
+      "breakpoints": true
     }
   ]
 }

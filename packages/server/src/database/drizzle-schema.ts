@@ -243,6 +243,8 @@ export const imprintDefinitions = pgTable('imprint_definitions', {
   bonusAtk: integer('bonus_atk').default(0).notNull(),
   bonusDef: integer('bonus_def').default(0).notNull(),
   ability: varchar('ability', { length: 300 }).notNull().default(''),
+  abilityCode: varchar('ability_code', { length: 40 }).notNull().default(''),
+  abilityParams: jsonb('ability_params').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
   isEnabled: boolean('is_enabled').default(true).notNull(),
 }, (table) => [
   check('imprint_rank_check', sql`${table.rank} IN ('S', 'A', 'B')`),

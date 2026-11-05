@@ -1,0 +1,2 @@
+ALTER TABLE "imprint_definitions" ADD COLUMN "ability_code" varchar(40) DEFAULT '' NOT NULL;--> statement-breakpoint
+ALTER TABLE "imprint_definitions" ADD COLUMN "ability_params" jsonb DEFAULT '{}'::jsonb NOT NULL;

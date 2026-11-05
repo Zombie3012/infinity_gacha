@@ -127,6 +127,47 @@ test('HTTP combat v2: simulate a battle', { skip: skipReason }, async t => {
     assert.equal(record.rows[0].total, 1);
   });
 
+  await t.test('imprint abilities reach the engine and are reported', async () => {
+    await sql(`insert into hero_imprints (id, hero_id, imprint_code, rank_level, acquired_at)
+               values (gen_random_uuid()::text, $1, 'SWIFT_SHADOW', 2, now())
+               on conflict (hero_id, imprint_code) do update set rank_level = 2`, [hero.id]);
+
+    const simulated = await harness.request('/api/combat/v2/simulate', {
+      method: 'POST', token: master.token,
+      body: { heroIds: [hero.id], enemyCodes: [enemyCode], seed: 5 },
+    });
+    assert.equal(simulated.status, 200);
+    const effects = simulated.body.heroes[0].imprintEffects;
+    assert.equal(effects.critRate, 10); // rank 2 x 5 points
+    assert.equal(effects.evasion, 10);
+
+    const catalogue = await harness.request('/api/imprints', { token: master.token });
+    assert.equal(catalogue.status, 200);
+    const swift = catalogue.body.find(row => row.code === 'SWIFT_SHADOW');
+    assert.equal(swift.abilityCode, 'CRIT_EVASION');
+    assert.deepEqual(swift.abilityParams, { critRate: 5, evasion: 5 });
+  });
+
+  await t.test('PHOENIX_FLAME revives a fallen Hero once in a simulated battle', async () => {
+    const phoenix = await createHero(master.masterId, {
+      templateIndex: 2, name: 'Phoenix', attack: 1, defense: 0, speed: 1, hp: 100, maxHp: 100,
+    });
+    await sql(`insert into hero_imprints (id, hero_id, imprint_code, rank_level, acquired_at)
+               values (gen_random_uuid()::text, $1, 'PHOENIX_FLAME', 1, now())
+               on conflict (hero_id, imprint_code) do update set rank_level = 1`, [phoenix.id]);
+    const strongEnemy = (await sql('select code from enemy_templates order by base_atk desc limit 1')).rows[0].code;
+
+    const simulated = await harness.request('/api/combat/v2/simulate', {
+      method: 'POST', token: master.token,
+      body: { heroIds: [phoenix.id], enemyCodes: [strongEnemy], seed: 3, maxRounds: 12 },
+    });
+    assert.equal(simulated.status, 200);
+    // Phoenix Flame also grants +250 HP, so the revive restores 30% of 350.
+    const revives = simulated.body.log.filter(entry => entry.action === 'REVIVE');
+    assert.equal(revives.length, 1);
+    assert.equal(revives[0].heal, 105);
+  });
+
   await t.test('unknown Heroes and empty parties are refused', async () => {
     const missing = await harness.request('/api/combat/v2/simulate', {
       method: 'POST', token: master.token,

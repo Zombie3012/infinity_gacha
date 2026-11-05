@@ -8,11 +8,14 @@
  * a basic attack that restores 5% Max MP. Damage goes through the shared
  * hit -> mitigation -> affinity -> damage bonus -> crit -> block -> DR pipeline.
  * Skills cost 20% Max MP (minimum 10) and use their configured cooldown.
+ *
+ * Imprint abilities are folded in at the profile level: crit/evasion/accuracy,
+ * ATK/MATK %, MP regen per round, a low-HP damage bonus and one revive.
  */
 
 import {
-  affinityMultiplier, applyShield, clamp, resolveAttack,
-  type DamageElement, type DerivedStats, type ElementAffinity,
+  affinityMultiplier, applyShield, CAPS, clamp, resolveAttack,
+  type DamageElement, type DerivedStats, type ElementAffinity, type ImprintCombatEffects,
 } from '@infiniti-gacha/shared';
 
 export type CombatSide = 'HERO' | 'ENEMY';
@@ -40,6 +43,8 @@ export interface CombatV2UnitInput {
   damageType: 'PHYSICAL' | 'MAGICAL';
   affinity?: ElementAffinity | null;
   skills?: CombatV2Skill[];
+  /** Aggregated imprint abilities; omitted when the Hero owns no ability imprint. */
+  imprintEffects?: ImprintCombatEffects;
 }
 
 export interface CombatV2UnitState extends CombatV2UnitInput {
@@ -48,6 +53,8 @@ export interface CombatV2UnitState extends CombatV2UnitInput {
   shield: number;
   cooldowns: Record<string, number>;
   alive: boolean;
+  /** Revives left in this battle, seeded from the imprint effect. */
+  revivesLeft: number;
 }
 
 export interface CombatV2LogEntry {
@@ -93,6 +100,7 @@ function initialize(input: CombatV2UnitInput): CombatV2UnitState {
     shield: 0,
     cooldowns: {},
     alive: input.stats.maxHp > 0,
+    revivesLeft: input.imprintEffects?.revive?.times ?? 0,
   };
 }
 
@@ -121,15 +129,20 @@ function pickHealTarget(actor: CombatV2UnitState, units: CombatV2UnitState[]): C
 
 function attackProfile(actor: CombatV2UnitState, multiplier: number) {
   const magical = actor.damageType === 'MAGICAL';
+  const effects = actor.imprintEffects;
+  // LOW_HP_EMPOWER only counts while the attacker is below the HP threshold.
+  const hpPct = actor.stats.maxHp > 0 ? (actor.hp / actor.stats.maxHp) * 100 : 0;
+  const lowHp = effects?.lowHp && hpPct <= effects.lowHp.hpThresholdPct ? effects.lowHp : null;
+  const attackScale = 1 + (magical ? (effects?.matkPercent ?? 0) : (effects?.atkPercent ?? 0)) / 100;
   return {
-    attack: magical ? actor.stats.matk : actor.stats.atk,
+    attack: (magical ? actor.stats.matk : actor.stats.atk) * attackScale,
     damageType: magical ? 'MAGICAL' as const : 'PHYSICAL' as const,
     skillMultiplier: multiplier,
     bonusDamage: 0,
-    damageBonus: actor.stats.damageBonus,
-    critRate: actor.stats.critRate,
+    damageBonus: actor.stats.damageBonus + (lowHp?.damageBonus ?? 0),
+    critRate: clamp(actor.stats.critRate + (effects?.critRate ?? 0), 0, CAPS.critRate),
     critDamage: actor.stats.critDamage,
-    accuracy: actor.stats.accuracy,
+    accuracy: actor.stats.accuracy + (effects?.accuracy ?? 0),
     penetrationPercent: magical ? actor.stats.magicPen : actor.stats.armorPen,
     penetrationFlat: 0,
   };
@@ -139,7 +152,7 @@ function defenceProfile(target: CombatV2UnitState) {
   const magical = target.damageType === 'MAGICAL';
   return {
     defense: magical ? target.stats.mdef : target.stats.def,
-    evasion: target.stats.evasion,
+    evasion: clamp(target.stats.evasion + (target.imprintEffects?.evasion ?? 0), 0, CAPS.evasion),
     blockRate: target.stats.blockRate,
     blockEffect: target.stats.blockEffect,
     critResistance: target.stats.critResistance,
@@ -224,7 +237,20 @@ export function resolveBattleV2(
           const heal = Math.floor(shield.toHp * clamp(actor.stats.lifesteal, 0, 100) / 100);
           actor.hp = Math.min(actor.stats.maxHp, actor.hp + heal);
         }
-        if (target.hp <= 0) target.alive = false;
+        if (target.hp <= 0) {
+          target.alive = false;
+          // PHOENIX_REVIVE: one comeback per battle (times may be tuned above 1).
+          const revive = target.imprintEffects?.revive;
+          if (revive && target.revivesLeft > 0) {
+            target.revivesLeft -= 1;
+            target.alive = true;
+            target.hp = Math.max(1, Math.round(target.stats.maxHp * clamp(revive.hpPct, 1, 100) / 100));
+            log.push({
+              round, actorId: target.id, actorName: target.name, targetId: target.id, action: 'REVIVE',
+              damage: 0, heal: target.hp, crit: false, blocked: false, targetHp: target.hp, actorMp: target.mp,
+            });
+          }
+        }
 
         if (skill) {
           actor.mp = Math.max(0, actor.mp - mpCost);
@@ -246,8 +272,14 @@ export function resolveBattleV2(
       }
     }
 
-    // Cooldowns tick at the end of the round.
+    // End of round: cooldowns tick and ARCANE_EMPOWER restores MP.
     for (const unit of units) {
+      if (unit.alive) {
+        const mpRegenPct = unit.imprintEffects?.mpRegenPct ?? 0;
+        if (mpRegenPct > 0 && unit.stats.maxMp > 0) {
+          unit.mp = Math.min(unit.stats.maxMp, unit.mp + Math.round(unit.stats.maxMp * mpRegenPct / 100));
+        }
+      }
       for (const code of Object.keys(unit.cooldowns)) {
         unit.cooldowns[code] = Math.max(0, unit.cooldowns[code] - 1);
       }
