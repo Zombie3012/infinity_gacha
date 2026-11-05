@@ -11,6 +11,9 @@ import pg from 'pg';
 
 const SEED_ORDER = [
   'hero_templates.sample.sql',
+  'hero_templates_v2.sample.sql',
+  'hero_class_definitions.sample.sql',
+  'subclass_definitions.sample.sql',
   'hero_level_configs.sample.sql',
   'hero_development_configs.sample.sql',
   'hero_skill_templates.sample.sql',

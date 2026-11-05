@@ -109,6 +109,17 @@ export const heroTemplates = pgTable('hero_templates', {
   baseAttack: integer('base_atk').notNull(),
   baseDefense: integer('base_def').notNull(),
   baseSpeed: integer('base_spd').notNull(),
+  // Combat v2: the four base stats and the archetype used by the summon roll.
+  baseStr: integer('base_str').default(0).notNull(),
+  baseInt: integer('base_int').default(0).notNull(),
+  baseSta: integer('base_sta').default(0).notNull(),
+  baseAgi: integer('base_agi').default(0).notNull(),
+  archetypeWeights: jsonb('archetype_weights').$type<{ str: number; int: number; sta: number; agi: number }>()
+    .notNull().default({ str: 0.25, int: 0.25, sta: 0.25, agi: 0.25 }),
+  classOptions: jsonb('class_options').$type<string[]>(),
+  classCode: varchar('class_code', { length: 20 }).default('UNCLASSIFIED').notNull(),
+  combatRole: varchar('combat_role', { length: 20 }).default('PHYSICAL_DPS').notNull(),
+  isEnabled: boolean('is_enabled').default(true).notNull(),
 });
 
 export const summonRewardPool = pgTable('summon_reward_pool', {
@@ -139,6 +150,19 @@ export const heroes = pgTable('heroes', {
   attack: integer('attack').notNull(),
   defense: integer('defense').notNull(),
   speed: integer('speed').notNull(),
+  // Combat v2: persisted base stats, class and resource percentages.
+  baseStr: integer('base_str').default(0).notNull(),
+  baseInt: integer('base_int').default(0).notNull(),
+  baseSta: integer('base_sta').default(0).notNull(),
+  baseAgi: integer('base_agi').default(0).notNull(),
+  classCode: varchar('class_code', { length: 20 }).default('UNCLASSIFIED').notNull(),
+  combatRole: varchar('combat_role', { length: 20 }).default('PHYSICAL_DPS').notNull(),
+  trainingStats: jsonb('training_stats').$type<{ str: number; int: number; sta: number; agi: number }>()
+    .notNull().default({ str: 0, int: 0, sta: 0, agi: 0 }),
+  mp: integer('mp').default(0).notNull(),
+  maxMp: integer('max_mp').default(0).notNull(),
+  currentHpPct: doublePrecision('current_hp_pct').default(1).notNull(),
+  currentMpPct: doublePrecision('current_mp_pct').default(1).notNull(),
   talentPoints: integer('talent_points').default(0).notNull(),
   thienMenh: integer('thien_menh').default(0).notNull(),
   hunger: integer('hunger').default(0).notNull(),
@@ -150,6 +174,56 @@ export const heroes = pgTable('heroes', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [unique('uq_master_hero_template').on(table.masterId, table.configId)]);
+
+// --- Combat v2: class, subclass and Mage element affinity catalogues ---
+
+export const heroClassDefinitions = pgTable('hero_class_definitions', {
+  code: varchar('code', { length: 20 }).primaryKey(),
+  name: varchar('name', { length: 50 }).notNull(),
+  baseCritRate: doublePrecision('base_crit_rate').notNull().default(5),
+  growthStr: doublePrecision('growth_str').notNull().default(1),
+  growthInt: doublePrecision('growth_int').notNull().default(1),
+  growthSta: doublePrecision('growth_sta').notNull().default(1),
+  growthAgi: doublePrecision('growth_agi').notNull().default(1),
+  passive: varchar('passive', { length: 300 }).notNull().default(''),
+  isEnabled: boolean('is_enabled').default(true).notNull(),
+});
+
+export const subclassDefinitions = pgTable('subclass_definitions', {
+  code: varchar('code', { length: 30 }).primaryKey(),
+  name: varchar('name', { length: 50 }).notNull(),
+  primaryStat: varchar('primary_stat', { length: 10 }).notNull(),
+  requiredValue: integer('required_value').notNull(),
+  requiredLevel: integer('required_level').default(20).notNull(),
+  effect: varchar('effect', { length: 300 }).notNull().default(''),
+  isEnabled: boolean('is_enabled').default(true).notNull(),
+});
+
+export const heroSubclasses = pgTable('hero_subclasses', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  heroId: varchar('hero_id', { length: 36 }).notNull().references(() => heroes.id, { onDelete: 'cascade' }),
+  subclassCode: varchar('subclass_code', { length: 30 }).notNull().references(() => subclassDefinitions.code, { onDelete: 'cascade' }),
+  acquiredAt: timestamp('acquired_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [unique('uq_hero_subclass').on(table.heroId, table.subclassCode)]);
+
+/** Mage-only affinity table; non-Mage Heroes keep no row. */
+export const heroElementAffinities = pgTable('hero_element_affinities', {
+  heroId: varchar('hero_id', { length: 36 }).primaryKey().references(() => heroes.id, { onDelete: 'cascade' }),
+  fire: integer('fire').default(0).notNull(),
+  water: integer('water').default(0).notNull(),
+  wind: integer('wind').default(0).notNull(),
+  earth: integer('earth').default(0).notNull(),
+  light: integer('light').default(0).notNull(),
+  dark: integer('dark').default(0).notNull(),
+  lightning: integer('lightning').default(0).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check('hero_affinity_range', sql`
+    ${table.fire} BETWEEN 0 AND 100 AND ${table.water} BETWEEN 0 AND 100
+    AND ${table.wind} BETWEEN 0 AND 100 AND ${table.earth} BETWEEN 0 AND 100
+    AND ${table.light} BETWEEN 0 AND 100 AND ${table.dark} BETWEEN 0 AND 100
+    AND ${table.lightning} BETWEEN 0 AND 100`),
+]);
 
 export const equipmentTemplates = pgTable('equipment_templates', {
   id: varchar('id', { length: 36 }).primaryKey(),

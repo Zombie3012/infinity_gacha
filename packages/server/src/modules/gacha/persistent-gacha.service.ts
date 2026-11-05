@@ -5,9 +5,10 @@ import { calculateFiveStarRate, GAME_CONSTANTS } from '@infiniti-gacha/shared';
 import { getPityRules } from '../admin/runtime-rules.js';
 import { db } from '../../database/db.js';
 import {
-  banners, heroes, heroTemplates, masterBannerPity, masterItems,
+  banners, heroes, heroElementAffinities, heroTemplates, masterBannerPity, masterItems,
   masterSummonInventory, masters, summonHistory, summonRewardPool, summonSessions,
 } from '../../database/drizzle-schema.js';
+import { affinityColumns, buildSummonedHero, HERO_STAR_LOCKED } from '../hero/hero-generation.js';
 
 export class SummonError extends Error {
   constructor(message: string, public readonly statusCode: number) { super(message); }
@@ -118,14 +119,36 @@ export class PersistentGachaService {
             thienMenhGranted = 1;
             await tx.update(heroes).set({ thienMenh: sql`${heroes.thienMenh} + 1`, updatedAt: now }).where(eq(heroes.id, owned.id));
           } else {
+            const heroId = uuidv4();
+            let build;
+            try {
+              build = buildSummonedHero({ template, bannerKind: banner.bannerType });
+            } catch (error) {
+              if ((error as Error).message === HERO_STAR_LOCKED) {
+                throw new SummonError('Phẩm cấp Hero này chưa được mở.', 409);
+              }
+              throw error;
+            }
             await tx.insert(heroes).values({
-              id: uuidv4(), masterId, configId: template.code, name: template.name,
+              id: heroId, masterId, configId: template.code, name: template.name,
               rarity: template.defaultRarity, category: origin, state: 'HEALTHY', level: 1,
-              exp: 0n, hp: template.baseHp, maxHp: template.baseHp,
-              attack: template.baseAttack, defense: template.baseDefense, speed: template.baseSpeed,
+              exp: 0n,
+              hp: build.derived.maxHp, maxHp: build.derived.maxHp,
+              attack: build.derived.atk, defense: build.derived.def, speed: build.legacySpeed,
+              baseStr: build.base.str, baseInt: build.base.int,
+              baseSta: build.base.sta, baseAgi: build.base.agi,
+              classCode: build.classCode, combatRole: build.combatRole,
+              trainingStats: { str: 0, int: 0, sta: 0, agi: 0 },
+              mp: build.derived.maxMp, maxMp: build.derived.maxMp,
+              currentHpPct: 1, currentMpPct: 1,
               talentPoints: 0, thienMenh: 0, hunger: 0, fatigue: 0, loyalty: 100,
               createdAt: now, updatedAt: now,
             });
+            if (build.elementAffinity) {
+              await tx.insert(heroElementAffinities).values({
+                heroId, ...affinityColumns(build.elementAffinity), updatedAt: now,
+              });
+            }
           }
         } else {
           await tx.insert(masterItems).values({ id: uuidv4(), masterId, itemId: picked.rewardId, quantity: 1, updatedAt: now })
