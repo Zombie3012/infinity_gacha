@@ -8,6 +8,7 @@ import { calculateFiveStarRate, roleForClass, rollElementAffinity, type HeroClas
 import { db, pool } from './database/db.js';
 import { accounts, accountSessions, playerProfiles, banners, masterBannerPity, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits, heroImprints, imprintDefinitions } from './database/drizzle-schema.js';
 import { CLASS_CHANGE_ITEM, CLASS_CHANGE_SILVER, ProgressionError, allocateTraining, classChangeCheck, isV2Origin, originOf, progressionFor } from './modules/hero/hero-progression.js';
+import { imprintSlotsFor } from './modules/hero/imprint-rules.js';
 import { createAccessToken, hashPassword, readAccessToken, TOKEN_LIFETIME_SECONDS, verifyPassword } from './modules/auth/auth.js';
 import { PersistentGachaService, SummonError } from './modules/gacha/persistent-gacha.service.js';
 import { WorldSeedGenerator } from './modules/dungeon/world-seed.generator.js';
@@ -2621,14 +2622,21 @@ export function createApp() {
             .where(eq(heroPersonalityTraits.heroId, hero.id));
         }
         const ownedImprints = await tx.select().from(heroImprints).where(eq(heroImprints.heroId, hero.id));
-        if (ownedImprints.length === 0) {
+        const slots = imprintSlotsFor(hero.rarity);
+        if (ownedImprints.length < slots) {
+          const ownedCodes = new Set(ownedImprints.map(row => row.imprintCode));
           const [imprint] = await tx.select().from(imprintDefinitions)
-            .where(eq(imprintDefinitions.isEnabled, true)).orderBy(asc(imprintDefinitions.tier)).limit(1);
-          if (imprint) {
+            .where(eq(imprintDefinitions.isEnabled, true))
+            .orderBy(asc(imprintDefinitions.tier)).limit(10);
+          const candidate = imprint && !ownedCodes.has(imprint.code) ? imprint : undefined;
+          const free = candidate ?? (await tx.select().from(imprintDefinitions)
+            .where(eq(imprintDefinitions.isEnabled, true)).orderBy(asc(imprintDefinitions.tier)).limit(10))
+            .find(row => !ownedCodes.has(row.code));
+          if (free) {
             await tx.insert(heroImprints).values({
-              id: uuidv4(), heroId: hero.id, imprintCode: imprint.code, rankLevel: 1, acquiredAt: new Date(),
+              id: uuidv4(), heroId: hero.id, imprintCode: free.code, rankLevel: 1, acquiredAt: new Date(),
             });
-            imprintGranted = { code: imprint.code, rankLevel: 1 };
+            imprintGranted = { code: free.code, rankLevel: 1 };
           }
         } else {
           const upgradeImprint = ownedImprints.find(row => row.rankLevel < 3);
