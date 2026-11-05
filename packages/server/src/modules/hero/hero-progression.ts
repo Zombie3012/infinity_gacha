@@ -76,14 +76,19 @@ export function progressionFor(input: {
   mpPct?: number;
   /** Each awakening rank permanently grants +10 to every base stat. */
   awakeningRank?: number;
+  /** Flat base-stat bonus from imprints. */
+  imprint?: Partial<BaseStats>;
 }): ProgressionSnapshot {
   const training = trainingOf(input.training);
   const origin = originOf(input.origin);
+  const imprint = originOf(input.imprint ?? {});
   const awakeningBonus = 10 * Math.max(0, Math.floor(input.awakeningRank ?? 0));
   const base = computeHeroBaseStats({
     templateBase: {
-      str: origin.str + awakeningBonus, int: origin.int + awakeningBonus,
-      sta: origin.sta + awakeningBonus, agi: origin.agi + awakeningBonus,
+      str: origin.str + awakeningBonus + imprint.str,
+      int: origin.int + awakeningBonus + imprint.int,
+      sta: origin.sta + awakeningBonus + imprint.sta,
+      agi: origin.agi + awakeningBonus + imprint.agi,
     },
     star: input.star,
     level: input.level,

@@ -2335,6 +2335,7 @@ export function createApp() {
         level = config.level;
       }
       const isV2 = isV2Origin(hero.originStats);
+      const imprintBonus = isV2 ? await imprintStatsFor(tx, hero.id) : { str: 0, int: 0, sta: 0, agi: 0 };
       await tx.update(masterItems).set({ quantity: material.quantity - 1, updatedAt: new Date() }).where(eq(masterItems.id, material.id));
       const updateValues = isV2
         ? (() => {
@@ -2345,6 +2346,7 @@ export function createApp() {
             classCode: hero.classCode as HeroClass,
             training: hero.trainingStats,
             awakeningRank: hero.awakeningRank,
+            imprint: imprintBonus,
             hpPct: hero.currentHpPct,
             mpPct: hero.currentMpPct,
           });
@@ -2365,6 +2367,18 @@ export function createApp() {
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     return res.json(result);
   }));
+
+  const imprintStatsFor = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], heroId: string) => {
+    const rows = await tx.select({ owned: heroImprints, definition: imprintDefinitions })
+      .from(heroImprints).innerJoin(imprintDefinitions, eq(imprintDefinitions.code, heroImprints.imprintCode))
+      .where(eq(heroImprints.heroId, heroId));
+    return rows.reduce((sum, row) => ({
+      str: sum.str + row.definition.bonusStr,
+      int: sum.int + row.definition.bonusInt,
+      sta: sum.sta + row.definition.bonusSta,
+      agi: sum.agi + row.definition.bonusAgi,
+    }), { str: 0, int: 0, sta: 0, agi: 0 });
+  };
 
   const progressionError = (res: Response, error: unknown): boolean => {
     if (error instanceof ProgressionError) {
@@ -2468,6 +2482,7 @@ export function createApp() {
           classCode: targetClass as HeroClass,
           training: hero.trainingStats,
           awakeningRank: hero.awakeningRank,
+          imprint: await imprintStatsFor(tx, hero.id),
           hpPct: hero.currentHpPct,
           mpPct: hero.currentMpPct,
         });
@@ -2586,6 +2601,7 @@ export function createApp() {
           hpPct: hero.currentHpPct,
           mpPct: hero.currentMpPct,
           awakeningRank: config.rank,
+          imprint: await imprintStatsFor(tx, hero.id),
         });
         const skillRows = await tx.select({ instance: heroSkillInstances, template: heroSkillTemplates })
           .from(heroSkillInstances).innerJoin(heroSkillTemplates, eq(heroSkillInstances.skillCode, heroSkillTemplates.code))
