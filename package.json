@@ -17,7 +17,8 @@
     "check:encoding": "node scripts/check-encoding.mjs",
     "verify": "npm run check:encoding && npm run build && npm test",
     "db:seed": "node scripts/apply-seeds.mjs",
-    "db:reset-heroes": "node scripts/reset-demo-heroes.mjs"
+    "db:reset-heroes": "node scripts/reset-demo-heroes.mjs",
+    "docs:routes": "node scripts/list-routes.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
