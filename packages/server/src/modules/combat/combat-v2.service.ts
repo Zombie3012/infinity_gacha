@@ -17,6 +17,9 @@ import {
   deriveStats, mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
 } from '@infiniti-gacha/shared';
 import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.js';
+import { survivalService } from '../survival/survival.service.js';
+import { medicalService } from '../medical/medical.service.js';
+import { personalityService } from '../personality/personality.service.js';
 import { resolveBattleV2, type CombatV2Skill, type CombatV2UnitInput } from './combat-v2.engine.js';
 
 export class CombatV2Error extends Error {
@@ -54,6 +57,21 @@ function affinityFromRow(row: typeof heroElementAffinities.$inferSelect): Elemen
 function strongestElement(affinity: ElementAffinity): keyof ElementAffinity {
   return (Object.entries(affinity) as [keyof ElementAffinity, number][])
     .sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function applyCombatModifiers(
+  stats: DerivedStats,
+  readiness: number,
+  loyalty: number,
+  resonance: number,
+): DerivedStats {
+  return {
+    ...stats,
+    atk: Math.max(1, Math.round(stats.atk * readiness * loyalty * resonance)),
+    matk: Math.max(1, Math.round(stats.matk * readiness * loyalty * resonance)),
+    def: Math.max(0, Math.round(stats.def * readiness * loyalty)),
+    mdef: Math.max(0, Math.round(stats.mdef * readiness * loyalty)),
+  };
 }
 
 export class CombatV2Service {
@@ -100,6 +118,18 @@ export class CombatV2Service {
       gearByHero.set(heroId, bonus);
     }
 
+    // Existing P1 systems: injury, starvation and loyalty/resonance multipliers.
+    const [injuryPenalties, personality] = await Promise.all([
+      medicalService.penaltyByHero(masterId).catch(() => ({} as Record<string, number>)),
+      personalityService.combatModifiers(masterId).catch(() => ({} as Record<string, { loyalty: number; resonance: number }>)),
+    ]);
+    let readiness: Record<string, number> = {};
+    try {
+      readiness = (await survivalService.battleReadiness(masterId)).multipliers ?? {};
+    } catch {
+      readiness = {};
+    }
+
     const heroUnits: CombatV2UnitInput[] = rows.map(({ hero, template }, index) => {
       const useV2 = isV2Origin(hero.originStats);
       const snapshot = useV2
@@ -120,6 +150,12 @@ export class CombatV2Service {
           hpBase: gear.hp, atkBase: gear.attack, defBase: gear.defense, agi: gear.speed,
         })
         : legacyStats(hero, gear);
+      const modified = applyCombatModifiers(
+        stats,
+        (readiness[hero.id] ?? 1) * (injuryPenalties[hero.id] ?? 1),
+        personality[hero.id]?.loyalty ?? 1,
+        personality[hero.id]?.resonance ?? 1,
+      );
       const affinityRow = affinities.find(row => row.heroId === hero.id);
       const affinity = affinityRow ? affinityFromRow(affinityRow) : null;
       const element = affinity ? strongestElement(affinity) : undefined;
@@ -141,7 +177,7 @@ export class CombatV2Service {
         side: 'HERO',
         slotIndex: index,
         agi: (snapshot?.base.agi ?? Math.max(1, hero.speed)) + gear.speed,
-        stats,
+        stats: modified,
         damageType: classCode === 'MAGE' ? 'MAGICAL' : 'PHYSICAL',
         affinity,
         skills: unitSkills,
