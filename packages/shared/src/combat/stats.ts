@@ -161,6 +161,8 @@ export interface DerivedOffsets {
   mdefBase?: number;
   hpRegenBase?: number;
   mpRegenBase?: number;
+  /** Flat AGI from equipment/buffs; affects crit, evasion and the ATK formula. */
+  agi?: number;
   critRate?: number;
   critDamage?: number;
   accuracy?: number;
@@ -373,11 +375,12 @@ export function deriveStats(
   heroClass: HeroClass = 'UNCLASSIFIED',
   offsets: DerivedOffsets = {},
 ): DerivedStats {
-  const critRate = CLASS_BASE_CRIT[heroClass] + base.agi * 0.05 + (offsets.critRate ?? 0);
+  const agi = Math.max(0, base.agi + (offsets.agi ?? 0));
+  const critRate = CLASS_BASE_CRIT[heroClass] + agi * 0.05 + (offsets.critRate ?? 0);
   return {
     maxHp: Math.round((offsets.hpBase ?? 0) + 20 * base.sta),
     maxMp: Math.round((offsets.mpBase ?? 0) + 10 * base.int),
-    atk: Math.round((offsets.atkBase ?? 0) + 2.5 * base.str + 0.5 * base.agi),
+    atk: Math.round((offsets.atkBase ?? 0) + 2.5 * base.str + 0.5 * agi),
     matk: Math.round((offsets.matkBase ?? 0) + 3.0 * base.int),
     def: Math.round((offsets.defBase ?? 0) + 0.5 * base.sta),
     mdef: Math.round((offsets.mdefBase ?? 0) + 0.5 * base.int),
@@ -386,7 +389,7 @@ export function deriveStats(
     critRate: Math.round(clamp(critRate, 0, CAPS.critRate) * 10) / 10,
     critDamage: Math.round(clamp(150 + (offsets.critDamage ?? 0), 0, CAPS.critDamage) * 10) / 10,
     accuracy: Math.round(clamp(offsets.accuracy ?? 0, 0, 100) * 10) / 10,
-    evasion: Math.round(clamp(base.agi * 0.05 + (offsets.evasion ?? 0), 0, CAPS.evasion) * 10) / 10,
+    evasion: Math.round(clamp(agi * 0.05 + (offsets.evasion ?? 0), 0, CAPS.evasion) * 10) / 10,
     blockRate: Math.round(clamp(offsets.blockRate ?? 0, 0, CAPS.blockRate) * 10) / 10,
     blockEffect: Math.round(clamp(offsets.blockEffect ?? 0, 0, CAPS.blockEffect) * 10) / 10,
     critResistance: Math.round(clamp(offsets.critResistance ?? 0, 0, 100) * 10) / 10,

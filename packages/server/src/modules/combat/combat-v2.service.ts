@@ -10,10 +10,11 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../../database/db.js';
 import {
-  enemyTemplates, heroElementAffinities, heroes, heroSkillInstances, heroSkillTemplates, heroTemplates,
+  enemyTemplates, equipmentInstances, equipmentTemplates, heroElementAffinities, heroes,
+  heroSkillInstances, heroSkillTemplates, heroTemplates,
 } from '../../database/drizzle-schema.js';
 import {
-  mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
+  deriveStats, mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
 } from '@infiniti-gacha/shared';
 import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.js';
 import { resolveBattleV2, type CombatV2Skill, type CombatV2UnitInput } from './combat-v2.engine.js';
@@ -31,15 +32,15 @@ const EMPTY_DERIVED: Omit<DerivedStats, 'maxHp' | 'maxMp' | 'atk' | 'matk' | 'de
   damageReduction: 0, tenacity: 0, armorPen: 0, magicPen: 0, damageBonus: 0, lifesteal: 0,
 };
 
-function legacyStats(hero: typeof heroes.$inferSelect): DerivedStats {
+function legacyStats(hero: typeof heroes.$inferSelect, gear = { hp: 0, attack: 0, defense: 0, speed: 0 }): DerivedStats {
   return {
     ...EMPTY_DERIVED,
-    maxHp: hero.maxHp,
+    maxHp: hero.maxHp + gear.hp,
     maxMp: Math.max(0, hero.maxMp),
-    atk: hero.attack,
-    matk: hero.attack,
-    def: hero.defense,
-    mdef: hero.defense,
+    atk: hero.attack + gear.attack,
+    matk: hero.attack + gear.attack,
+    def: hero.defense + gear.defense,
+    mdef: hero.defense + gear.defense,
   };
 }
 
@@ -79,6 +80,26 @@ export class CombatV2Service {
       .where(and(inArray(heroSkillInstances.heroId, heroIds), eq(heroSkillInstances.isUnlocked, true)));
     const affinities = await db.select().from(heroElementAffinities).where(inArray(heroElementAffinities.heroId, heroIds));
 
+    const gearRows = await db.select({ item: equipmentInstances, template: equipmentTemplates })
+      .from(equipmentInstances).innerJoin(equipmentTemplates, eq(equipmentInstances.templateCode, equipmentTemplates.code))
+      .where(and(
+        eq(equipmentInstances.masterId, masterId),
+        eq(equipmentInstances.location, 'EQUIPPED'),
+        inArray(equipmentInstances.equippedHeroId, heroIds),
+      ));
+    const gearByHero = new Map<string, { hp: number; attack: number; defense: number; speed: number }>();
+    for (const row of gearRows) {
+      const heroId = row.item.equippedHeroId!;
+      const bonus = gearByHero.get(heroId) ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
+      const multiplier = row.item.statMultiplier ?? 1;
+      const substats = row.item.substats ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
+      bonus.hp += Math.round(row.template.bonusHp * multiplier) + substats.hp;
+      bonus.attack += Math.round(row.template.bonusAttack * multiplier) + substats.attack;
+      bonus.defense += Math.round(row.template.bonusDefense * multiplier) + substats.defense;
+      bonus.speed += Math.round(row.template.bonusSpeed * multiplier) + substats.speed;
+      gearByHero.set(heroId, bonus);
+    }
+
     const heroUnits: CombatV2UnitInput[] = rows.map(({ hero, template }, index) => {
       const useV2 = isV2Origin(hero.originStats);
       const snapshot = useV2
@@ -92,8 +113,13 @@ export class CombatV2Service {
           mpPct: 1,
         })
         : null;
-      const stats = snapshot?.derived ?? legacyStats(hero);
+      const gear = gearByHero.get(hero.id) ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
       const classCode = hero.classCode as HeroClass;
+      const stats = snapshot
+        ? deriveStats(snapshot.base, classCode, {
+          hpBase: gear.hp, atkBase: gear.attack, defBase: gear.defense, agi: gear.speed,
+        })
+        : legacyStats(hero, gear);
       const affinityRow = affinities.find(row => row.heroId === hero.id);
       const affinity = affinityRow ? affinityFromRow(affinityRow) : null;
       const element = affinity ? strongestElement(affinity) : undefined;
@@ -114,7 +140,7 @@ export class CombatV2Service {
         name: hero.name,
         side: 'HERO',
         slotIndex: index,
-        agi: snapshot?.base.agi ?? Math.max(1, hero.speed),
+        agi: (snapshot?.base.agi ?? Math.max(1, hero.speed)) + gear.speed,
         stats,
         damageType: classCode === 'MAGE' ? 'MAGICAL' : 'PHYSICAL',
         affinity,

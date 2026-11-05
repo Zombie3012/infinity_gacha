@@ -37,6 +37,16 @@ test('Combat v2 - derived stats from STR/INT/STA/AGI', async (t) => {
     assert.equal(stats.evasion, 3);           // AGI 60 * 0.05%
   });
 
+  await t.test('equipment AGI offsets feed crit, evasion and ATK', () => {
+    const baseStats = { str: 100, int: 50, sta: 200, agi: 60 };
+    const plain = deriveStats(baseStats, 'WARRIOR');
+    const geared = deriveStats(baseStats, 'WARRIOR', { agi: 40, atkBase: 10, hpBase: 100 });
+    assert.equal(geared.critRate, plain.critRate + 2); // 40 * 0.05
+    assert.equal(geared.evasion, plain.evasion + 2);
+    assert.equal(geared.atk, plain.atk + 10 + 20); // flat ATK + 0.5 * AGI
+    assert.equal(geared.maxHp, plain.maxHp + 100);
+  });
+
   await t.test('offsets from equipment and buffs are clamped', () => {
     const boosted = deriveStats(base, 'ARCHER', { damageReduction: 120, lifesteal: 99, armorPen: 95 });
     assert.equal(boosted.damageReduction, CAPS.damageReduction);
