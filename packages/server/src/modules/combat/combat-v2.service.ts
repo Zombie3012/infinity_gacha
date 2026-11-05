@@ -143,6 +143,7 @@ export class CombatV2Service {
           level: hero.level,
           classCode: hero.classCode as HeroClass,
           training: hero.trainingStats,
+          awakeningRank: hero.awakeningRank,
           hpPct: 1,
           mpPct: 1,
         })

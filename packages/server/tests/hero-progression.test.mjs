@@ -61,6 +61,18 @@ test('Combat v2 - progression recompute', async (t) => {
     );
   });
 
+  await t.test('awakening ranks add +10 to every base stat permanently', () => {
+    const base = progressionFor({ origin: origin5, star: 5, level: 30, classCode: 'WARRIOR' });
+    const awakened = progressionFor({
+      origin: origin5, star: 5, level: 30, classCode: 'WARRIOR', awakeningRank: 2,
+    });
+    assert.equal(awakened.base.str - base.base.str, 20);
+    assert.equal(awakened.base.int - base.base.int, 20);
+    assert.equal(awakened.base.sta - base.base.sta, 20);
+    assert.equal(awakened.base.agi - base.base.agi, 20);
+    assert.ok(awakened.maxHp > base.maxHp);
+  });
+
   await t.test('v2 detection separates new Heroes from legacy demo rows', () => {
     assert.equal(isV2Origin(origin5), true);
     assert.equal(isV2Origin({ str: 0, int: 0, sta: 0, agi: 0 }), false);

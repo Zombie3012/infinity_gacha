@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { timingSafeEqual } from 'node:crypto';
 import { calculateFiveStarRate, roleForClass, rollElementAffinity, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
 import { db, pool } from './database/db.js';
-import { accounts, accountSessions, playerProfiles, banners, masterBannerPity, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities } from './database/drizzle-schema.js';
+import { accounts, accountSessions, playerProfiles, banners, masterBannerPity, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits } from './database/drizzle-schema.js';
 import { CLASS_CHANGE_ITEM, CLASS_CHANGE_SILVER, ProgressionError, allocateTraining, classChangeCheck, isV2Origin, originOf, progressionFor } from './modules/hero/hero-progression.js';
 import { createAccessToken, hashPassword, readAccessToken, TOKEN_LIFETIME_SECONDS, verifyPassword } from './modules/auth/auth.js';
 import { PersistentGachaService, SummonError } from './modules/gacha/persistent-gacha.service.js';
@@ -2344,6 +2344,7 @@ export function createApp() {
             level,
             classCode: hero.classCode as HeroClass,
             training: hero.trainingStats,
+            awakeningRank: hero.awakeningRank,
             hpPct: hero.currentHpPct,
             mpPct: hero.currentMpPct,
           });
@@ -2466,6 +2467,7 @@ export function createApp() {
           level: hero.level,
           classCode: targetClass as HeroClass,
           training: hero.trainingStats,
+          awakeningRank: hero.awakeningRank,
           hpPct: hero.currentHpPct,
           mpPct: hero.currentMpPct,
         });
@@ -2569,13 +2571,51 @@ export function createApp() {
       if (!material || material.quantity < config.materialQuantity) return { status: 409, error: `Awakening requires ${config.materialQuantity} configured materials.` } as const;
       const multiplier = config.statGrowthMultiplier;
       const maxHp = Math.floor(hero.maxHp * multiplier);
-      // Combat v2 stats are rebuilt from origin/class/training, so the legacy
-      // percentage roll must not mutate them. Awakening only raises the rank.
-      const [updated] = isV2Origin(hero.originStats)
-        ? await tx.update(heroes).set({ awakeningRank: config.rank, updatedAt: new Date() }).where(eq(heroes.id, hero.id)).returning()
-        : await tx.update(heroes).set({ awakeningRank: config.rank, maxHp, hp: Math.min(maxHp, hero.hp + maxHp - hero.maxHp), attack: Math.floor(hero.attack * multiplier), defense: Math.floor(hero.defense * multiplier), speed: Math.floor(hero.speed * multiplier), updatedAt: new Date() }).where(eq(heroes.id, hero.id)).returning();
+      let updated;
+      let skillAwakened: { code: string; level: number } | null = null;
+      let newTrait: string | null = null;
+      if (isV2Origin(hero.originStats)) {
+        // Awakening v2: stat growth + skill level + a new special trait.
+        const snapshot = progressionFor({
+          origin: originOf(hero.originStats),
+          star: hero.rarity as StarRating,
+          level: hero.level,
+          classCode: hero.classCode as HeroClass,
+          training: hero.trainingStats,
+          hpPct: hero.currentHpPct,
+          mpPct: hero.currentMpPct,
+          awakeningRank: config.rank,
+        });
+        const skillRows = await tx.select({ instance: heroSkillInstances, template: heroSkillTemplates })
+          .from(heroSkillInstances).innerJoin(heroSkillTemplates, eq(heroSkillInstances.skillCode, heroSkillTemplates.code))
+          .where(and(eq(heroSkillInstances.heroId, hero.id), eq(heroSkillInstances.isUnlocked, true)));
+        const upgrade = skillRows.find(row => row.instance.skillLevel < row.template.maxLevel);
+        if (upgrade) {
+          await tx.update(heroSkillInstances).set({
+            skillLevel: upgrade.instance.skillLevel + 1, updatedAt: new Date(),
+          }).where(eq(heroSkillInstances.id, upgrade.instance.id));
+          skillAwakened = { code: upgrade.template.code, level: upgrade.instance.skillLevel + 1 };
+        }
+        const traits = ['DRAGON_HEART', 'PHOENIX_BLOOD', 'VOID_TOUCH', 'STAR_BLESSED', 'IRON_WILL'];
+        newTrait = traits[Math.floor(Math.random() * traits.length)];
+        const [traitRow] = await tx.select().from(heroPersonalityTraits).where(eq(heroPersonalityTraits.heroId, hero.id)).limit(1);
+        if (traitRow) {
+          await tx.update(heroPersonalityTraits).set({ specialTrait: newTrait, updatedAt: new Date() })
+            .where(eq(heroPersonalityTraits.heroId, hero.id));
+        }
+        [updated] = await tx.update(heroes).set({
+          awakeningRank: config.rank,
+          baseStr: snapshot.base.str, baseInt: snapshot.base.int,
+          baseSta: snapshot.base.sta, baseAgi: snapshot.base.agi,
+          maxHp: snapshot.maxHp, hp: snapshot.hp,
+          attack: snapshot.attack, defense: snapshot.defense, speed: snapshot.speed,
+          mp: snapshot.mp, maxMp: snapshot.maxMp, updatedAt: new Date(),
+        }).where(eq(heroes.id, hero.id)).returning();
+      } else {
+        [updated] = await tx.update(heroes).set({ awakeningRank: config.rank, maxHp, hp: Math.min(maxHp, hero.hp + maxHp - hero.maxHp), attack: Math.floor(hero.attack * multiplier), defense: Math.floor(hero.defense * multiplier), speed: Math.floor(hero.speed * multiplier), updatedAt: new Date() }).where(eq(heroes.id, hero.id)).returning();
+      }
       await tx.update(masterItems).set({ quantity: material.quantity - config.materialQuantity, updatedAt: new Date() }).where(eq(masterItems.id, material.id));
-      return { status: 200, heroId: updated.id, awakeningRank: updated.awakeningRank, stats: { hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }, materialQuantity: material.quantity - config.materialQuantity } as const;
+      return { status: 200, heroId: updated.id, awakeningRank: updated.awakeningRank, skillAwakened, newTrait, stats: { hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }, materialQuantity: material.quantity - config.materialQuantity } as const;
     });
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     return res.json(result);

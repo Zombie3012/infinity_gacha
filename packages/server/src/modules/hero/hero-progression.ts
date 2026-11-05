@@ -74,10 +74,17 @@ export function progressionFor(input: {
   training?: Partial<BaseStats> | null;
   hpPct?: number;
   mpPct?: number;
+  /** Each awakening rank permanently grants +10 to every base stat. */
+  awakeningRank?: number;
 }): ProgressionSnapshot {
   const training = trainingOf(input.training);
+  const origin = originOf(input.origin);
+  const awakeningBonus = 10 * Math.max(0, Math.floor(input.awakeningRank ?? 0));
   const base = computeHeroBaseStats({
-    templateBase: originOf(input.origin),
+    templateBase: {
+      str: origin.str + awakeningBonus, int: origin.int + awakeningBonus,
+      sta: origin.sta + awakeningBonus, agi: origin.agi + awakeningBonus,
+    },
     star: input.star,
     level: input.level,
     heroClass: input.classCode,
