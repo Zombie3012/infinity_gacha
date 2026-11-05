@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
   combatSessions, enemyTemplates, equipmentInstances, equipmentTemplates, heroElementAffinities, heroes,
-  heroSkillInstances, heroSkillTemplates, heroTemplates, worlds,
+  heroLevelConfigs, heroSkillInstances, heroSkillTemplates, heroTemplates, masterLevelConfigs, masters, worlds,
 } from '../../database/drizzle-schema.js';
 import {
   deriveStats, mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
@@ -327,6 +327,51 @@ export class CombatV2Service {
       .catch(error => console.error('[combat-v2] injury recording failed', error));
 
     if (won) {
+      const expReward = foes.reduce((sum, foe) => sum + foe.baseExpReward, 0);
+      const levelConfigs = await db.select().from(heroLevelConfigs).orderBy(asc(heroLevelConfigs.level));
+      for (const unit of report.units.filter(row => row.side === 'HERO' && row.alive)) {
+        const [hero] = await db.select().from(heroes).where(eq(heroes.id, unit.id)).limit(1);
+        if (!hero) continue;
+        const totalExp = hero.exp + BigInt(expReward);
+        let level = hero.level;
+        for (const config of levelConfigs) {
+          if (config.level > level && totalExp >= config.cumulativeExpRequired) level = config.level;
+        }
+        if (level === hero.level) {
+          await db.update(heroes).set({ exp: totalExp, updatedAt: now }).where(eq(heroes.id, hero.id));
+          continue;
+        }
+        const snapshot = progressionFor({
+          origin: originOf(hero.originStats),
+          star: hero.rarity as StarRating,
+          level,
+          classCode: hero.classCode as HeroClass,
+          training: hero.trainingStats,
+          hpPct: hero.currentHpPct,
+          mpPct: hero.currentMpPct,
+        });
+        await db.update(heroes).set({
+          exp: totalExp, level,
+          baseStr: snapshot.base.str, baseInt: snapshot.base.int,
+          baseSta: snapshot.base.sta, baseAgi: snapshot.base.agi,
+          maxHp: snapshot.maxHp, hp: snapshot.hp,
+          attack: snapshot.attack, defense: snapshot.defense, speed: snapshot.speed,
+          mp: snapshot.mp, maxMp: snapshot.maxMp, updatedAt: now,
+        }).where(eq(heroes.id, hero.id));
+      }
+
+      const [masterRow] = await db.select().from(masters).where(eq(masters.id, masterId)).limit(1);
+      if (masterRow) {
+        const masterExp = masterRow.exp + BigInt(expReward);
+        const masterConfigs = await db.select().from(masterLevelConfigs).orderBy(asc(masterLevelConfigs.level));
+        let masterLevel = masterRow.level;
+        for (const config of masterConfigs) {
+          if (config.level > masterLevel && masterExp >= config.expRequired) masterLevel = config.level;
+        }
+        await db.update(masters).set({ exp: masterExp, level: masterLevel, updatedAt: now })
+          .where(eq(masters.id, masterId));
+      }
+
       await questService.recordEvent(masterId, 'WIN_BATTLE', 1)
         .catch(error => console.error('[combat-v2] quest win hook failed', error));
       await questService.recordEvent(masterId, 'CLEAR_FLOOR', 1).catch(() => undefined);
