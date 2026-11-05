@@ -21,6 +21,8 @@ import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.j
 import { currencyService } from '../economy/currency.service.js';
 import { survivalService } from '../survival/survival.service.js';
 import { medicalService } from '../medical/medical.service.js';
+import { questService } from '../quest/quest.service.js';
+import { leaderboardService } from '../liveops/leaderboard.service.js';
 import { personalityService } from '../personality/personality.service.js';
 import { resolveBattleV2, type CombatV2Skill, type CombatV2UnitInput } from './combat-v2.engine.js';
 
@@ -265,6 +267,9 @@ export class CombatV2Service {
     if (!world) throw new CombatV2Error('ERR_COMBAT_V2_NO_WORLD', 409);
 
     const enemyCodes = Array.isArray(input.enemyCodes) ? input.enemyCodes.map(String) : [];
+    // DM-09: expedition rations are charged when the party deploys.
+    await survivalService.rationQuote(masterId, 'DUNGEON', heroIds.length, true)
+      .catch(error => console.error('[combat-v2] ration charge failed', error));
     const seed = Number.isFinite(Number(input.seed)) ? Number(input.seed) : Date.now() % 2_147_483_647;
     const sessionId = uuidv4();
     const now = new Date();
@@ -320,6 +325,17 @@ export class CombatV2Service {
       .map(unit => ({ id: unit.id, hp: unit.hp, maxHp: unit.maxHp }));
     await medicalService.recordBattleInjuries(masterId, survivors)
       .catch(error => console.error('[combat-v2] injury recording failed', error));
+
+    if (won) {
+      await questService.recordEvent(masterId, 'WIN_BATTLE', 1)
+        .catch(error => console.error('[combat-v2] quest win hook failed', error));
+      await questService.recordEvent(masterId, 'CLEAR_FLOOR', 1).catch(() => undefined);
+      const [world] = await db.select().from(worlds).where(eq(worlds.id, session.worldId)).limit(1);
+      if (world) {
+        await leaderboardService.recordFloor(masterId, world.currentFloor + 1, report.rounds)
+          .catch(error => console.error('[combat-v2] leaderboard hook failed', error));
+      }
+    }
 
     return { sessionId, status: 'COMPLETED', silverReward, report };
   }
