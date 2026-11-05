@@ -102,6 +102,31 @@ test('HTTP combat v2: simulate a battle', { skip: skipReason }, async t => {
     assert.equal(after.rows[0].total, before.rows[0].total + 1);
   });
 
+  await t.test('a fallen Normal Hero dies permanently and drops gear', async () => {
+    const weak = await createHero(master.masterId, {
+      templateIndex: 1, name: 'Fallen', attack: 1, defense: 0, speed: 1, hp: 100, maxHp: 100,
+    });
+    const strongEnemy = (await sql('select code from enemy_templates order by base_atk desc limit 1')).rows[0].code;
+    const started = await harness.request('/api/combat/v2/session/start', {
+      method: 'POST', token: master.token,
+      body: { heroIds: [weak.id], enemyCodes: [strongEnemy], seed: 3 },
+    });
+    assert.equal(started.status, 201);
+    const advanced = await harness.request(`/api/combat/v2/session/${started.body.sessionId}/advance`, {
+      method: 'POST', token: master.token,
+    });
+    assert.equal(advanced.status, 200);
+    assert.equal(advanced.body.report.winner, 'ENEMY');
+    assert.equal(advanced.body.deaths.length, 1);
+    assert.equal(advanced.body.deaths[0].state, 'DEAD');
+
+    const row = await sql('select state, hp from heroes where id = $1', [weak.id]);
+    assert.equal(row.rows[0].state, 'DEAD');
+    assert.equal(row.rows[0].hp, 0);
+    const record = await sql('select count(*)::int as total from hero_death_records where hero_id = $1', [weak.id]);
+    assert.equal(record.rows[0].total, 1);
+  });
+
   await t.test('unknown Heroes and empty parties are refused', async () => {
     const missing = await harness.request('/api/combat/v2/simulate', {
       method: 'POST', token: master.token,

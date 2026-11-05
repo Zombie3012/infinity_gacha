@@ -11,7 +11,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
-  combatSessions, enemyTemplates, equipmentInstances, equipmentTemplates, heroElementAffinities, heroes,
+  combatSessions, enemyTemplates, equipmentInstances, equipmentTemplates, heroDeathRecords, heroElementAffinities, heroes,
   heroLevelConfigs, heroSkillInstances, heroSkillTemplates, heroTemplates, masterLevelConfigs, masters, worlds,
 } from '../../database/drizzle-schema.js';
 import {
@@ -335,6 +335,37 @@ export class CombatV2Service {
       battleReport: report as unknown as Record<string, unknown>,
     }).where(eq(combatSessions.id, sessionId));
 
+    const [world] = await db.select().from(worlds).where(eq(worlds.id, session.worldId)).limit(1);
+
+    // P0 death rules: Normal Heroes die permanently and drop gear;
+    // Special/Limited Heroes are disabled instead.
+    const deaths: { heroId: string; name: string; state: string }[] = [];
+    for (const unit of report.units.filter(row => row.side === 'HERO' && !row.alive)) {
+      const [hero] = await db.select().from(heroes).where(eq(heroes.id, unit.id)).limit(1);
+      if (!hero || hero.state === 'DEAD' || hero.state === 'DISABLED') continue;
+      const gear = await db.select().from(equipmentInstances)
+        .where(and(eq(equipmentInstances.equippedHeroId, hero.id), eq(equipmentInstances.location, 'EQUIPPED')));
+      const nextState = hero.category === 'NORMAL' ? 'DEAD' : 'DISABLED';
+      await db.transaction(async tx => {
+        for (const item of gear) {
+          await tx.update(equipmentInstances).set({
+            equippedHeroId: null, location: 'FLOOR_DROP', dropWorldId: session.worldId,
+            dropFloor: world?.currentFloor ?? null, droppedAt: now,
+          }).where(eq(equipmentInstances.id, item.id));
+        }
+        await tx.update(heroes).set({ state: nextState, hp: 0, updatedAt: now }).where(eq(heroes.id, hero.id));
+        if (nextState === 'DEAD') {
+          await tx.insert(heroDeathRecords).values({
+            id: uuidv4(), heroId: hero.id, masterId, combatSessionId: sessionId,
+            summonOrigin: hero.category, deathType: 'PERMANENT',
+            droppedEquipment: gear.map(item => ({ id: item.id, templateCode: item.templateCode })),
+            cause: 'COMBAT_V2', recordedAt: now,
+          });
+        }
+      });
+      deaths.push({ heroId: hero.id, name: hero.name, state: nextState });
+    }
+
     if (silverReward > 0) {
       await currencyService.addCurrency(masterId, {
         silverDelta: silverReward, transactionType: 'COMBAT_V2_REWARD',
@@ -397,14 +428,13 @@ export class CombatV2Service {
       await questService.recordEvent(masterId, 'WIN_BATTLE', 1)
         .catch(error => console.error('[combat-v2] quest win hook failed', error));
       await questService.recordEvent(masterId, 'CLEAR_FLOOR', 1).catch(() => undefined);
-      const [world] = await db.select().from(worlds).where(eq(worlds.id, session.worldId)).limit(1);
       if (world) {
         await leaderboardService.recordFloor(masterId, world.currentFloor + 1, report.rounds)
           .catch(error => console.error('[combat-v2] leaderboard hook failed', error));
       }
     }
 
-    return { sessionId, status: 'COMPLETED', silverReward, report };
+    return { sessionId, status: 'COMPLETED', silverReward, deaths, report };
   }
 }
 
