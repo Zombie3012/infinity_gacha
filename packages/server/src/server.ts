@@ -18,6 +18,7 @@ import { inventoryService } from './modules/inventory/inventory.service.js';
 import { currencyService } from './modules/economy/currency.service.js';
 import { exchangeSilverForNormalScrolls, getWeeklyExchangePeriodKey, ScrollExchangeError } from './modules/economy/scroll-exchange.service.js';
 import { CombatSessionError, CombatSessionService } from './modules/combat/combat-session.service.js';
+import { CombatV2Error, combatV2Service } from './modules/combat/combat-v2.service.js';
 import { TacticalBuffManager } from './modules/combat/tactical-buff.manager.js';
 import { EquipmentError, EquipmentService } from './modules/equipment/equipment.service.js';
 import { AUDIT_ACTIONS, auditService } from './modules/admin/audit.service.js';
@@ -2742,6 +2743,17 @@ export function createApp() {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     return res.json(await combatService.getActive(master.id));
+  }));
+
+  app.post('/api/combat/v2/simulate', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    try {
+      return res.json(await combatV2Service.simulate(master.id, req.body ?? {}));
+    } catch (error) {
+      if (error instanceof CombatV2Error) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
   }));
 
   app.post('/api/combat/session/start', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
