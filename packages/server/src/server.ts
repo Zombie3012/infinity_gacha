@@ -2569,7 +2569,11 @@ export function createApp() {
       if (!material || material.quantity < config.materialQuantity) return { status: 409, error: `Awakening requires ${config.materialQuantity} configured materials.` } as const;
       const multiplier = config.statGrowthMultiplier;
       const maxHp = Math.floor(hero.maxHp * multiplier);
-      const [updated] = await tx.update(heroes).set({ awakeningRank: config.rank, maxHp, hp: Math.min(maxHp, hero.hp + maxHp - hero.maxHp), attack: Math.floor(hero.attack * multiplier), defense: Math.floor(hero.defense * multiplier), speed: Math.floor(hero.speed * multiplier), updatedAt: new Date() }).where(eq(heroes.id, hero.id)).returning();
+      // Combat v2 stats are rebuilt from origin/class/training, so the legacy
+      // percentage roll must not mutate them. Awakening only raises the rank.
+      const [updated] = isV2Origin(hero.originStats)
+        ? await tx.update(heroes).set({ awakeningRank: config.rank, updatedAt: new Date() }).where(eq(heroes.id, hero.id)).returning()
+        : await tx.update(heroes).set({ awakeningRank: config.rank, maxHp, hp: Math.min(maxHp, hero.hp + maxHp - hero.maxHp), attack: Math.floor(hero.attack * multiplier), defense: Math.floor(hero.defense * multiplier), speed: Math.floor(hero.speed * multiplier), updatedAt: new Date() }).where(eq(heroes.id, hero.id)).returning();
       await tx.update(masterItems).set({ quantity: material.quantity - config.materialQuantity, updatedAt: new Date() }).where(eq(masterItems.id, material.id));
       return { status: 200, heroId: updated.id, awakeningRank: updated.awakeningRank, stats: { hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }, materialQuantity: material.quantity - config.materialQuantity } as const;
     });
