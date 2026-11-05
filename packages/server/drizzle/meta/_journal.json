@@ -288,6 +288,13 @@
       "when": 1793844604729,
       "tag": "0040_absurd_joshua_kane",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793849338290,
+      "tag": "0041_curly_mandroid",
+      "breakpoints": true
     }
   ]
 }

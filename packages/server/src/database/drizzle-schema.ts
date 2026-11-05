@@ -228,8 +228,36 @@ export const heroElementAffinities = pgTable('hero_element_affinities', {
     AND ${table.lightning} BETWEEN 0 AND 100`),
 ]);
 
-export const equipmentTemplates = pgTable('equipment_templates', {
+// --- Combat v2: imprints (Awakening content) ---
+
+export const imprintDefinitions = pgTable('imprint_definitions', {
+  code: varchar('code', { length: 50 }).primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  rank: varchar('rank', { length: 2 }).notNull(),
+  tier: integer('tier').default(1).notNull(),
+  bonusStr: integer('bonus_str').default(0).notNull(),
+  bonusInt: integer('bonus_int').default(0).notNull(),
+  bonusSta: integer('bonus_sta').default(0).notNull(),
+  bonusAgi: integer('bonus_agi').default(0).notNull(),
+  bonusHp: integer('bonus_hp').default(0).notNull(),
+  bonusAtk: integer('bonus_atk').default(0).notNull(),
+  bonusDef: integer('bonus_def').default(0).notNull(),
+  ability: varchar('ability', { length: 300 }).notNull().default(''),
+  isEnabled: boolean('is_enabled').default(true).notNull(),
+}, (table) => [
+  check('imprint_rank_check', sql`${table.rank} IN ('S', 'A', 'B')`),
+  index('idx_imprint_rank').on(table.rank, table.tier),
+]);
+
+export const heroImprints = pgTable('hero_imprints', {
   id: varchar('id', { length: 36 }).primaryKey(),
+  heroId: varchar('hero_id', { length: 36 }).notNull().references(() => heroes.id, { onDelete: 'cascade' }),
+  imprintCode: varchar('imprint_code', { length: 50 }).notNull().references(() => imprintDefinitions.code, { onDelete: 'cascade' }),
+  rankLevel: integer('rank_level').default(1).notNull(),
+  acquiredAt: timestamp('acquired_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [unique('uq_hero_imprint').on(table.heroId, table.imprintCode)]);
+
+export const equipmentTemplates = pgTable('equipment_templates', {  id: varchar('id', { length: 36 }).primaryKey(),
   code: varchar('code', { length: 50 }).notNull().unique(),
   name: varchar('name', { length: 100 }).notNull(),
   slotType: varchar('slot_type', { length: 30 }).notNull(),
