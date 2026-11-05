@@ -15,7 +15,7 @@ import {
   heroLevelConfigs, heroSkillInstances, heroSkillTemplates, heroTemplates, masterLevelConfigs, masters, worlds,
 } from '../../database/drizzle-schema.js';
 import {
-  deriveStats, mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
+  combatPowerV2, deriveStats, mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
 } from '@infiniti-gacha/shared';
 import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.js';
 import { currencyService } from '../economy/currency.service.js';
@@ -238,7 +238,12 @@ export class CombatV2Service {
       ...report,
       seed,
       sessionId,
-      heroes: heroUnits.map(unit => ({ id: unit.id, name: unit.name, classCode: unit.side === 'HERO' ? rows.find(row => row.hero.id === unit.id)?.hero.classCode : undefined })),
+      heroes: heroUnits.map(unit => ({
+        id: unit.id,
+        name: unit.name,
+        classCode: unit.side === 'HERO' ? rows.find(row => row.hero.id === unit.id)?.hero.classCode : undefined,
+        combatPower: combatPowerV2(unit.stats),
+      })),
     };
   }
 

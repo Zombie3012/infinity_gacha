@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BASE_STAT_BUDGET, CAPS, affinityMultiplier, budgetAtLevel, classGrowthPoints,
-  computeHeroBaseStats, deriveStats, eligibleClasses, growthCompensation, isStarEnabled,
+  combatPowerV2, computeHeroBaseStats, deriveStats, eligibleClasses, growthCompensation, isStarEnabled,
   isStarRating, mulberry32, rollBaseStats, rollElementAffinity, rollSummonClass,
   targetBudgetAt50, trainingPointsForLevel, TARGET_BUDGET,
 } from '../dist/combat/stats.js';
@@ -45,6 +45,13 @@ test('Combat v2 - derived stats from STR/INT/STA/AGI', async (t) => {
     assert.equal(geared.evasion, plain.evasion + 2);
     assert.equal(geared.atk, plain.atk + 10 + 20); // flat ATK + 0.5 * AGI
     assert.equal(geared.maxHp, plain.maxHp + 100);
+  });
+
+  await t.test('combat power v2 ranks stronger Heroes higher', () => {
+    const base = deriveStats({ str: 100, int: 50, sta: 200, agi: 60 }, 'WARRIOR');
+    const stronger = deriveStats({ str: 200, int: 50, sta: 300, agi: 100 }, 'WARRIOR');
+    assert.ok(combatPowerV2(base) > 0);
+    assert.ok(combatPowerV2(stronger) > combatPowerV2(base));
   });
 
   await t.test('offsets from equipment and buffs are clamped', () => {

@@ -404,6 +404,27 @@ export function deriveStats(
 }
 
 /**
+ * Combat Power v2: one comparable score across physical/magical/support builds.
+ * ATK/MATK carry the most weight, then defences, HP and percentage stats.
+ */
+export function combatPowerV2(stats: DerivedStats): number {
+  return Math.round(
+    stats.atk * 2
+    + stats.matk * 2
+    + stats.def * 1.5
+    + stats.mdef * 1.5
+    + stats.maxHp / 8
+    + stats.critRate * 6
+    + stats.critDamage * 2
+    + stats.evasion * 4
+    + stats.blockRate * 4
+    + stats.blockEffect * 2
+    + stats.damageReduction * 8
+    + stats.accuracy * 2,
+  );
+}
+
+/**
  * Class qualification from stat distribution (owner-approved: class does not
  * lock skills, so a high-INT Thief can still cast Mage spells).
  * 1-2 star Heroes can never become Mages (Mage is gacha-only).
