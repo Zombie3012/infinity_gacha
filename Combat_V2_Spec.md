@@ -87,5 +87,13 @@ Legacy columns `hp/attack/defense/speed` remain as mirrored display data (decisi
 - `POST /api/combat/v2/session/:id/advance`
 - `GET /api/combat/v2/sessions`
 
-## 10. Known gaps (Unity backlog)
-Imprint Evolution, trait tiers, skill-choice UI, Rank Promotion flow, client UI/VFX, TTK tuning. See `UNITY_BACKLOG.md`.
+## 10. Imprints
+- `imprint_definitions`: rank **S/A/B**, tier, bonus STR/INT/STA/AGI/HP/ATK/DEF, ability text.
+- `hero_imprints`: one row per (Hero, imprint), `rank_level` 1–3.
+- Awakening grants the first enabled imprint (rankLevel 1) or raises an owned imprint below rank 3; response returns `imprintGranted`.
+- Imprint bonuses are added to base stats before derivation in level-up, training, class change, awakening and Combat v2 sessions.
+- APIs: `GET /api/imprints`, `GET /api/heroes/:heroId/imprints`.
+- Pending: slot limits by star/rank promotion and ability execution (Phoenix revive, Iron Will CC reduction).
+
+## 11. Known gaps (Unity backlog)
+Imprint Evolution UI, trait tiers, skill-choice UI, Rank Promotion flow, client UI/VFX, TTK tuning. See `UNITY_BACKLOG.md`.
