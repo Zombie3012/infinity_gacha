@@ -1,0 +1,239 @@
+openapi: 3.0.3
+info:
+  title: Infinite Gacha — Combat v2 API
+  version: "1.0"
+  description: >
+    Auth dùng Bearer JWT lấy từ /api/auth/login. Mọi lỗi trả { "error": "ERR_CODE" }.
+    PvP/expedition vẫn dùng legacy stats; các endpoint dưới đây là Combat v2.
+servers:
+  - url: http://localhost:3000
+security:
+  - bearerAuth: []
+paths:
+  /api/heroes/{heroId}/train:
+    post:
+      summary: Phân bổ điểm training
+      parameters:
+        - $ref: '#/components/parameters/HeroId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stat, points]
+              properties:
+                stat: { type: string, enum: [str, int, sta, agi] }
+                points: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Snapshot sau khi phân bổ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProgressionSnapshot' }
+        "409": { $ref: '#/components/responses/Error' }
+  /api/heroes/{heroId}/class-change:
+    post:
+      summary: Đổi class (50.000 Silver + 1 Class Change Token)
+      parameters:
+        - $ref: '#/components/parameters/HeroId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetClass]
+              properties:
+                targetClass: { type: string, enum: [WARRIOR, THIEF, SPEARMAN, ARCHER, MAGE] }
+      responses:
+        "200":
+          description: Class mới + growth hồi tố
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  heroId: { type: string }
+                  previousClass: { type: string }
+                  classCode: { type: string }
+                  combatRole: { type: string }
+                  affinity: { type: object, nullable: true }
+                  cost: { type: object }
+        "409": { $ref: '#/components/responses/Error' }
+  /api/combat/v2/simulate:
+    post:
+      summary: Mô phỏng một trận (không đổi dữ liệu trừ khi persist=true)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimulateRequest' }
+      responses:
+        "200":
+          description: Battle report (có sessionId nếu persist)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SimulateResponse' }
+        "409": { $ref: '#/components/responses/Error' }
+  /api/combat/v2/session/start:
+    post:
+      summary: Mở phiên combat 2 bước
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimulateRequest' }
+      responses:
+        "201":
+          description: Phiên ACTIVE
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId: { type: string }
+                  status: { type: string, example: ACTIVE }
+                  seed: { type: integer }
+        "409": { $ref: '#/components/responses/Error' }
+  /api/combat/v2/session/{sessionId}/advance:
+    post:
+      summary: Resolve phiên, thưởng Silver/EXP và áp dụng hậu quả
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Kết quả trận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdvanceResponse' }
+        "409": { $ref: '#/components/responses/Error' }
+  /api/combat/v2/sessions:
+    get:
+      summary: 20 phiên gần nhất
+      responses:
+        "200":
+          description: Danh sách phiên
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    status: { type: string }
+                    battleReport: { type: object }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    HeroId:
+      name: heroId
+      in: path
+      required: true
+      schema: { type: string }
+  responses:
+    Error:
+      description: Lỗi nghiệp vụ
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error: { type: string, example: ERR_COMBAT_V2_SESSION_FINISHED }
+  schemas:
+    SimulateRequest:
+      type: object
+      required: [heroIds]
+      properties:
+        heroIds:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items: { type: string }
+        enemyCodes:
+          type: array
+          items: { type: string }
+        maxRounds: { type: integer, minimum: 1, maximum: 30 }
+        seed: { type: integer }
+        persist: { type: boolean, default: false }
+    SimulateResponse:
+      type: object
+      properties:
+        winner: { type: string, enum: [HERO, ENEMY, DRAW] }
+        rounds: { type: integer }
+        totalDamage: { type: integer }
+        seed: { type: integer }
+        sessionId: { type: string, nullable: true }
+        heroes:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              classCode: { type: string }
+              combatPower: { type: integer }
+        log:
+          type: array
+          items: { $ref: '#/components/schemas/BattleLogEntry' }
+        units:
+          type: array
+          items: { $ref: '#/components/schemas/BattleUnit' }
+    AdvanceResponse:
+      type: object
+      properties:
+        sessionId: { type: string }
+        status: { type: string }
+        silverReward: { type: integer }
+        deaths:
+          type: array
+          items:
+            type: object
+            properties:
+              heroId: { type: string }
+              name: { type: string }
+              state: { type: string, enum: [DEAD, DISABLED] }
+        report: { $ref: '#/components/schemas/SimulateResponse' }
+    BattleLogEntry:
+      type: object
+      properties:
+        round: { type: integer }
+        actorId: { type: string }
+        targetId: { type: string, nullable: true }
+        action: { type: string }
+        damage: { type: integer }
+        heal: { type: integer }
+        crit: { type: boolean }
+        blocked: { type: boolean }
+        targetHp: { type: integer }
+        actorMp: { type: integer }
+    BattleUnit:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        side: { type: string, enum: [HERO, ENEMY] }
+        hp: { type: integer }
+        maxHp: { type: integer }
+        mp: { type: integer }
+        maxMp: { type: integer }
+        alive: { type: boolean }
+    ProgressionSnapshot:
+      type: object
+      properties:
+        heroId: { type: string }
+        level: { type: integer }
+        base: { type: object }
+        derived: { type: object }
+        training: { type: object }
+        trainingRemaining: { type: integer }
+        stats: { type: object }
