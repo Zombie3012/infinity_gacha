@@ -260,9 +260,12 @@ export class CombatV2Service {
   }) {
     const heroIds = Array.isArray(input.heroIds) ? input.heroIds.map(String) : [];
     if (heroIds.length === 0 || heroIds.length > 5) throw new CombatV2Error('ERR_COMBAT_V2_INVALID_PARTY', 400);
-    const owned = await db.select({ id: heroes.id }).from(heroes)
+    const owned = await db.select({ id: heroes.id, state: heroes.state, hp: heroes.hp }).from(heroes)
       .where(and(eq(heroes.masterId, masterId), inArray(heroes.id, heroIds)));
     if (owned.length !== heroIds.length) throw new CombatV2Error('ERR_COMBAT_V2_HERO_NOT_FOUND', 404);
+    if (owned.some(hero => hero.state === 'DEAD' || hero.state === 'DISABLED' || hero.hp <= 0)) {
+      throw new CombatV2Error('ERR_COMBAT_V2_HERO_UNAVAILABLE', 409);
+    }
 
     const [world] = await db.select().from(worlds).where(eq(worlds.masterId, masterId)).limit(1);
     if (!world) throw new CombatV2Error('ERR_COMBAT_V2_NO_WORLD', 409);
