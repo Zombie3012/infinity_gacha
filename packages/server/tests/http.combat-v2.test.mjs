@@ -82,6 +82,26 @@ test('HTTP combat v2: simulate a battle', { skip: skipReason }, async t => {
     assert.equal(replay.body.error, 'ERR_COMBAT_V2_SESSION_FINISHED');
   });
 
+  await t.test('concurrent advances pay the reward only once', async () => {
+    const started = await harness.request('/api/combat/v2/session/start', {
+      method: 'POST', token: master.token,
+      body: { heroIds: [hero.id], enemyCodes: [enemyCode], seed: 21 },
+    });
+    assert.equal(started.status, 201);
+    const before = await sql(`select count(*)::int as total from currency_transactions
+                              where master_id = $1 and transaction_type = 'COMBAT_V2_REWARD'`, [master.masterId]);
+
+    const [first, second] = await Promise.all([
+      harness.request(`/api/combat/v2/session/${started.body.sessionId}/advance`, { method: 'POST', token: master.token }),
+      harness.request(`/api/combat/v2/session/${started.body.sessionId}/advance`, { method: 'POST', token: master.token }),
+    ]);
+    assert.deepEqual([first.status, second.status].sort((a, b) => a - b), [200, 409]);
+
+    const after = await sql(`select count(*)::int as total from currency_transactions
+                             where master_id = $1 and transaction_type = 'COMBAT_V2_REWARD'`, [master.masterId]);
+    assert.equal(after.rows[0].total, before.rows[0].total + 1);
+  });
+
   await t.test('unknown Heroes and empty parties are refused', async () => {
     const missing = await harness.request('/api/combat/v2/simulate', {
       method: 'POST', token: master.token,

@@ -290,11 +290,33 @@ export class CombatV2Service {
 
   /** Resolves the stored request, persists the report and pays Silver. */
   async advance(masterId: string, sessionId: string) {
-    const [session] = await db.select().from(combatSessions)
-      .where(and(eq(combatSessions.id, sessionId), eq(combatSessions.masterId, masterId))).limit(1);
-    if (!session) throw new CombatV2Error('ERR_COMBAT_V2_SESSION_NOT_FOUND', 404);
-    if (session.status !== 'ACTIVE') throw new CombatV2Error('ERR_COMBAT_V2_SESSION_FINISHED', 409);
+    // Atomically claim the session so two concurrent advances cannot both pay rewards.
+    const [session] = await db.update(combatSessions).set({ status: 'RESOLVING' })
+      .where(and(
+        eq(combatSessions.id, sessionId),
+        eq(combatSessions.masterId, masterId),
+        eq(combatSessions.status, 'ACTIVE'),
+      )).returning();
+    if (!session) {
+      const [existing] = await db.select({ status: combatSessions.status }).from(combatSessions)
+        .where(and(eq(combatSessions.id, sessionId), eq(combatSessions.masterId, masterId))).limit(1);
+      if (!existing) throw new CombatV2Error('ERR_COMBAT_V2_SESSION_NOT_FOUND', 404);
+      throw new CombatV2Error('ERR_COMBAT_V2_SESSION_FINISHED', 409);
+    }
 
+    try {
+      return await this.resolveSession(masterId, session);
+    } catch (error) {
+      // Give the session back if resolution failed before completion.
+      await db.update(combatSessions).set({ status: 'ACTIVE' })
+        .where(and(eq(combatSessions.id, sessionId), eq(combatSessions.status, 'RESOLVING')))
+        .catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private async resolveSession(masterId: string, session: typeof combatSessions.$inferSelect) {
+    const sessionId = session.id;
     const request = (session.combatState as { request?: Record<string, unknown> } | null)?.request ?? {};
     const report = await this.simulate(masterId, { ...request, persist: false });
 
