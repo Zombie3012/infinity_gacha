@@ -246,3 +246,34 @@ Signed: Antigravity, project assistant
 
 - Set up database ORM layer (Prisma or Drizzle) integrating PostgreSQL schema into `@infiniti-gacha/server`.
 - Scaffold Phase 1 Web HUD / Prototype client in `packages/client` for end-to-end interactive gameplay testing.
+
+## Update - 2026-11-05 09:45:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+### Work completed
+
+- Implemented **Combat v2** foundation across shared, database, server and tests:
+  - `packages/shared/src/combat/`: four base stats (STR/INT/STA/AGI), derived stats, stat caps (crit 100%), class base crit (Thief 50%, others 5%), class growth multipliers, star budgets 1★ 100 → 5★ 280 with locked 6★ 350 / 7★ 430, growth compensation to 672 points at level 50, random stat roll (75% archetype + 25% wildcard, ±15%, 45% per-stat cap), class qualification/roll, Mage element affinity and the full damage pipeline.
+  - Migrations `0039_same_spyke.sql` and `0040_absurd_joshua_kane.sql`: new `hero_templates`/`heroes` columns (base stats, class/role, training/origin stats, MP percentages) and new `hero_class_definitions`, `subclass_definitions`, `hero_subclasses`, `hero_element_affinities` tables.
+  - Seeds: `hero_templates_v2.sample.sql`, `hero_class_definitions.sample.sql`, `subclass_definitions.sample.sql`; 22 seed files applied.
+  - Summoning now rolls base stats, class (Mage on every banner; 1–2★ always unclassified) and Mage affinity, stores `origin_stats` and mirrors legacy HP/ATK/DEF/SPD for the old engine. `npm run db:reset-heroes` clears demo Heroes for re-summoning.
+  - Progression v2: level-up recomputes stats; `POST /api/heroes/:heroId/train`; `POST /api/heroes/:heroId/class-change` (level 20+, stat eligibility, 50,000 Silver + Class Change Token, retroactive growth, affinity handling). Awakening no longer multiplies legacy stats for v2 Heroes.
+  - Combat v2 engine: AGI turn order, one action per round, MP skills/cooldowns, basic attacks restoring 5% MP, hit/mitigation/affinity/crit/block/DR, healing, lifesteal, draw handling. Equipment, starvation, injury, loyalty and resonance modifiers are applied before resolving.
+  - `POST /api/combat/v2/simulate` with deterministic seeds; `persist: true` stores a completed `combat_sessions` report; `GET /api/combat/v2/sessions` lists history.
+
+### Verification
+
+- `npm run verify` green: **362/362 server tests** and **56/56 shared tests**; encoding check 319 files.
+- Commits: `a419038`, `f8e0cfc`, `0543719`, `27246b2`, `004ce5f`, `83e7065`, `5f06981`, `a107ac8`.
+
+### Open items
+
+- Persistent multi-step Combat v2 sessions (`start`/`advance`) with EXP/Silver, injuries, survival, quest and leaderboard hooks.
+- Combat v2 page in the web client; subclass acquisition API/UI.
+- Equipment catalogue granting base/derived stats (current v2 uses the legacy flat bonuses).
+- 6★/7★ content, TTK-10 balance pass, class-change pricing review.
+
+### Recommended next action
+
+- Wire the Combat v2 engine into the existing combat session flow behind a `COMBAT_V2` flag, reusing the reward/injury hooks, then add the web test page and tune TTK before starting the Unity client.

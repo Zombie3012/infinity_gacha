@@ -92,7 +92,7 @@ infiniti_gacha/
 ## Automated tests and CI
 
 - `npm run verify` runs the encoding guard, builds every workspace and executes the full test suite.
-- `npm test` runs **325 server tests** — domain-rule unit tests plus HTTP integration suites (`packages/server/tests/http.*.test.mjs`) that boot the real Express app, register a throwaway account and exercise base construction, crafting, survival, medical, economy/IAP, LiveOps, alliances, world conquest and administration flows against PostgreSQL — and **11 shared** formula tests.
+- `npm test` runs **362 server tests** — domain-rule unit tests plus HTTP integration suites (`packages/server/tests/http.*.test.mjs`) that boot the real Express app, register a throwaway account and exercise base construction, crafting, survival, medical, economy/IAP, LiveOps, alliances, world conquest, Combat v2 and administration flows against PostgreSQL — and **56 shared** formula tests.
 - HTTP suites skip automatically when the database is unreachable, so the unit suite still works offline.
 - Fresh database in two commands: `npm run db:migrate` then `npm run db:seed` (18 idempotent sample seeds).
 - CI (`.github/workflows/ci.yml`) starts PostgreSQL 17 as a service, migrates, seeds and runs `npm run verify` on every push and pull request.
@@ -387,3 +387,19 @@ Signed: DeepSeek Harness, project assistant
 - New API surface under `/api/alliance` (overview, search, create, join/approve/reject/cancel, leave, member management, notice, tech, disband, chat) and `/api/world/conquest` (overview, ranking, seasons, Wonder siege) plus `/api/alliance/wars`; a **Liên minh** screen was added to the web client with overview, roster, chat and war tabs.
 - PvP settlement now feeds war scoring, and the Wonder tile is excluded from the client's local map grid.
 - Verified: `npm run verify` green — 325/325 server tests (20 alliance rule tests, 17 conquest rule tests, an 11-step HTTP alliance suite and a 9-step HTTP conquest suite) and 11/11 shared tests.
+
+## Update - 2026-11-05 09:45:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Started **Combat v2** (based on the STR/INT/STA/AGI design) and completed its foundation: stat calculator, class/affinity rules, progression, engine, simulation and report persistence.
+- Confirmed design decisions: no Speed stat (one action per round, AGI order), Thief crit 50% / others 5% with a 100% crit cap, growth compensation to 672 points at level 50 for 1–5★, Mage available on every banner, 6★/7★ data-ready but locked, random stats with per-star budgets, class changes cost 50,000 Silver + 1 Class Change Token.
+- `packages/shared/src/combat/`: base/derived stats, caps, class growth (Warrior/Thief/Spearman/Archer/Mage), summon class roll, stat roll (75% archetype + 25% wildcard), growth compensation, Mage affinity, damage pipeline and Hero generation. Shared suite is now 56 tests.
+- Database migrations `0039_same_spyke.sql` and `0040_absurd_joshua_kane.sql` add `hero_templates`/`heroes` base stats, class/role, training and origin stats, plus `hero_class_definitions`, `subclass_definitions`, `hero_subclasses` and `hero_element_affinities`; 22 seeds were applied.
+- Summoning now rolls base stats, class and Mage affinity, mirrors the legacy HP/ATK/DEF/SPD columns for the current engine, and stores `origin_stats`. `npm run db:reset-heroes` clears old demo Heroes so they can be re-summoned.
+- Progression v2: level-up recomputes from origin/class/training; `POST /api/heroes/:heroId/train` allocates training points (3 per level, 60% per-stat cap); `POST /api/heroes/:heroId/class-change` enforces level/stat/resource conditions, recomputes growth retroactively and manages Mage affinity.
+- Combat v2 engine (`combat-v2.engine.ts`): AGI turn order, one action per round, MP skills with cooldowns, basic attacks restoring 5% MP, shared hit/mitigation/affinity/crit/block/DR pipeline, healing, lifesteal and draw handling. Equipment, starvation, injury, loyalty and resonance modifiers are applied before combat.
+- `POST /api/combat/v2/simulate` resolves a deterministic battle report; `persist: true` stores it as a completed `combat_sessions` row and `GET /api/combat/v2/sessions` lists recent reports.
+- Awakening no longer multiplies legacy stats for Combat v2 Heroes; their stats stay on the recompute path.
+- Verified: `npm run verify` green — **362/362 server tests** and **56/56 shared tests**.
+- Remaining before Unity: persistent multi-step combat sessions with EXP/Silver, injury and quest/leaderboard hooks; a Combat v2 page in the web client; subclass acquisition API/UI; an equipment catalogue that grants base/derived stats; 6★/7★ content and TTK tuning.
