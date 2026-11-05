@@ -277,3 +277,50 @@ Signed: DeepSeek Harness, project assistant
 ### Recommended next action
 
 - Wire the Combat v2 engine into the existing combat session flow behind a `COMBAT_V2` flag, reusing the reward/injury hooks, then add the web test page and tune TTK before starting the Unity client.
+
+## Update - 2026-11-05 10:50:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+### Work completed since the 09:45 entry
+
+- **Combat v2 session is now playable end-to-end (backend)**
+  - `POST /api/combat/v2/session/start` → `POST /api/combat/v2/session/:id/advance`, stored in `combat_sessions` (`ACTIVE → RESOLVING → COMPLETED`).
+  - `advance` claims the session atomically; concurrent requests cannot double-pay (tested with two parallel advances).
+  - Rewards/hooks on win: Silver, Hero EXP + level-up (`hero_level_configs`), Master EXP + level-up, quest `WIN_BATTLE`/`CLEAR_FLOOR`, leaderboard floor, ration charge on start.
+  - Injuries recorded via `medicalService`; fallen Normal Heroes become `DEAD` with gear moved to `FLOOR_DROP`, Special/Limited become `DISABLED`, `hero_death_records` written.
+  - `start` rejects dead/disabled/0-HP Heroes.
+- **Awakening v2**: each rank grants +10 STR/INT/STA/AGI, upgrades one unlocked skill below max, assigns a random special trait.
+- **Imprint system (new)**
+  - Migration `0041_curly_mandroid.sql`: `imprint_definitions` (rank S/A/B, tier, stat/HP/ATK/DEF bonuses, ability) and `hero_imprints` (`rank_level` 1–3).
+  - Seed `imprint_definitions.sample.sql` (6 imprints); 23 seeds applied.
+  - `GET /api/imprints`, `GET /api/heroes/:heroId/imprints`.
+  - Awakening grants a new imprint while a slot is free, otherwise raises an owned one below rank 3.
+  - Slot rule: 1–2★ = 1, 3★ = 2, 4★ = 3, 5★+ = 4.
+  - Bonus stats applied in level-up, training, class change, awakening and Combat v2 stats.
+- **Combat Power v2** formula added in shared and exposed in simulation; decision **(b)**: PvP/expedition/leaderboards keep legacy CP until v2 is default.
+- **Documents**: `Combat_V2_Spec.md`, `openapi.combat-v2.yaml`, `API_Routes.md` (203 routes, `npm run docs:routes`), `UNITY_BACKLOG.md`.
+- **Unity items marked**: Imprint Evolution UI, trait tiers, skill-choice UI, Rank Promotion flow, combat client/HUD, 6★/7★ content, store SDKs, TTK tuning.
+
+### Verification
+
+- Last full `npm run verify`: **363/363 server**, **56/56 shared** (before imprint/awakening additions).
+- Since then: server builds clean; `hero-progression` + `http.combat-v2` = **19/19**; migrations through `0041` applied; 23 seeds applied; encoding clean.
+- Run `npm run verify` first in the new session.
+
+### Open items
+
+1. Imprint **ability effects** (Phoenix revive, Iron Will CC reduction, Arcane Core MP regen) — need engine hooks.
+2. Full **OpenAPI** for auth/gacha/hero/base/economy/PvP groups (only Combat v2 + Imprint have detailed schemas).
+3. **Redis** locks/idempotency/timers; move session/advance locks to Redis when multi-instance.
+4. **Balance TTK = 10 hits** with real parties/gear; 6★/7★ content.
+5. Rank Promotion flow (star, level/skill caps, imprint slots, portrait).
+
+### New-session checklist
+
+```powershell
+docker compose up -d postgres
+npm run db:migrate && npm run db:seed
+npm run verify
+```
+Demo account: `demo` / `demo12345`; old Heroes can be cleared with `npm run db:reset-heroes`.

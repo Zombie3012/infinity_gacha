@@ -403,3 +403,15 @@ Signed: DeepSeek Harness, project assistant
 - Awakening no longer multiplies legacy stats for Combat v2 Heroes; their stats stay on the recompute path.
 - Verified: `npm run verify` green — **362/362 server tests** and **56/56 shared tests**.
 - Remaining before Unity: persistent multi-step combat sessions with EXP/Silver, injury and quest/leaderboard hooks; a Combat v2 page in the web client; subclass acquisition API/UI; an equipment catalogue that grants base/derived stats; 6★/7★ content and TTK tuning.
+
+## Update - 2026-11-05 10:50:00 ICT (UTC+7)
+
+Signed: DeepSeek Harness, project assistant
+
+- Combat v2 sessions are now playable end-to-end: `POST /api/combat/v2/session/start` and `/advance`, atomic claim against double rewards, Silver + Hero/Master EXP with level-up, quest/leaderboard hooks, ration charge, injury recording, permanent death with gear drop and `hero_death_records`.
+- Awakening v2 grants +10 to each base stat per rank, +1 level to one unlocked skill and a random special trait.
+- New **Imprint** system: `imprint_definitions` (S/A/B, tier, bonuses, ability) and `hero_imprints` (`rank_level` 1–3), migration `0041_curly_mandroid.sql`, 6 seeded imprints, `GET /api/imprints` and `GET /api/heroes/:heroId/imprints`; Awakening grants/upgrades imprints, slot limits by star (1–2★ 1, 3★ 2, 4★ 3, 5★+ 4) and bonuses apply in every progression path.
+- Combat Power v2 formula added and exposed in simulation; decision (b): PvP/expedition/leaderboards keep legacy CP until v2 is the default.
+- New docs: `Combat_V2_Spec.md`, `openapi.combat-v2.yaml`, `API_Routes.md` (203 routes via `npm run docs:routes`) and `UNITY_BACKLOG.md`.
+- Database migrated through `0041`; 23 seeds applied. Last full verify: 363 server / 56 shared (before the imprint additions); targeted progression + Combat v2 suites are 19/19 after them.
+- Remaining: imprint ability effects, full OpenAPI coverage, Redis locks/timers, TTK-10 balance, Rank Promotion flow.
