@@ -2745,6 +2745,12 @@ export function createApp() {
     return res.json(await combatService.getActive(master.id));
   }));
 
+  app.get('/api/combat/v2/sessions', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    return res.json(await combatV2Service.sessions(master.id));
+  }));
+
   app.post('/api/combat/v2/simulate', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });

@@ -7,11 +7,12 @@
  * wired into the persistent combat session and reward flow.
  */
 
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
-  enemyTemplates, equipmentInstances, equipmentTemplates, heroElementAffinities, heroes,
-  heroSkillInstances, heroSkillTemplates, heroTemplates,
+  combatSessions, enemyTemplates, equipmentInstances, equipmentTemplates, heroElementAffinities, heroes,
+  heroSkillInstances, heroSkillTemplates, heroTemplates, worlds,
 } from '../../database/drizzle-schema.js';
 import {
   deriveStats, mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
@@ -76,7 +77,7 @@ function applyCombatModifiers(
 
 export class CombatV2Service {
   async simulate(masterId: string, input: {
-    heroIds?: unknown; enemyCodes?: unknown; maxRounds?: unknown; seed?: unknown;
+    heroIds?: unknown; enemyCodes?: unknown; maxRounds?: unknown; seed?: unknown; persist?: unknown;
   }) {
     const heroIds = Array.isArray(input.heroIds) ? input.heroIds.map(String) : [];
     if (heroIds.length === 0) throw new CombatV2Error('ERR_COMBAT_V2_NO_HEROES', 400);
@@ -215,11 +216,38 @@ export class CombatV2Service {
       maxRounds, random: mulberry32(seed),
     });
 
+    let sessionId: string | null = null;
+    if (input.persist === true) {
+      const [world] = await db.select().from(worlds).where(eq(worlds.masterId, masterId)).limit(1);
+      if (!world) throw new CombatV2Error('ERR_COMBAT_V2_NO_WORLD', 409);
+      sessionId = uuidv4();
+      const now = new Date();
+      await db.insert(combatSessions).values({
+        id: sessionId, masterId, worldId: world.id, partyId: null,
+        status: 'COMPLETED', createdAt: now, finishedAt: now,
+        combatState: { engine: 'V2', seed } as unknown as Record<string, unknown>,
+        battleReport: report as unknown as Record<string, unknown>,
+      });
+    }
+
     return {
       ...report,
       seed,
+      sessionId,
       heroes: heroUnits.map(unit => ({ id: unit.id, name: unit.name, classCode: unit.side === 'HERO' ? rows.find(row => row.hero.id === unit.id)?.hero.classCode : undefined })),
     };
+  }
+
+  async sessions(masterId: string) {
+    return db.select({
+      id: combatSessions.id,
+      status: combatSessions.status,
+      createdAt: combatSessions.createdAt,
+      finishedAt: combatSessions.finishedAt,
+      battleReport: combatSessions.battleReport,
+    }).from(combatSessions)
+      .where(eq(combatSessions.masterId, masterId))
+      .orderBy(desc(combatSessions.createdAt)).limit(20);
   }
 }
 

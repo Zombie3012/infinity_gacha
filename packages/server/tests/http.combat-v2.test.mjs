@@ -39,6 +39,22 @@ test('HTTP combat v2: simulate a battle', { skip: skipReason }, async t => {
     );
   });
 
+  await t.test('battle reports can be persisted and listed', async () => {
+    await sql(`insert into worlds (id, master_id, world_seed, seed_algorithm_version, difficulty_multiplier, current_floor, base_zones, created_at)
+               values (gen_random_uuid()::text, $1, gen_random_uuid()::text, 1, 1, 1, 1, now())`, [master.masterId]);
+    const persisted = await harness.request('/api/combat/v2/simulate', {
+      method: 'POST', token: master.token,
+      body: { heroIds: [hero.id], enemyCodes: [enemyCode], seed: 7, persist: true },
+    });
+    assert.equal(persisted.status, 200);
+    assert.ok(persisted.body.sessionId);
+
+    const list = await harness.request('/api/combat/v2/sessions', { token: master.token });
+    assert.equal(list.status, 200);
+    assert.equal(list.body[0].id, persisted.body.sessionId);
+    assert.equal(list.body[0].status, 'COMPLETED');
+  });
+
   await t.test('unknown Heroes and empty parties are refused', async () => {
     const missing = await harness.request('/api/combat/v2/simulate', {
       method: 'POST', token: master.token,
