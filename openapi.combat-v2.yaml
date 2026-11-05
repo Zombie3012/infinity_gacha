@@ -61,6 +61,30 @@ paths:
                   affinity: { type: object, nullable: true }
                   cost: { type: object }
         "409": { $ref: '#/components/responses/Error' }
+  /api/imprints:
+    get:
+      summary: Catalogue imprint đang bật (S/A/B)
+      responses:
+        "200":
+          description: Danh sách imprint
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+  /api/heroes/{heroId}/imprints:
+    get:
+      summary: Imprint mà Hero sở hữu
+      parameters:
+        - $ref: '#/components/parameters/HeroId'
+      responses:
+        "200":
+          description: Cặp hero_imprint + definition
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
   /api/combat/v2/simulate:
     post:
       summary: Mô phỏng một trận (không đổi dữ liệu trừ khi persist=true)

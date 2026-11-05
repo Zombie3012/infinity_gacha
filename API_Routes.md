@@ -1,6 +1,6 @@
 # API route inventory
 
-Generated from `packages/server/src/server.ts` (201 routes).
+Generated from `packages/server/src/server.ts` (203 routes).
 All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response schemas for Combat v2 live in `openapi.combat-v2.yaml`; this inventory is the source list for the remaining OpenAPI coverage.
 
 | Method | Path | Auth | Feature |
@@ -129,6 +129,7 @@ All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response sch
 | GET | `/api/heroes` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/awaken` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/class-change` | Bearer | HERO_COLLECTION |
+| GET | `/api/heroes/:heroId/imprints` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/level-up` | Bearer | HERO_COLLECTION |
 | PATCH | `/api/heroes/:heroId/lock` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/promote` | Bearer | HERO_COLLECTION |
@@ -140,6 +141,7 @@ All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response sch
 | GET | `/api/iap/products` | Bearer | — |
 | POST | `/api/iap/receipt` | Bearer | — |
 | GET | `/api/iap/transactions` | Bearer | — |
+| GET | `/api/imprints` | Bearer | HERO_COLLECTION |
 | GET | `/api/inventory` | Bearer | — |
 | POST | `/api/inventory/items/:itemId/sell` | Bearer | — |
 | POST | `/api/inventory/items/:itemId/use` | Bearer | — |
