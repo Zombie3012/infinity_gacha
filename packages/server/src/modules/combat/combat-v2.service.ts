@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
   combatSessions, enemyTemplates, equipmentInstances, equipmentTemplates, heroDeathRecords, heroElementAffinities, heroes,
-  heroLevelConfigs, heroSkillInstances, heroSkillTemplates, heroTemplates, masterLevelConfigs, masters, worlds,
+  heroImprints, heroLevelConfigs, heroSkillInstances, heroSkillTemplates, heroTemplates, imprintDefinitions, masterLevelConfigs, masters, worlds,
 } from '../../database/drizzle-schema.js';
 import {
   combatPowerV2, deriveStats, mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
@@ -102,6 +102,21 @@ export class CombatV2Service {
       .where(and(inArray(heroSkillInstances.heroId, heroIds), eq(heroSkillInstances.isUnlocked, true)));
     const affinities = await db.select().from(heroElementAffinities).where(inArray(heroElementAffinities.heroId, heroIds));
 
+    const imprintRows = await db.select({ owned: heroImprints, definition: imprintDefinitions })
+      .from(heroImprints).innerJoin(imprintDefinitions, eq(imprintDefinitions.code, heroImprints.imprintCode))
+      .where(inArray(heroImprints.heroId, heroIds));
+    const imprintBonus = (heroId: string) => imprintRows
+      .filter(row => row.owned.heroId === heroId)
+      .reduce((sum, row) => ({
+        str: sum.str + row.definition.bonusStr,
+        int: sum.int + row.definition.bonusInt,
+        sta: sum.sta + row.definition.bonusSta,
+        agi: sum.agi + row.definition.bonusAgi,
+        hp: sum.hp + row.definition.bonusHp,
+        atk: sum.atk + row.definition.bonusAtk,
+        def: sum.def + row.definition.bonusDef,
+      }), { str: 0, int: 0, sta: 0, agi: 0, hp: 0, atk: 0, def: 0 });
+
     const gearRows = await db.select({ item: equipmentInstances, template: equipmentTemplates })
       .from(equipmentInstances).innerJoin(equipmentTemplates, eq(equipmentInstances.templateCode, equipmentTemplates.code))
       .where(and(
@@ -149,12 +164,32 @@ export class CombatV2Service {
         })
         : null;
       const gear = gearByHero.get(hero.id) ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
+      const imprint = imprintBonus(hero.id);
       const classCode = hero.classCode as HeroClass;
       const stats = snapshot
-        ? deriveStats(snapshot.base, classCode, {
-          hpBase: gear.hp, atkBase: gear.attack, defBase: gear.defense, agi: gear.speed,
-        })
+        ? deriveStats(
+          {
+            str: snapshot.base.str + imprint.str,
+            int: snapshot.base.int + imprint.int,
+            sta: snapshot.base.sta + imprint.sta,
+            agi: snapshot.base.agi + imprint.agi,
+          },
+          classCode,
+          {
+            hpBase: gear.hp + imprint.hp,
+            atkBase: gear.attack + imprint.atk,
+            defBase: gear.defense + imprint.def,
+            agi: gear.speed,
+          },
+        )
         : legacyStats(hero, gear);
+      if (!snapshot) {
+        stats.maxHp += imprint.hp;
+        stats.atk += imprint.atk;
+        stats.matk += imprint.atk;
+        stats.def += imprint.def;
+        stats.mdef += imprint.def;
+      }
       const modified = applyCombatModifiers(
         stats,
         (readiness[hero.id] ?? 1) * (injuryPenalties[hero.id] ?? 1),
