@@ -55,6 +55,33 @@ test('HTTP combat v2: simulate a battle', { skip: skipReason }, async t => {
     assert.equal(list.body[0].status, 'COMPLETED');
   });
 
+  await t.test('two-step session resolves and pays Silver', async () => {
+    const before = Number((await sql('select silver_coins from masters where id = $1', [master.masterId])).rows[0].silver_coins);
+    const started = await harness.request('/api/combat/v2/session/start', {
+      method: 'POST', token: master.token,
+      body: { heroIds: [hero.id], enemyCodes: [enemyCode], seed: 11 },
+    });
+    assert.equal(started.status, 201);
+    assert.equal(started.body.status, 'ACTIVE');
+
+    const advanced = await harness.request(`/api/combat/v2/session/${started.body.sessionId}/advance`, {
+      method: 'POST', token: master.token,
+    });
+    assert.equal(advanced.status, 200);
+    assert.equal(advanced.body.status, 'COMPLETED');
+    assert.equal(advanced.body.report.winner, 'HERO');
+    assert.ok(advanced.body.silverReward > 0);
+
+    const after = Number((await sql('select silver_coins from masters where id = $1', [master.masterId])).rows[0].silver_coins);
+    assert.ok(after > before);
+
+    const replay = await harness.request(`/api/combat/v2/session/${started.body.sessionId}/advance`, {
+      method: 'POST', token: master.token,
+    });
+    assert.equal(replay.status, 409);
+    assert.equal(replay.body.error, 'ERR_COMBAT_V2_SESSION_FINISHED');
+  });
+
   await t.test('unknown Heroes and empty parties are refused', async () => {
     const missing = await harness.request('/api/combat/v2/simulate', {
       method: 'POST', token: master.token,

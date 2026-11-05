@@ -2749,6 +2749,36 @@ export function createApp() {
     return res.json(await combatService.getActive(master.id));
   }));
 
+  const combatV2Error = (res: Response, error: unknown): boolean => {
+    if (error instanceof CombatV2Error) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.post('/api/combat/v2/session/start', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    try {
+      return res.status(201).json(await combatV2Service.start(master.id, req.body ?? {}));
+    } catch (error) {
+      if (combatV2Error(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/combat/v2/session/:sessionId/advance', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    try {
+      return res.json(await combatV2Service.advance(master.id, String(req.params.sessionId)));
+    } catch (error) {
+      if (combatV2Error(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
   app.get('/api/combat/v2/sessions', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });

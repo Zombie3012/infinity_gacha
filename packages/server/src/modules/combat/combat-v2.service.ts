@@ -18,6 +18,7 @@ import {
   deriveStats, mulberry32, type DerivedStats, type ElementAffinity, type HeroClass, type StarRating,
 } from '@infiniti-gacha/shared';
 import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.js';
+import { currencyService } from '../economy/currency.service.js';
 import { survivalService } from '../survival/survival.service.js';
 import { medicalService } from '../medical/medical.service.js';
 import { personalityService } from '../personality/personality.service.js';
@@ -248,6 +249,72 @@ export class CombatV2Service {
     }).from(combatSessions)
       .where(eq(combatSessions.masterId, masterId))
       .orderBy(desc(combatSessions.createdAt)).limit(20);
+  }
+
+  /** Opens a two-step Combat v2 session; the battle resolves on advance. */
+  async start(masterId: string, input: {
+    heroIds?: unknown; enemyCodes?: unknown; maxRounds?: unknown; seed?: unknown;
+  }) {
+    const heroIds = Array.isArray(input.heroIds) ? input.heroIds.map(String) : [];
+    if (heroIds.length === 0 || heroIds.length > 5) throw new CombatV2Error('ERR_COMBAT_V2_INVALID_PARTY', 400);
+    const owned = await db.select({ id: heroes.id }).from(heroes)
+      .where(and(eq(heroes.masterId, masterId), inArray(heroes.id, heroIds)));
+    if (owned.length !== heroIds.length) throw new CombatV2Error('ERR_COMBAT_V2_HERO_NOT_FOUND', 404);
+
+    const [world] = await db.select().from(worlds).where(eq(worlds.masterId, masterId)).limit(1);
+    if (!world) throw new CombatV2Error('ERR_COMBAT_V2_NO_WORLD', 409);
+
+    const enemyCodes = Array.isArray(input.enemyCodes) ? input.enemyCodes.map(String) : [];
+    const seed = Number.isFinite(Number(input.seed)) ? Number(input.seed) : Date.now() % 2_147_483_647;
+    const sessionId = uuidv4();
+    const now = new Date();
+    await db.transaction(async tx => {
+      await tx.update(combatSessions).set({ status: 'COMPLETED', finishedAt: now })
+        .where(and(eq(combatSessions.masterId, masterId), eq(combatSessions.status, 'ACTIVE')));
+      await tx.insert(combatSessions).values({
+        id: sessionId, masterId, worldId: world.id, partyId: null,
+        status: 'ACTIVE', createdAt: now,
+        combatState: {
+          engine: 'V2',
+          request: { heroIds, enemyCodes, maxRounds: input.maxRounds, seed },
+        } as unknown as Record<string, unknown>,
+      });
+    });
+    return { sessionId, status: 'ACTIVE', heroIds, enemyCodes, seed };
+  }
+
+  /** Resolves the stored request, persists the report and pays Silver. */
+  async advance(masterId: string, sessionId: string) {
+    const [session] = await db.select().from(combatSessions)
+      .where(and(eq(combatSessions.id, sessionId), eq(combatSessions.masterId, masterId))).limit(1);
+    if (!session) throw new CombatV2Error('ERR_COMBAT_V2_SESSION_NOT_FOUND', 404);
+    if (session.status !== 'ACTIVE') throw new CombatV2Error('ERR_COMBAT_V2_SESSION_FINISHED', 409);
+
+    const request = (session.combatState as { request?: Record<string, unknown> } | null)?.request ?? {};
+    const report = await this.simulate(masterId, { ...request, persist: false });
+
+    const foeCodes = Array.isArray(request.enemyCodes) && request.enemyCodes.length > 0
+      ? request.enemyCodes.map(String)
+      : [];
+    const foes = foeCodes.length > 0
+      ? await db.select().from(enemyTemplates).where(inArray(enemyTemplates.code, foeCodes))
+      : await db.select().from(enemyTemplates).where(eq(enemyTemplates.isActive, true)).orderBy(asc(enemyTemplates.code)).limit(3);
+    const won = report.winner === 'HERO';
+    const silverReward = won ? foes.reduce((sum, foe) => sum + foe.baseSilverReward, 0) : 0;
+
+    const now = new Date();
+    await db.update(combatSessions).set({
+      status: 'COMPLETED', finishedAt: now,
+      battleReport: report as unknown as Record<string, unknown>,
+    }).where(eq(combatSessions.id, sessionId));
+
+    if (silverReward > 0) {
+      await currencyService.addCurrency(masterId, {
+        silverDelta: silverReward, transactionType: 'COMBAT_V2_REWARD',
+      }).catch(error => console.error('[combat-v2] silver reward failed', error));
+    }
+
+    return { sessionId, status: 'COMPLETED', silverReward, report };
   }
 }
 
