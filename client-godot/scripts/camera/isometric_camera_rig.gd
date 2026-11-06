@@ -6,11 +6,11 @@ class_name IsometricCameraRig
 
 @export var default_iso_pitch_deg: float = -35.264
 @export var default_iso_yaw_deg: float = 45.0
-@export var default_ortho_size: float = 17.5
-@export var action_ortho_size: float = 8.5
-@export var pan_speed: float = 16.0
-@export var pan_limits_min: Vector2 = Vector2(-28.0, -28.0)
-@export var pan_limits_max: Vector2 = Vector2(28.0, 28.0)
+@export var default_ortho_size: float = 28.0
+@export var action_ortho_size: float = 12.0
+@export var pan_speed: float = 20.0
+@export var pan_limits_min: Vector2 = Vector2(-38.0, -38.0)
+@export var pan_limits_max: Vector2 = Vector2(38.0, 38.0)
 @export var allow_manual_pan: bool = true
 
 @onready var rotation_arm: Node3D = $RotationArm
@@ -39,9 +39,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			camera.size = clampf(camera.size - 1.4, 7.5, 56.0)
+			camera.size = clampf(camera.size - 1.8, 10.0, 72.0)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			camera.size = clampf(camera.size + 1.4, 7.5, 56.0)
+			camera.size = clampf(camera.size + 1.8, 10.0, 72.0)
 		elif mb.button_index == MOUSE_BUTTON_RIGHT or mb.button_index == MOUSE_BUTTON_MIDDLE:
 			_rmb_panning = mb.pressed
 	elif event is InputEventMouseMotion and _rmb_panning:

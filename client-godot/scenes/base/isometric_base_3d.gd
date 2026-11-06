@@ -1,43 +1,43 @@
 extends Node3D
 
-## Isometric 3D Multi-Floor Waiting Room / Lobby Scene (Pick Me Up: Infinite Gacha Architecture)
-## - Vertically Stacked Multi-Floor 3D Lobby: Every 15 Master Levels unlocks a higher floor (Tầng 1..6)
-## - Authentic Pick Me Up Building Catalogue (No Lumber/Mine/Farm):
-##   * HOUSE (Dormitory) -> Upgrades to PARTY_MANSION at Master Level 30
-##   * WAREHOUSE (Storage for materials, items & equipment)
-##   * TRAINING_CENTER (Hero Base Stat Training & Skill practice)
-##   * FORGE (Equipment Crafting, Enhancement & Star Fusion)
-##   * HALL_OF_MAGIC with 3 Sub-Wings: LIBRARY, ALCHEMY_WORKSHOP, MAGIC_RESEARCH_LAB
-##   * KITCHEN & MEDICAL
-## - 3D Raycast Picking + Pick Me Up 3D Hero Drag-and-Drop + Camera Elevator between floors
+## Isometric 3D Grand Citadel Multi-Floor Lobby (Pick Me Up: Infinite Gacha Architecture)
+## - 5x Grand Fortress Area: 44m x 36m Rectangular Perimeter + Central Circular Plaza & Cross Avenues
+## - Tiered Central Fountain (⛲ Đài Phun Nước Trung Tâm) replacing the central bonfire
+## - South Wall (+Z): Tower Dungeon Gate (⛩️ Cổng Tháp / Cổng Thành) integrated into perimeter wall
+## - North Wall (-Z): Summon Altar (✨ Đài Triệu Hồi) on stone terrace
+## - West Wall (-X): Barracks (Doanh Trại Tướng & Thăng Sao)
+## - East Wall (+X): Infirmary (Bệnh Xá & Hậu Cần)
+## - Multi-Floor Grand Atrium / Mezzanine Citadel: Vertically stacked at X=0, Z=0 (Y = (floor-1) * 5.2m)
+## - 8 Building Plots per Floor (Total 48 plots across 6 floors: 2 North, 2 South, 2 West, 2 East)
 
 const UNIT_ACTOR_SCENE := preload("res://scenes/common/unit_actor_3d.tscn")
 const BASE_PLOT_SCENE := preload("res://scenes/base/base_plot_3d.tscn")
 
 const MAX_LOBBY_FLOORS := 6
-const FLOOR_HEIGHT := 4.2
+const FLOOR_HEIGHT := 5.2
 const MASTER_LEVELS_PER_FLOOR := 15
+const PLOTS_PER_FLOOR := 8
 
-## 3D Terrace Step Vector ("Mô hình Ruộng Bậc Thang kéo từ trên cao góc 10h xuống góc 4h"):
-## With camera yaw = +45° and pitch = -35.264°, stepping by (-12.6, +4.2, +4.6) per floor
-## projects onto the screen along the exact 10 o'clock (Top-Left, High) <-> 4 o'clock (Bottom-Right, Low) diagonal.
-const TERRACE_STEP_10H := Vector3(-12.6, FLOOR_HEIGHT, 4.6)
-
-# 3 Plot local positions on Floor 1 (Grand Plaza at 4h base) and Upper Terraces (Floors 2..6 stepping toward 10h)
-const FLOOR_PLOT_OFFSETS := [
-	Vector3(-6.2, 0.0, -0.8),
-	Vector3(0.0, 0.0, -6.2),
-	Vector3(6.2, 0.0, -0.8)
-]
-const UPPER_TERRACE_PLOT_OFFSETS := [
-	Vector3(-5.0, 0.0, -1.4),
-	Vector3(0.0, 0.0, -4.8),
-	Vector3(5.0, 0.0, -1.4)
+## 8 Building plot offsets on each floor (2 North, 2 South, 2 West, 2 East):
+## Generously spaced (8-11m apart) across the 4 cardinal wings
+const FLOOR_PLOT_OFFSETS: Array[Vector3] = [
+	# 2 North plots
+	Vector3(-7.5, 0.0, -10.5),
+	Vector3(7.5, 0.0, -10.5),
+	# 2 South plots
+	Vector3(-7.5, 0.0, 10.5),
+	Vector3(7.5, 0.0, 10.5),
+	# 2 West plots
+	Vector3(-14.0, 0.0, -5.5),
+	Vector3(-14.0, 0.0, 5.5),
+	# 2 East plots
+	Vector3(14.0, 0.0, -5.5),
+	Vector3(14.0, 0.0, 5.5)
 ]
 
 func get_floor_terrace_center(floor_num: int) -> Vector3:
 	var idx := clampi(floor_num, 1, MAX_LOBBY_FLOORS) - 1
-	return TERRACE_STEP_10H * float(idx)
+	return Vector3(0.0, float(idx) * FLOOR_HEIGHT, 0.0)
 
 @onready var world_env: WorldEnvironment = $WorldEnvironment
 @onready var dir_light: DirectionalLight3D = $DirectionalLight3D
@@ -118,6 +118,7 @@ var _bonfire_time: float = 0.0
 var _auto_poll_timer: float = 0.0
 
 func _ready() -> void:
+	_setup_grand_citadel_floor1()
 	_setup_landmark_metadata()
 	_spawn_stacked_3d_floors_and_plots()
 	_build_floor_elevator_buttons()
@@ -151,16 +152,380 @@ func _ready() -> void:
 	var demo_ok := await GameState.ensure_demo_session()
 	if demo_ok:
 		await _sync_all_from_backend()
-		status_banner_label.text = "🏔️ Sảnh Chờ Ruộng Bậc Thang (10h -> 4h) — Tài khoản mặc định [%s (Lv.%d)] đã sẵn sàng!" % [
+		status_banner_label.text = "🏰 Đại Sảnh Thành Trì Thông Tầng — Tài khoản mặc định [%s (Lv.%d)] đã sẵn sàng!" % [
 			GameState.master_name,
 			GameState.master_level
 		]
 	else:
 		status_banner_label.text = "⚠️ KHÔNG THỂ KẾT NỐI SERVER BACKEND (PORT 3000)! Vui lòng kiểm tra lại server."
 
+## Configures the Grand 5x Citadel Floor 1 Ground Courtyard (44m x 36m):
+## - Rectangular fortress perimeter walls with 4 corner bastion towers
+## - Cobblestone plaza (radius ~11.5m) and cross stone avenues (+)
+## - Central tiered fountain (basin, upper tier, obelisk spire, cyan ambiance)
+## - South wall: Embedded Tower Dungeon Gate (⛩️ Cổng Tháp / Cổng Thành)
+## - North wall: Elevated Summon Altar (✨ Đài Triệu Hồi)
+## - West wall: Barracks (Doanh Trại Tướng & Thăng Sao)
+## - East wall: Infirmary (Bệnh Xá & Hậu Cần)
+func _setup_grand_citadel_floor1() -> void:
+	var arch := $BaseArchitecture
+	if arch == null:
+		return
+
+	# 1. Fortress Ground Courtyard: 48m (X) x 40m (Z)
+	var ground: MeshInstance3D = arch.get_node_or_null("Ground")
+	if ground != null:
+		var ground_box := BoxMesh.new()
+		ground_box.size = Vector3(48.0, 0.5, 40.0)
+		ground.mesh = ground_box
+		ground.position = Vector3(0.0, -0.25, 0.0)
+
+	# 2. Central Cobblestone Plaza Disc (radius 11.5m)
+	var plaza: MeshInstance3D = arch.get_node_or_null("CentralPlazaDisc")
+	if plaza != null:
+		var plaza_cyl := CylinderMesh.new()
+		plaza_cyl.top_radius = 11.5
+		plaza_cyl.bottom_radius = 11.8
+		plaza_cyl.height = 0.22
+		plaza.mesh = plaza_cyl
+		plaza.position = Vector3(0.0, 0.05, 0.0)
+		var plaza_mat := StandardMaterial3D.new()
+		plaza_mat.albedo_color = Color(0.24, 0.28, 0.35)
+		plaza_mat.roughness = 0.78
+		plaza.material_override = plaza_mat
+
+	# 3. Cross Avenues (+) connecting the Central Plaza to the 4 Citadel Gates/Wings
+	var avenues_node := arch.get_node_or_null("CrossAvenues")
+	if avenues_node == null:
+		avenues_node = Node3D.new()
+		avenues_node.name = "CrossAvenues"
+		arch.add_child(avenues_node)
+
+		var ave_mat := StandardMaterial3D.new()
+		ave_mat.albedo_color = Color(0.28, 0.32, 0.40)
+		ave_mat.roughness = 0.72
+
+		# North-South Avenue (X = 0, Z from -18 to +18)
+		var ns_ave := MeshInstance3D.new()
+		var ns_box := BoxMesh.new()
+		ns_box.size = Vector3(5.6, 0.12, 36.0)
+		ns_ave.mesh = ns_box
+		ns_ave.position = Vector3(0.0, 0.06, 0.0)
+		ns_ave.material_override = ave_mat
+		avenues_node.add_child(ns_ave)
+
+		# East-West Avenue (Z = 0, X from -23 to +23)
+		var ew_ave := MeshInstance3D.new()
+		var ew_box := BoxMesh.new()
+		ew_box.size = Vector3(44.0, 0.12, 5.6)
+		ew_ave.mesh = ew_box
+		ew_ave.position = Vector3(0.0, 0.06, 0.0)
+		ew_ave.material_override = ave_mat
+		avenues_node.add_child(ew_ave)
+
+	# 4. Perimeter Fortress Walls & 4 Corner Bastion Towers
+	var walls_node := arch.get_node_or_null("PerimeterFortressWalls")
+	if walls_node == null:
+		walls_node = Node3D.new()
+		walls_node.name = "PerimeterFortressWalls"
+		arch.add_child(walls_node)
+
+		var wall_mat := StandardMaterial3D.new()
+		wall_mat.albedo_color = Color(0.20, 0.24, 0.31)
+		wall_mat.roughness = 0.85
+
+		var trim_mat := StandardMaterial3D.new()
+		trim_mat.albedo_color = Color(0.35, 0.42, 0.52)
+		trim_mat.roughness = 0.65
+
+		# North Wall (Z = -18.5)
+		var north_w := MeshInstance3D.new()
+		var nb := BoxMesh.new()
+		nb.size = Vector3(47.0, 4.5, 1.4)
+		north_w.mesh = nb
+		north_w.position = Vector3(0.0, 2.25, -18.5)
+		north_w.material_override = wall_mat
+		walls_node.add_child(north_w)
+
+		# South Wall (Z = 18.5) with open center gateway (X = [-4.0, 4.0])
+		var south_w_left := MeshInstance3D.new()
+		var swl_box := BoxMesh.new()
+		swl_box.size = Vector3(19.0, 4.5, 1.4)
+		south_w_left.mesh = swl_box
+		south_w_left.position = Vector3(-14.0, 2.25, 18.5)
+		south_w_left.material_override = wall_mat
+		walls_node.add_child(south_w_left)
+
+		var south_w_right := MeshInstance3D.new()
+		var swr_box := BoxMesh.new()
+		swr_box.size = Vector3(19.0, 4.5, 1.4)
+		south_w_right.mesh = swr_box
+		south_w_right.position = Vector3(14.0, 2.25, 18.5)
+		south_w_right.material_override = wall_mat
+		walls_node.add_child(south_w_right)
+
+		# West Wall (X = -23.5)
+		var west_w := MeshInstance3D.new()
+		var wb := BoxMesh.new()
+		wb.size = Vector3(1.4, 4.5, 37.0)
+		west_w.mesh = wb
+		west_w.position = Vector3(-23.5, 2.25, 0.0)
+		west_w.material_override = wall_mat
+		walls_node.add_child(west_w)
+
+		# East Wall (X = 23.5)
+		var east_w := MeshInstance3D.new()
+		var eb := BoxMesh.new()
+		eb.size = Vector3(1.4, 4.5, 37.0)
+		east_w.mesh = eb
+		east_w.position = Vector3(23.5, 2.25, 0.0)
+		east_w.material_override = wall_mat
+		walls_node.add_child(east_w)
+
+		# 4 Corner Bastion Towers
+		var tower_corners := [
+			Vector3(-23.5, 0.0, -18.5),
+			Vector3(23.5, 0.0, -18.5),
+			Vector3(-23.5, 0.0, 18.5),
+			Vector3(23.5, 0.0, 18.5)
+		]
+		for c_pos in tower_corners:
+			var tower := MeshInstance3D.new()
+			var t_cyl := CylinderMesh.new()
+			t_cyl.top_radius = 2.6
+			t_cyl.bottom_radius = 2.8
+			t_cyl.height = 6.2
+			tower.mesh = t_cyl
+			tower.position = c_pos + Vector3(0.0, 3.1, 0.0)
+			tower.material_override = wall_mat
+			walls_node.add_child(tower)
+
+			var cap := MeshInstance3D.new()
+			var cap_mesh := CylinderMesh.new()
+			cap_mesh.top_radius = 2.9
+			cap_mesh.bottom_radius = 2.6
+			cap_mesh.height = 0.5
+			cap.mesh = cap_mesh
+			cap.position = c_pos + Vector3(0.0, 6.35, 0.0)
+			cap.material_override = trim_mat
+			walls_node.add_child(cap)
+
+	# 5. Centerpiece: Tiered Central Fountain (⛲ Đài Phun Nước Trung Tâm)
+	var bonfire_node := arch.get_node_or_null("CentralBonfire")
+	if bonfire_node != null:
+		var firepit: MeshInstance3D = bonfire_node.get_node_or_null("FirepitMesh")
+		if firepit != null:
+			firepit.visible = false
+		var flame: MeshInstance3D = bonfire_node.get_node_or_null("FlameMesh")
+		if flame != null:
+			flame.visible = false
+
+		var b_lbl: Label3D = bonfire_node.get_node_or_null("BonfireLabel")
+		if b_lbl != null:
+			b_lbl.text = "⛲ ĐÀI PHUN NƯỚC TRUNG TÂM"
+			b_lbl.position = Vector3(0.0, 3.8, 0.0)
+			b_lbl.modulate = Color(0.45, 0.88, 1.0)
+			b_lbl.font_size = 23
+
+		var fountain_visuals := bonfire_node.get_node_or_null("FountainVisuals")
+		if fountain_visuals == null:
+			fountain_visuals = Node3D.new()
+			fountain_visuals.name = "FountainVisuals"
+			bonfire_node.add_child(fountain_visuals)
+
+			var stone_mat := StandardMaterial3D.new()
+			stone_mat.albedo_color = Color(0.38, 0.45, 0.55)
+			stone_mat.roughness = 0.65
+
+			var water_mat := StandardMaterial3D.new()
+			water_mat.albedo_color = Color(0.18, 0.72, 0.96, 0.88)
+			water_mat.roughness = 0.08
+			water_mat.metallic = 0.1
+			water_mat.emission_enabled = true
+			water_mat.emission = Color(0.12, 0.52, 0.78)
+			water_mat.emission_energy_multiplier = 0.6
+
+			# Lower stone basin
+			var lower_basin := MeshInstance3D.new()
+			var lb_cyl := CylinderMesh.new()
+			lb_cyl.top_radius = 3.6
+			lb_cyl.bottom_radius = 3.8
+			lb_cyl.height = 0.65
+			lower_basin.mesh = lb_cyl
+			lower_basin.position = Vector3(0.0, 0.32, 0.0)
+			lower_basin.material_override = stone_mat
+			fountain_visuals.add_child(lower_basin)
+
+			# Lower water pool
+			var water_pool := MeshInstance3D.new()
+			var wp_cyl := CylinderMesh.new()
+			wp_cyl.top_radius = 3.35
+			wp_cyl.bottom_radius = 3.35
+			wp_cyl.height = 0.06
+			water_pool.mesh = wp_cyl
+			water_pool.position = Vector3(0.0, 0.60, 0.0)
+			water_pool.material_override = water_mat
+			fountain_visuals.add_child(water_pool)
+
+			# Central pedestal
+			var pedestal := MeshInstance3D.new()
+			var ped_cyl := CylinderMesh.new()
+			ped_cyl.top_radius = 1.15
+			ped_cyl.bottom_radius = 1.35
+			ped_cyl.height = 1.1
+			pedestal.mesh = ped_cyl
+			pedestal.position = Vector3(0.0, 1.05, 0.0)
+			pedestal.material_override = stone_mat
+			fountain_visuals.add_child(pedestal)
+
+			# Upper stone basin
+			var upper_basin := MeshInstance3D.new()
+			var ub_cyl := CylinderMesh.new()
+			ub_cyl.top_radius = 2.1
+			ub_cyl.bottom_radius = 1.7
+			ub_cyl.height = 0.38
+			upper_basin.mesh = ub_cyl
+			upper_basin.position = Vector3(0.0, 1.62, 0.0)
+			upper_basin.material_override = stone_mat
+			fountain_visuals.add_child(upper_basin)
+
+			# Upper water layer
+			var upper_water := MeshInstance3D.new()
+			var uw_cyl := CylinderMesh.new()
+			uw_cyl.top_radius = 1.95
+			uw_cyl.bottom_radius = 1.95
+			uw_cyl.height = 0.05
+			upper_water.mesh = uw_cyl
+			upper_water.position = Vector3(0.0, 1.78, 0.0)
+			upper_water.material_override = water_mat
+			fountain_visuals.add_child(upper_water)
+
+			# Spire / Crystal fountain obelisk
+			var spire := MeshInstance3D.new()
+			var spire_cyl := CylinderMesh.new()
+			spire_cyl.top_radius = 0.08
+			spire_cyl.bottom_radius = 0.55
+			spire_cyl.height = 1.55
+			spire.mesh = spire_cyl
+			spire.position = Vector3(0.0, 2.45, 0.0)
+			var spire_mat := StandardMaterial3D.new()
+			spire_mat.albedo_color = Color(0.45, 0.92, 1.0)
+			spire_mat.emission_enabled = true
+			spire_mat.emission = Color(0.35, 0.85, 1.0)
+			spire_mat.emission_energy_multiplier = 1.8
+			spire.material_override = spire_mat
+			fountain_visuals.add_child(spire)
+
+		if bonfire_light != null:
+			bonfire_light.light_color = Color(0.42, 0.86, 1.0)
+			bonfire_light.position = Vector3(0.0, 2.8, 0.0)
+			bonfire_light.light_energy = 2.4
+			bonfire_light.omni_range = 18.0
+
+		if bonfire_body != null and bonfire_body.has_node("CollisionShape3D"):
+			var bshape: CollisionShape3D = bonfire_body.get_node("CollisionShape3D")
+			var cs := CylinderShape3D.new()
+			cs.radius = 3.8
+			cs.height = 2.6
+			bshape.shape = cs
+			bshape.position = Vector3(0.0, 1.3, 0.0)
+
+	# 6. South Wall: Embedded Tower Dungeon Gate (⛩️ Cổng Tháp / Cổng Thành)
+	if dungeon_portal_mesh != null:
+		dungeon_portal_mesh.position = Vector3(0.0, 2.8, 17.2)
+		dungeon_portal_mesh.rotation = Vector3(0.0, 0.0, 0.0)
+	if portal_body != null:
+		portal_body.position = Vector3(0.0, 0.0, 17.2)
+
+	var portal_lbl: Label3D = arch.get_node_or_null("PortalLabel")
+	if portal_lbl != null:
+		portal_lbl.text = "⛩️ CỔNG THÁP CHINH PHẠT PvE"
+		portal_lbl.position = Vector3(0.0, 6.4, 17.2)
+	if portal_sub_label != null:
+		portal_sub_label.position = Vector3(0.0, 5.85, 17.2)
+
+	var gatehouse_visuals := arch.get_node_or_null("GatehouseVisuals")
+	if gatehouse_visuals == null:
+		gatehouse_visuals = Node3D.new()
+		gatehouse_visuals.name = "GatehouseVisuals"
+		arch.add_child(gatehouse_visuals)
+
+		var gh_mat := StandardMaterial3D.new()
+		gh_mat.albedo_color = Color(0.26, 0.30, 0.40)
+		gh_mat.roughness = 0.70
+
+		# Left gate pillar
+		var lp := MeshInstance3D.new()
+		var lpb := BoxMesh.new()
+		lpb.size = Vector3(1.8, 5.8, 2.4)
+		lp.mesh = lpb
+		lp.position = Vector3(-3.8, 2.9, 17.2)
+		lp.material_override = gh_mat
+		gatehouse_visuals.add_child(lp)
+
+		# Right gate pillar
+		var rp := MeshInstance3D.new()
+		var rpb := BoxMesh.new()
+		rpb.size = Vector3(1.8, 5.8, 2.4)
+		rp.mesh = rpb
+		rp.position = Vector3(3.8, 2.9, 17.2)
+		rp.material_override = gh_mat
+		gatehouse_visuals.add_child(rp)
+
+		# Top gate arch / lintel
+		var arch_beam := MeshInstance3D.new()
+		var abb := BoxMesh.new()
+		abb.size = Vector3(8.2, 1.4, 2.6)
+		arch_beam.mesh = abb
+		arch_beam.position = Vector3(0.0, 5.5, 17.2)
+		arch_beam.material_override = gh_mat
+		gatehouse_visuals.add_child(arch_beam)
+
+	# 7. North Wall: Summon Altar (✨ Đài Triệu Hồi)
+	if summon_altar_mesh != null:
+		summon_altar_mesh.position = Vector3(0.0, 0.55, -14.8)
+	if altar_body != null:
+		altar_body.position = Vector3(0.0, 0.0, -14.8)
+	var altar_lbl: Label3D = summon_altar_mesh.get_node_or_null("AltarLabel")
+	if altar_lbl != null:
+		altar_lbl.position = Vector3(0.0, 2.7, 0.0)
+	var altar_sub: Label3D = summon_altar_mesh.get_node_or_null("AltarSubLabel")
+	if altar_sub != null:
+		altar_sub.position = Vector3(0.0, 2.15, 0.0)
+
+	# 8. West Wall: Barracks (🛡️ Doanh Trại & Thăng Sao)
+	if barracks_mesh != null:
+		barracks_mesh.position = Vector3(-17.5, 1.6, 0.0)
+		var b_box := BoxMesh.new()
+		b_box.size = Vector3(4.6, 3.2, 5.8)
+		barracks_mesh.mesh = b_box
+	if barracks_body != null and barracks_body.has_node("CollisionShape3D"):
+		var b_shape: CollisionShape3D = barracks_body.get_node("CollisionShape3D")
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(5.0, 3.6, 6.2)
+		b_shape.shape = bs
+	var bar_lbl: Label3D = barracks_mesh.get_node_or_null("BarracksLabel")
+	if bar_lbl != null:
+		bar_lbl.position = Vector3(0.0, 2.4, 0.0)
+
+	# 9. East Wall: Infirmary (✚ Bệnh Xá & Hậu Cần)
+	if infirmary_mesh != null:
+		infirmary_mesh.position = Vector3(17.5, 1.6, 0.0)
+		var i_box := BoxMesh.new()
+		i_box.size = Vector3(4.6, 3.2, 5.8)
+		infirmary_mesh.mesh = i_box
+	if infirmary_body != null and infirmary_body.has_node("CollisionShape3D"):
+		var i_shape: CollisionShape3D = infirmary_body.get_node("CollisionShape3D")
+		var ishape := BoxShape3D.new()
+		ishape.size = Vector3(5.0, 3.6, 6.2)
+		i_shape.shape = ishape
+	var inf_lbl: Label3D = infirmary_mesh.get_node_or_null("InfirmaryLabel")
+	if inf_lbl != null:
+		inf_lbl.position = Vector3(0.0, 2.4, 0.0)
+
 func _setup_landmark_metadata() -> void:
 	bonfire_body.set_meta("interactable_type", "LANDMARK")
-	bonfire_body.set_meta("landmark_code", "BONFIRE")
+	bonfire_body.set_meta("landmark_code", "FOUNTAIN")
 
 	altar_body.set_meta("interactable_type", "LANDMARK")
 	altar_body.set_meta("landmark_code", "SUMMON_ALTAR")
@@ -184,11 +549,11 @@ func _spawn_stacked_3d_floors_and_plots() -> void:
 	_floor_banners.clear()
 	_floor_trans_map.clear()
 
-	# Glowing Active Terrace Halo Ring & Focus Light that rides diagonally along 10h <-> 4h with the observed terrace
+	# Glowing Active Terrace Halo Ring & Focus Light that rides with the observed floor
 	_active_floor_ring = MeshInstance3D.new()
 	var ring_torus := TorusMesh.new()
-	ring_torus.inner_radius = 8.45
-	ring_torus.outer_radius = 8.85
+	ring_torus.inner_radius = 11.2
+	ring_torus.outer_radius = 11.6
 	_active_floor_ring.mesh = ring_torus
 	_active_floor_ring.position = Vector3(0.0, 0.08, 0.0)
 	var ring_mat := StandardMaterial3D.new()
@@ -201,9 +566,9 @@ func _spawn_stacked_3d_floors_and_plots() -> void:
 
 	_active_floor_light = OmniLight3D.new()
 	_active_floor_light.light_color = Color(0.85, 0.94, 1.0)
-	_active_floor_light.light_energy = 1.65
-	_active_floor_light.omni_range = 16.0
-	_active_floor_light.position = Vector3(0.0, 4.2, 0.0)
+	_active_floor_light.light_energy = 2.0
+	_active_floor_light.omni_range = 24.0
+	_active_floor_light.position = Vector3(0.0, 5.0, 0.0)
 	zones_container.add_child(_active_floor_light)
 
 	for f_idx in range(MAX_LOBBY_FLOORS):
@@ -211,7 +576,7 @@ func _spawn_stacked_3d_floors_and_plots() -> void:
 		var terrace_center := get_floor_terrace_center(floor_num)
 		_floor_trans_map[floor_num] = 0.0
 
-		# Upper Terraces (Floors 2..6) step diagonally from High 10h down to Low 4h ("Ruộng Bậc Thang")
+		# Upper Atrium Mezzanines (Floors 2..6)
 		if floor_num >= 2:
 			var terrace_root := _build_terrace_step_3d(floor_num, terrace_center)
 			zones_container.add_child(terrace_root)
@@ -223,90 +588,185 @@ func _spawn_stacked_3d_floors_and_plots() -> void:
 		f_banner.no_depth_test = true
 		f_banner.font_size = 24
 		f_banner.outline_size = 6
-		f_banner.position = terrace_center + Vector3(0.0, 4.3, -7.2)
-		f_banner.text = "🏔️ BẬC THANG TẦNG #%d (Mở ở Master Lv.%d)" % [floor_num, req_lvl]
+		f_banner.position = terrace_center + Vector3(0.0, 4.8, -16.5)
+		f_banner.text = "🏰 ĐẠI SẢNH THÀNH TRÌ TẦNG #%d (Mở ở Master Lv.%d)" % [floor_num, req_lvl]
 		zones_container.add_child(f_banner)
 		_floor_banners[floor_num] = f_banner
 
-		var plot_offsets := FLOOR_PLOT_OFFSETS if floor_num == 1 else UPPER_TERRACE_PLOT_OFFSETS
-		for p_local in range(3):
-			var plot_num := f_idx * 3 + p_local + 1
+		for p_local in range(PLOTS_PER_FLOOR):
+			var plot_num := f_idx * PLOTS_PER_FLOOR + p_local + 1
 			var plot_node: BasePlot3D = BASE_PLOT_SCENE.instantiate()
 			plot_node.plot_index = plot_num
 			plot_node.zone_index = floor_num
 			plots_container.add_child(plot_node)
-			plot_node.global_position = terrace_center + plot_offsets[p_local]
+			plot_node.global_position = terrace_center + FLOOR_PLOT_OFFSETS[p_local]
 			_plot_nodes[plot_num] = plot_node
 
-## Builds a 3D Stepped Terrace ("Bậc Thang Đá & Bờ Kè 10h -> 4h") for `floor_num` >= 2
+## Builds a 3D Grand Atrium Mezzanine Deck ("Đại Sảnh Thông Tầng") for `floor_num` >= 2:
+## - 4 Walkway Wings (North, South, East, West) around the central circular atrium well (radius ~9.5m)
+## - Stone balustrade guardrail looking down onto Floor 1 Central Fountain
+## - 4 Grand stone columns reaching down to the lower floor
+## - Outer perimeter fortress walls with arched mezzanine windows
+## - Twin side staircases connecting down to `floor_num - 1`
 func _build_terrace_step_3d(floor_num: int, terrace_center: Vector3) -> Node3D:
 	var terrace_root := Node3D.new()
-	terrace_root.name = "TerraceStep_%d" % floor_num
+	terrace_root.name = "AtriumMezzanine_%d" % floor_num
 	terrace_root.position = terrace_center
 
-	# 1. Top stone terrace deck
-	var deck := MeshInstance3D.new()
-	var deck_cyl := CylinderMesh.new()
-	deck_cyl.top_radius = 7.9
-	deck_cyl.bottom_radius = 8.2
-	deck_cyl.height = 0.42
-	deck.mesh = deck_cyl
-	deck.position = Vector3(0.0, -0.21, 0.0)
-	var deck_mat := StandardMaterial3D.new()
-	deck_mat.albedo_color = Color(0.24, 0.28, 0.36)
-	deck_mat.roughness = 0.76
-	deck.material_override = deck_mat
-	terrace_root.add_child(deck)
+	var floor_mat := StandardMaterial3D.new()
+	floor_mat.albedo_color = Color(0.25, 0.29, 0.38)
+	floor_mat.roughness = 0.74
 
-	# 2. Stepped stone retaining wall ("Bờ kè ruộng bậc thang") dropping down to the lower terrace level
-	var wall := MeshInstance3D.new()
-	var wall_cyl := CylinderMesh.new()
-	wall_cyl.top_radius = 8.15
-	wall_cyl.bottom_radius = 8.95
-	wall_cyl.height = FLOOR_HEIGHT - 0.25
-	wall.mesh = wall_cyl
-	wall.position = Vector3(0.0, -(FLOOR_HEIGHT * 0.5) - 0.1, 0.0)
 	var wall_mat := StandardMaterial3D.new()
-	wall_mat.albedo_color = Color(0.17, 0.20, 0.27)
-	wall_mat.roughness = 0.88
-	wall.material_override = wall_mat
-	terrace_root.add_child(wall)
+	wall_mat.albedo_color = Color(0.20, 0.24, 0.31)
+	wall_mat.roughness = 0.85
 
-	# 3. Carved stone rim around the terrace edge
-	var rim := MeshInstance3D.new()
-	var rim_torus := TorusMesh.new()
-	rim_torus.inner_radius = 7.75
-	rim_torus.outer_radius = 8.12
-	rim.mesh = rim_torus
-	rim.position = Vector3(0.0, 0.02, 0.0)
-	var rim_mat := StandardMaterial3D.new()
-	rim_mat.albedo_color = Color(0.46, 0.54, 0.68)
-	rim_mat.roughness = 0.55
-	rim.material_override = rim_mat
-	terrace_root.add_child(rim)
+	var rail_mat := StandardMaterial3D.new()
+	rail_mat.albedo_color = Color(0.42, 0.50, 0.62)
+	rail_mat.roughness = 0.55
 
-	# 4. Diagonal 10h -> 4h Stone Staircase connecting this terrace down to `floor_num - 1`
-	var down_vec := -TERRACE_STEP_10H # Points from 10h (high) toward 4h (low)
-	var horiz_dir := Vector3(down_vec.x, 0.0, down_vec.z).normalized()
-	var stair_yaw := atan2(horiz_dir.x, horiz_dir.z)
-	var step_count := 6
-	var step_mat := StandardMaterial3D.new()
-	step_mat.albedo_color = Color(0.36, 0.41, 0.52)
-	step_mat.roughness = 0.70
+	var column_mat := StandardMaterial3D.new()
+	column_mat.albedo_color = Color(0.18, 0.22, 0.29)
+	column_mat.roughness = 0.80
 
-	for s_idx in range(step_count):
-		var t := float(s_idx + 1) / float(step_count + 1)
-		var step_mesh := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = Vector3(2.5, 0.42, 1.15)
-		step_mesh.mesh = box
-		# Start at the 4h rim of the upper terrace and step down toward the 10h rim of the lower terrace
-		var horiz_dist := lerpf(6.8, 10.6, t)
+	# 1. Four Walkway Wings forming the rectangular mezzanine floor around the central atrium well:
+	# North Walkway Wing (Z = -13.5)
+	var n_wing := MeshInstance3D.new()
+	var n_box := BoxMesh.new()
+	n_box.size = Vector3(44.0, 0.42, 8.5)
+	n_wing.mesh = n_box
+	n_wing.position = Vector3(0.0, -0.21, -13.5)
+	n_wing.material_override = floor_mat
+	terrace_root.add_child(n_wing)
+
+	# South Walkway Wing (Z = 13.5)
+	var s_wing := MeshInstance3D.new()
+	var s_box := BoxMesh.new()
+	s_box.size = Vector3(44.0, 0.42, 8.5)
+	s_wing.mesh = s_box
+	s_wing.position = Vector3(0.0, -0.21, 13.5)
+	s_wing.material_override = floor_mat
+	terrace_root.add_child(s_wing)
+
+	# West Walkway Wing (X = -15.75, connecting North and South wings)
+	var w_wing := MeshInstance3D.new()
+	var w_box := BoxMesh.new()
+	w_box.size = Vector3(12.5, 0.42, 18.5)
+	w_wing.mesh = w_box
+	w_wing.position = Vector3(-15.75, -0.21, 0.0)
+	w_wing.material_override = floor_mat
+	terrace_root.add_child(w_wing)
+
+	# East Walkway Wing (X = 15.75, connecting North and South wings)
+	var e_wing := MeshInstance3D.new()
+	var e_box := BoxMesh.new()
+	e_box.size = Vector3(12.5, 0.42, 18.5)
+	e_wing.mesh = e_box
+	e_wing.position = Vector3(15.75, -0.21, 0.0)
+	e_wing.material_override = floor_mat
+	terrace_root.add_child(e_wing)
+
+	# 2. Circular Stone Balustrade / Guardrail around the Atrium Opening (radius 9.5m)
+	var balustrade := MeshInstance3D.new()
+	var b_torus := TorusMesh.new()
+	b_torus.inner_radius = 9.35
+	b_torus.outer_radius = 9.75
+	balustrade.mesh = b_torus
+	balustrade.position = Vector3(0.0, 0.35, 0.0)
+	balustrade.material_override = rail_mat
+	terrace_root.add_child(balustrade)
+
+	# Balustrade Posts
+	var post_count := 16
+	for p_i in range(post_count):
+		var p_ang := (TAU / float(post_count)) * float(p_i)
+		var post := MeshInstance3D.new()
+		var p_cyl := CylinderMesh.new()
+		p_cyl.top_radius = 0.16
+		p_cyl.bottom_radius = 0.20
+		p_cyl.height = 0.85
+		post.mesh = p_cyl
+		post.position = Vector3(cos(p_ang) * 9.55, 0.42, sin(p_ang) * 9.55)
+		post.material_override = rail_mat
+		terrace_root.add_child(post)
+
+	# 3. Four Grand Supporting Columns reaching down to the lower floor
+	var col_positions := [
+		Vector3(-9.2, -(FLOOR_HEIGHT * 0.5) - 0.21, -9.2),
+		Vector3(9.2, -(FLOOR_HEIGHT * 0.5) - 0.21, -9.2),
+		Vector3(-9.2, -(FLOOR_HEIGHT * 0.5) - 0.21, 9.2),
+		Vector3(9.2, -(FLOOR_HEIGHT * 0.5) - 0.21, 9.2)
+	]
+	for c_pos in col_positions:
+		var col := MeshInstance3D.new()
+		var col_cyl := CylinderMesh.new()
+		col_cyl.top_radius = 0.70
+		col_cyl.bottom_radius = 0.75
+		col_cyl.height = FLOOR_HEIGHT
+		col.mesh = col_cyl
+		col.position = c_pos
+		col.material_override = column_mat
+		terrace_root.add_child(col)
+
+	# 4. Perimeter Fortress Walls for this Atrium Floor
+	var pw_north := MeshInstance3D.new()
+	var pwn_box := BoxMesh.new()
+	pwn_box.size = Vector3(46.0, 4.4, 1.2)
+	pw_north.mesh = pwn_box
+	pw_north.position = Vector3(0.0, 2.0, -18.2)
+	pw_north.material_override = wall_mat
+	terrace_root.add_child(pw_north)
+
+	var pw_south := MeshInstance3D.new()
+	var pws_box := BoxMesh.new()
+	pws_box.size = Vector3(46.0, 4.4, 1.2)
+	pw_south.mesh = pws_box
+	pw_south.position = Vector3(0.0, 2.0, 18.2)
+	pw_south.material_override = wall_mat
+	terrace_root.add_child(pw_south)
+
+	var pw_west := MeshInstance3D.new()
+	var pww_box := BoxMesh.new()
+	pww_box.size = Vector3(1.2, 4.4, 36.0)
+	pw_west.mesh = pww_box
+	pw_west.position = Vector3(-23.0, 2.0, 0.0)
+	pw_west.material_override = wall_mat
+	terrace_root.add_child(pw_west)
+
+	var pw_east := MeshInstance3D.new()
+	var pwe_box := BoxMesh.new()
+	pwe_box.size = Vector3(1.2, 4.4, 36.0)
+	pw_east.mesh = pwe_box
+	pw_east.position = Vector3(23.0, 2.0, 0.0)
+	pw_east.material_override = wall_mat
+	terrace_root.add_child(pw_east)
+
+	# 5. Twin Stone Staircases connecting this mezzanine down to floor_num - 1 along the West & East walls
+	var stair_step_count := 8
+	var stair_mat := StandardMaterial3D.new()
+	stair_mat.albedo_color = Color(0.34, 0.38, 0.48)
+	stair_mat.roughness = 0.70
+
+	for s_idx in range(stair_step_count):
+		var t := float(s_idx + 1) / float(stair_step_count + 1)
 		var step_y := lerpf(-0.25, -FLOOR_HEIGHT + 0.25, t)
-		step_mesh.position = horiz_dir * horiz_dist + Vector3(0.0, step_y, 0.0)
-		step_mesh.rotation.y = stair_yaw
-		step_mesh.material_override = step_mat
-		terrace_root.add_child(step_mesh)
+		var step_z := lerpf(-3.5, 3.5, t)
+
+		# West staircase
+		var w_step := MeshInstance3D.new()
+		var sb := BoxMesh.new()
+		sb.size = Vector3(2.4, 0.38, 0.95)
+		w_step.mesh = sb
+		w_step.position = Vector3(-20.5, step_y, step_z)
+		w_step.material_override = stair_mat
+		terrace_root.add_child(w_step)
+
+		# East staircase
+		var e_step := MeshInstance3D.new()
+		e_step.mesh = sb
+		e_step.position = Vector3(20.5, step_y, step_z)
+		e_step.material_override = stair_mat
+		terrace_root.add_child(e_step)
 
 	return terrace_root
 
@@ -323,12 +783,12 @@ func _build_floor_elevator_buttons() -> void:
 	floor_buttons_container.add_child(panorama_btn)
 	_panorama_btn = panorama_btn
 
-	# 2. Render from Floor 6 (10h High Terrace) down to Floor 1 (4h Base Plaza)
+	# 2. Render from Floor 6 down to Floor 1
 	for f_num in range(MAX_LOBBY_FLOORS, 0, -1):
 		var req_lvl := 1 if f_num <= 1 else (f_num - 1) * MASTER_LEVELS_PER_FLOOR
 		var btn := Button.new()
 		btn.custom_minimum_size = Vector2(0, 34)
-		btn.text = "🏢 Bậc Tầng %d (Lv.%d)" % [f_num, req_lvl]
+		btn.text = "🏢 Tầng %d (Lv.%d)" % [f_num, req_lvl]
 		var target_floor := f_num
 		btn.pressed.connect(func(): _switch_to_lobby_floor(target_floor))
 		floor_buttons_container.add_child(btn)
@@ -345,10 +805,9 @@ func _build_floor_elevator_buttons() -> void:
 func _show_all_floors_panorama() -> void:
 	_close_inspector()
 	_panorama_mode = true
-	var mid_center := get_floor_terrace_center(1).lerp(get_floor_terrace_center(MAX_LOBBY_FLOORS), 0.5)
-	camera_rig.focus_base_overview(mid_center, 42.0, 0.65)
+	camera_rig.focus_base_overview(Vector3(0.0, 13.0, 0.0), 46.0, 0.65)
 	_apply_floor_focus_isolation(0, false, 0)
-	status_banner_label.text = "🌐 Đang xem toàn cảnh tất cả 6 tầng Sảnh Chờ (Mô hình Ruộng Bậc Thang 10h -> 4h)."
+	status_banner_label.text = "🌐 Đang xem toàn cảnh tất cả 6 tầng Đại Sảnh Thành Trì Thông Tầng (Grand Citadel Atrium)."
 	_refresh_hud()
 
 func _switch_to_lobby_floor(floor_num: int) -> void:
@@ -362,29 +821,29 @@ func _switch_to_lobby_floor(floor_num: int) -> void:
 
 	var req_lvl := 1 if _current_lobby_floor <= 1 else (_current_lobby_floor - 1) * MASTER_LEVELS_PER_FLOOR
 	var is_open := _current_lobby_floor <= GameState.unlocked_lobby_floors
-	status_banner_label.text = "🏔️ Đang quan sát Bậc Thang Tầng #%d (Dải 10h -> 4h, đã làm mờ các tầng khác) — %s" % [
+	status_banner_label.text = "🏰 Đang quan sát Tầng #%d Đại Sảnh Thành Trì (Đài Phun Nước Trung Tâm & 8 Ô Xây Dựng) — %s" % [
 		_current_lobby_floor,
 		"Đã mở khóa ✅" if is_open else ("🔒 Mở khóa khi Master đạt cấp %d (hoặc nhấn Mở Tầng)" % req_lvl)
 	]
 	_refresh_hud()
 
-## Isolates the currently observed terrace (`active_floor_num`) by completely hiding/disabling
-## all other terraces, architecture, plots, and heroes outside the active floor to eliminate lag.
+## Isolates the currently observed floor (`active_floor_num`) while keeping the Ground Floor
+## courtyard and Central Fountain visible looking down through the central atrium well.
 func _apply_floor_focus_isolation(active_floor_num: int, animate: bool = true, travel_dir: int = 0) -> void:
 	if _floor_isolation_tween and _floor_isolation_tween.is_valid():
 		_floor_isolation_tween.kill()
 
 	var target_center := get_floor_terrace_center(active_floor_num)
-	var ring_radius_scale := 1.12 if active_floor_num == 1 else 0.94
+	var ring_radius_scale := 1.15 if active_floor_num == 1 else 0.95
 
-	# 1. Move & pulse the Active Terrace Halo Ring + Spotlight along the 10h <-> 4h diagonal
+	# 1. Move & pulse the Active Terrace Halo Ring + Spotlight
 	if _active_floor_ring != null and _active_floor_light != null:
 		if _panorama_mode:
 			_active_floor_ring.visible = false
 			_active_floor_light.visible = false
 		else:
 			var target_ring_pos := target_center + Vector3(0.0, 0.08, 0.0)
-			var target_light_pos := target_center + Vector3(0.0, 4.2, 0.0)
+			var target_light_pos := target_center + Vector3(0.0, 5.0, 0.0)
 			_active_floor_ring.visible = true
 			_active_floor_light.visible = true
 			if not animate:
@@ -398,23 +857,27 @@ func _apply_floor_focus_isolation(active_floor_num: int, animate: bool = true, t
 				_active_floor_ring.scale = Vector3(ring_radius_scale * 0.84, 1.0, ring_radius_scale * 0.84)
 				_floor_isolation_tween.tween_property(_active_floor_ring, "scale", Vector3(ring_radius_scale, 1.0, ring_radius_scale), 0.48).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
-	# 2. Floor 1 Central Plaza & Landmarks isolation: Chỉ render khi đang xem Tầng 1 hoặc Panorama
-	var floor1_active := (active_floor_num == 1 or _panorama_mode)
+	# 2. Floor 1 Central Plaza & Landmarks isolation:
+	# Ground floor courtyard & central fountain remain visible when looking down through the central atrium well from upper floors
+	var floor1_interactive := (active_floor_num == 1)
 	var arch := $BaseArchitecture
 	if arch != null:
-		arch.visible = floor1_active
-		arch.process_mode = Node.PROCESS_MODE_INHERIT if floor1_active else Node.PROCESS_MODE_DISABLED
-	_set_floor1_landmarks_interactive(floor1_active)
+		arch.visible = true
+		arch.process_mode = Node.PROCESS_MODE_INHERIT if floor1_interactive else Node.PROCESS_MODE_DISABLED
+	_set_floor1_landmarks_interactive(floor1_interactive)
 	if bonfire_light != null:
-		bonfire_light.visible = floor1_active
+		bonfire_light.visible = true
 	if dungeon_portal_mesh != null:
-		dungeon_portal_mesh.visible = floor1_active
-	_apply_floor1_architecture_transparency(0.0)
+		dungeon_portal_mesh.visible = true
+	var floor1_trans := 0.0 if (active_floor_num == 1 or _panorama_mode) else 0.15
+	_apply_floor1_architecture_transparency(floor1_trans)
 
-	# 3. Upper Terrace Foundations (Floors 2..6): Render tầng đang xem hoặc toàn bộ 6 tầng khi xem Toàn Cảnh
-	for f_num in range(1, MAX_LOBBY_FLOORS + 1):
+	# 3. Upper Atrium Mezzanines (Floors 2..6):
+	# Show active floor platform, or all floors in panorama mode.
+	# Platforms above the active floor are hidden so the ceiling does not occlude the camera view.
+	for f_num in range(2, MAX_LOBBY_FLOORS + 1):
 		var is_active := (f_num == active_floor_num or _panorama_mode)
-		var is_above := (f_num > active_floor_num)
+		var is_below := (f_num < active_floor_num)
 
 		if _floor_banners.has(f_num):
 			var banner: Label3D = _floor_banners[f_num]
@@ -423,14 +886,16 @@ func _apply_floor_focus_isolation(active_floor_num: int, animate: bool = true, t
 
 		if _floor_platforms.has(f_num):
 			var terrace_root: Node3D = _floor_platforms[f_num]
-			terrace_root.visible = is_active
+			var show_platform := (is_active or is_below)
+			terrace_root.visible = show_platform
 			terrace_root.process_mode = Node.PROCESS_MODE_INHERIT if is_active else Node.PROCESS_MODE_DISABLED
-			if is_active:
+			if show_platform:
 				terrace_root.scale = Vector3.ONE
 				terrace_root.position = get_floor_terrace_center(f_num)
-				_set_terrace_node_transparency(terrace_root, 0.0)
+				var trans := 0.0 if is_active else 0.25
+				_set_terrace_node_transparency(terrace_root, trans)
 
-	# 4. All 18 Building Plots (3 per Terrace): Render plot thuộc tầng đang xem hoặc toàn bộ khi xem Toàn Cảnh
+	# 4. All Building Plots (8 per Floor): Render plot thuộc tầng đang xem hoặc toàn bộ khi xem Toàn Cảnh
 	for p_num in _plot_nodes.keys():
 		var plot_node: BasePlot3D = _plot_nodes[p_num]
 		var is_active := (plot_node.zone_index == active_floor_num or _panorama_mode)
@@ -473,10 +938,10 @@ func _apply_floor1_architecture_transparency(trans: float) -> void:
 			(node as MeshInstance3D).transparency = trans
 
 func _process(delta: float) -> void:
-	_bonfire_time += delta * 6.0
+	_bonfire_time += delta * 2.2
 	if bonfire_light != null:
-		var base_energy := 4.4 if _lighting_mode == 2 else (2.8 if _lighting_mode == 1 else 1.6)
-		bonfire_light.light_energy = base_energy + sin(_bonfire_time) * 0.35 + cos(_bonfire_time * 2.3) * 0.18
+		var base_energy := 3.2 if _lighting_mode == 2 else (2.4 if _lighting_mode == 1 else 1.8)
+		bonfire_light.light_energy = base_energy + sin(_bonfire_time) * 0.22 + cos(_bonfire_time * 1.7) * 0.12
 	if dungeon_portal_mesh != null:
 		dungeon_portal_mesh.rotate_z(delta * 0.85)
 
@@ -707,7 +1172,7 @@ func _spawn_resident_heroes() -> void:
 			heroes_container.add_child(actor)
 
 			var angle := (TAU / float(count)) * float(i) + randf_range(-0.15, 0.15)
-			var radius := randf_range(2.0, 3.6)
+			var radius := randf_range(5.0, 9.2) if f_num == 1 else randf_range(11.0, 14.8)
 
 			var worker_info: Dictionary = {}
 			if worker_map.has(hid):
@@ -829,7 +1294,7 @@ func _on_left_mouse_up(screen_pos: Vector2) -> void:
 func _handle_hero_drop(hero_actor: UnitActor3D, screen_pos: Vector2) -> void:
 	var ground_pos := _project_mouse_to_active_floor(screen_pos)
 	var terrace_center := get_floor_terrace_center(_current_lobby_floor)
-	var max_r := 6.6 if _current_lobby_floor == 1 else 5.8
+	var max_r := 16.5 if _current_lobby_floor == 1 else 16.0
 	var drop_rel := ground_pos - terrace_center
 	var drop_horiz := Vector2(drop_rel.x, drop_rel.z)
 	if drop_horiz.length() > max_r:
@@ -1927,9 +2392,9 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 
 		"DUNGEON_PORTAL":
 			if focus_cam:
-				camera_rig.focus_action_unit(Vector3(5.5, 0.0, -4.8), 10.0, 0.35)
-			inspector_title_label.text = "🌀 CỔNG THÁP PvE (COMBAT V2)"
-			inspector_subtitle_label.text = "Tầng hiện tại: Tầng %d (World Level %d)" % [GameState.current_floor, GameState.world_level]
+				camera_rig.focus_action_unit(dungeon_portal_mesh.global_position, 12.0, 0.35)
+			inspector_title_label.text = "⛩️ CỔNG THÁP CHINH PHẠT PvE (TOWER GATE)"
+			inspector_subtitle_label.text = "Cổng thành tích hợp phòng thủ & viễn chinh — Tầng %d (World Level %d)" % [GameState.current_floor, GameState.world_level]
 			_add_inspector_info("⚔️ Đội hình xuất kích (%d/5 Tướng):\n(Mẹo: Kéo-thả Tướng 3D vào Cổng Tháp hoặc nhấn nút bên dưới)" % GameState.active_party_ids.size(), Color(0.88, 0.72, 1.0))
 
 			for h in GameState.heroes:
@@ -1951,25 +2416,24 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 
 		"BARRACKS":
 			if focus_cam:
-				camera_rig.focus_action_unit(barracks_mesh.global_position, 10.0, 0.35)
+				camera_rig.focus_action_unit(barracks_mesh.global_position, 11.0, 0.35)
 			inspector_title_label.text = "🛡️ DOANH TRẠI & THĂNG SAO"
 			inspector_subtitle_label.text = "Quản lý đội ngũ Tướng và Ghép Thăng Sao (Pick Me Up)"
 			_add_inspector_info("Tổng số Tướng sở hữu: %d Tướng" % GameState.heroes.size())
 			_add_inspector_button("👥 Quản Lý Hero Từng Tầng Sảnh Chờ", func(): _open_floor_hero_manager(_current_lobby_floor))
 			_add_inspector_button("🛡️ Mở Bảng Tướng & Ghép Thăng Sao", _on_barracks_pressed)
 
-		"INFIRMARY", "BONFIRE":
+		"FOUNTAIN", "BONFIRE":
 			if focus_cam:
-				var target_pos := infirmary_mesh.global_position if landmark_code == "INFIRMARY" else Vector3.ZERO
-				camera_rig.focus_action_unit(target_pos, 10.5, 0.35)
-			inspector_title_label.text = "✚ BỆNH XÁ & TRỤC LỬA HẬU CẦN"
-			inspector_subtitle_label.text = "Chế biến khẩu phần, hồi sức cho Tướng và đổi bầu không khí"
+				camera_rig.focus_action_unit(Vector3(0.0, 1.2, 0.0), 12.0, 0.35)
+			inspector_title_label.text = "⛲ ĐÀI PHUN NƯỚC TRUNG TÂM & KHÔNG GIAN"
+			inspector_subtitle_label.text = "Điểm tụ năng lượng linh hồn, hồi phục thể lực và điều chỉnh thời tiết Sảnh Chờ"
 			_add_inspector_info("🍖 Khẩu phần dự trữ: %d | 🌾 Lương thực thô: %d" % [
 				int(GameState.materials.get("RATION", 0)),
 				int(GameState.materials.get("RAW_FOOD", 0))
 			])
 			_add_inspector_button("🍳 Nấu 5 Khẩu Phần Quân Lương", func(): _cook_rations(5))
-			_add_inspector_button("🌤️🌅🔥 Đổi Ánh Sáng Ngày / Hoàng Hôn / Đêm", _on_lighting_toggle_pressed)
+			_add_inspector_button("🌤️🌅🌙 Đổi Bầu Không Khí: Ngày / Hoàng Hôn / Đêm", _on_lighting_toggle_pressed)
 
 			for h in GameState.heroes:
 				var hid := str(h.get("id", ""))
@@ -1978,7 +2442,30 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 				var mhp := int(h.get("maxHp", 100))
 				_add_inspector_button(
 					"🍖 Cấp Khẩu Phần cho %s (HP %d/%d)" % [hname, hp, mhp],
-					func(): _feed_hero(hid, hname)
+					func(): _feed_hero(hid, hname),
+					int(GameState.materials.get("RATION", 0)) <= 0
+				)
+
+		"INFIRMARY":
+			if focus_cam:
+				camera_rig.focus_action_unit(infirmary_mesh.global_position, 11.0, 0.35)
+			inspector_title_label.text = "✚ BỆNH XÁ & HẬU CẦN"
+			inspector_subtitle_label.text = "Chữa trị thương tích và hồi phục thể lực cho Tướng sau viễn chinh"
+			_add_inspector_info("🍖 Khẩu phần dự trữ: %d | 🌾 Lương thực thô: %d" % [
+				int(GameState.materials.get("RATION", 0)),
+				int(GameState.materials.get("RAW_FOOD", 0))
+			])
+			_add_inspector_button("🍳 Nấu 5 Khẩu Phần Quân Lương", func(): _cook_rations(5))
+
+			for h in GameState.heroes:
+				var hid := str(h.get("id", ""))
+				var hname := str(h.get("name", "Hero"))
+				var hp := int(h.get("hp", 100))
+				var mhp := int(h.get("maxHp", 100))
+				_add_inspector_button(
+					"🍖 Cấp Khẩu Phần cho %s (HP %d/%d)" % [hname, hp, mhp],
+					func(): _feed_hero(hid, hname),
+					int(GameState.materials.get("RATION", 0)) <= 0
 				)
 
 func _open_hero_inspector(hero_actor: UnitActor3D, focus_cam: bool = true) -> void:
@@ -2691,7 +3178,7 @@ func _apply_lighting_preset(mode_idx: int, animate: bool) -> void:
 			target_ambient = Color(0.78, 0.52, 0.45)
 			target_ambient_energy = 0.68
 		2:
-			lighting_toggle_btn.text = "🔥 Đêm"
+			lighting_toggle_btn.text = "🌙 Đêm"
 			target_light_col = Color(0.38, 0.50, 0.82)
 			target_light_energy = 0.35
 			target_bg = Color(0.05, 0.07, 0.12)
@@ -2729,7 +3216,7 @@ func _on_barracks_pressed() -> void:
 
 func _on_enter_pve_pressed() -> void:
 	_switch_to_lobby_floor(1)
-	camera_rig.focus_action_unit(Vector3(5.5, 0.0, -4.8), 7.5, 0.35)
+	camera_rig.focus_action_unit(dungeon_portal_mesh.global_position, 8.5, 0.35)
 	status_banner_label.text = "🌀 Đang tiến vào Cổng Tháp PvE (Isometric 3D Combat v2)..."
 	await get_tree().create_timer(0.4).timeout
 	get_tree().change_scene_to_file("res://scenes/pve/isometric_pve_arena_3d.tscn")

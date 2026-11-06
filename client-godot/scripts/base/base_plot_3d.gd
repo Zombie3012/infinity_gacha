@@ -13,6 +13,7 @@ class_name BasePlot3D
 
 @export var plot_index: int = 1
 @export var zone_index: int = 1 # Floor number (1..6)
+const PLOTS_PER_FLOOR := 8
 
 @onready var pad_mesh: MeshInstance3D = $PadMesh
 @onready var border_mesh: MeshInstance3D = $BorderMesh
@@ -41,7 +42,7 @@ var _anim_floating_base_y: float = 2.4
 var _facility_lights: Array[OmniLight3D] = []
 
 func _ready() -> void:
-	zone_index = int((maxi(1, plot_index) - 1) / 3) + 1
+	zone_index = int((maxi(1, plot_index) - 1) / PLOTS_PER_FLOOR) + 1
 	click_body.set_meta("interactable_type", "PLOT")
 	click_body.set_meta("plot_index", plot_index)
 	click_body.set_meta("plot_node", self)
@@ -82,7 +83,7 @@ func _process(delta: float) -> void:
 
 func setup_plot(idx: int, unlocked: bool, b_data: Dictionary) -> void:
 	plot_index = idx
-	zone_index = int((maxi(1, plot_index) - 1) / 3) + 1
+	zone_index = int((maxi(1, plot_index) - 1) / PLOTS_PER_FLOOR) + 1
 	is_unlocked = unlocked
 	building_data = b_data
 	if is_node_ready():

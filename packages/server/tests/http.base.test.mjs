@@ -20,7 +20,7 @@ test('HTTP base, construction and production', { skip: skipReason }, async t => 
     const overview = await harness.request('/api/base/overview', { token: master.token });
     assert.equal(overview.status, 200);
     assert.equal(overview.body.world.baseZones, 1);
-    assert.equal(overview.body.world.plots, 3);
+    assert.equal(overview.body.world.plots, 8);
     const codes = overview.body.buildingTypes.map(type => type.code);
     assert.ok(!codes.includes('LUMBER'));
     assert.ok(!codes.includes('MINE'));

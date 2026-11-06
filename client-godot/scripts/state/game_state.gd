@@ -20,7 +20,9 @@ var world_level: int = 1
 var current_floor: int = 12
 var base_zones: int = 3
 var unlocked_lobby_floors: int = 3
-var unlocked_plots: int = 9
+const PLOTS_PER_ZONE: int = 8
+const MAX_BASE_ZONES: int = 6
+var unlocked_plots: int = 24
 
 var heroes: Array = []
 var active_party_ids: Array = []
@@ -129,7 +131,7 @@ func refresh_base_overview() -> bool:
 		world_level = int(w.get("worldLevel", 1))
 		base_zones = int(w.get("baseZones", 1))
 		unlocked_lobby_floors = int(w.get("unlockedLobbyFloors", maxi(base_zones, 1 + int(master_level / 15))))
-		unlocked_plots = maxi(int(w.get("plots", base_zones * 3)), unlocked_lobby_floors * 3)
+		unlocked_plots = maxi(int(w.get("plots", base_zones * PLOTS_PER_ZONE)), unlocked_lobby_floors * PLOTS_PER_ZONE)
 	EventBus.base_updated.emit(base_overview)
 	return true
 
@@ -308,7 +310,7 @@ func clear() -> void:
 	world_level = 1
 	current_floor = 1
 	base_zones = 1
-	unlocked_plots = 3
+	unlocked_plots = PLOTS_PER_ZONE
 	heroes.clear()
 	active_party_ids.clear()
 	base_overview.clear()

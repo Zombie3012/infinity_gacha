@@ -25,10 +25,10 @@ test('DM-08 Base - world progress and expansion', async (t) => {
     assert.equal(worldLevelForFloor(999), 10);
   });
 
-  await t.test('each zone holds three plots, capped at six zones', () => {
-    assert.equal(plotsForZones(1), 3);
-    assert.equal(plotsForZones(3), 9);
-    assert.equal(plotsForZones(MAX_BASE_ZONES + 5), 18);
+  await t.test('each zone holds eight plots, capped at six zones', () => {
+    assert.equal(plotsForZones(1), 8);
+    assert.equal(plotsForZones(3), 24);
+    assert.equal(plotsForZones(MAX_BASE_ZONES + 5), 48);
   });
 
   await t.test('zone 3 costs 5,000 Silver and requires world level 2 (scenario 7.1)', () => {

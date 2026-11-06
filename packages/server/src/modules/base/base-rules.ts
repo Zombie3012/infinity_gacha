@@ -3,14 +3,14 @@
  * Kept free of I/O so the numbers are unit-testable and prototype tuning is visible in one place.
  *
  * Multi-floor & building rules:
- * - Each floor (zone) holds 3 building plots; base starts with Floor 1, up to 6 Floors (18 plots).
+ * - Each floor (zone) holds 8 building plots; base starts with Floor 1, up to 6 Floors (48 plots).
  * - Every 15 Master levels unlocks a higher floor (Lv.1 -> Floor 1, Lv.15 -> Floor 2, Lv.30 -> Floor 3, etc.),
  *   or a floor can be unlocked once World Level reaches `floor - 1`.
  * - Dormitory (`HOUSE`) can be promoted to `PARTY_MANSION` once Master reaches Level 30.
  * - `FORGE` is an active equipment crafting facility (not passive iron mining).
  */
 
-export const PLOTS_PER_ZONE = 3;
+export const PLOTS_PER_ZONE = 8;
 export const MAX_BASE_ZONES = 6;
 export const MASTER_LEVELS_PER_FLOOR = 15;
 export const PARTY_MANSION_REQUIRED_MASTER_LEVEL = 30;
