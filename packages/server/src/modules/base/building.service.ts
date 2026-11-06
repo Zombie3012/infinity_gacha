@@ -6,8 +6,10 @@ import {
   baseBuildings, baseProductionNodes, buildingTypes, buildingWorkerAssignments, heroes, masterItems, masters, worlds,
 } from '../../database/drizzle-schema.js';
 import {
-  MAX_BASE_ZONES, accruedStored, capacityForLevel, constructionSeconds, demolishRefundSilver,
+  MAX_BASE_ZONES, PARTY_MANSION_REQUIRED_MASTER_LEVEL, PARTY_MANSION_UPGRADE_COST_SILVER,
+  accruedStored, capacityForLevel, constructionSeconds, demolishRefundSilver,
   expansionCostSilver, expansionRequiredWorldLevel, plotsForZones, productionRatePerHour,
+  requiredMasterLevelForFloor, unlockedLobbyFloorsForMasterLevel,
   upgradeCostSilver, upgradeMaterials, upgradeSeconds, worldLevelForFloor,
 } from './base-rules.js';
 
@@ -150,26 +152,34 @@ export class BuildingService {
 
     const nextZone = world.baseZones + 1;
     const canExpandZone = nextZone <= MAX_BASE_ZONES;
+    const unlockedLobbyFloors = Math.max(world.baseZones, unlockedLobbyFloorsForMasterLevel(master.level));
     return {
-      master: { id: master.id, silverCoins: master.silverCoins.toString() },
+      master: {
+        id: master.id,
+        level: master.level,
+        silverCoins: master.silverCoins.toString(),
+      },
       world: {
         id: world.id,
         currentFloor: world.currentFloor,
         worldLevel,
         baseZones: world.baseZones,
         plots: plotsForZones(world.baseZones),
+        unlockedLobbyFloors,
       },
       expansion: {
         canExpand: canExpandZone,
         nextZone: canExpandZone ? nextZone : null,
         costSilver: canExpandZone ? expansionCostSilver(world.baseZones) : null,
         requiredWorldLevel: canExpandZone ? expansionRequiredWorldLevel(nextZone) : null,
+        requiredMasterLevel: canExpandZone ? requiredMasterLevelForFloor(nextZone) : null,
         maxZones: MAX_BASE_ZONES,
       },
       buildingTypes: types.map(type => ({
         ...type,
         production: asProfile(type.production),
-        unlocked: worldLevel >= type.requiredWorldLevel,
+        requiredMasterLevel: type.code === 'PARTY_MANSION' ? PARTY_MANSION_REQUIRED_MASTER_LEVEL : 1,
+        unlocked: worldLevel >= type.requiredWorldLevel && (type.code !== 'PARTY_MANSION' || master.level >= PARTY_MANSION_REQUIRED_MASTER_LEVEL),
       })),
       buildings: rows,
       plots,
@@ -187,8 +197,14 @@ export class BuildingService {
     const worldLevel = worldLevelForFloor(world.currentFloor);
     const [type] = await db.select().from(buildingTypes).where(eq(buildingTypes.code, code)).limit(1);
     if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
-    if (worldLevel < type.requiredWorldLevel) throw new BaseError(`Công trình cần World Level ${type.requiredWorldLevel}.`, 409);
-    if (plotIndex > plotsForZones(world.baseZones)) throw new BaseError('Ô đất chưa được mở khóa.', 409);
+    if (type.code === 'PARTY_MANSION' && master.level < PARTY_MANSION_REQUIRED_MASTER_LEVEL) {
+      throw new BaseError(`Party Mansion cần Master đạt cấp ${PARTY_MANSION_REQUIRED_MASTER_LEVEL}.`, 409);
+    }
+    if (worldLevel < type.requiredWorldLevel && master.level < requiredMasterLevelForFloor(type.requiredWorldLevel + 1)) {
+      throw new BaseError(`Công trình cần World Level ${type.requiredWorldLevel}.`, 409);
+    }
+    const maxUnlockedPlots = plotsForZones(Math.max(world.baseZones, unlockedLobbyFloorsForMasterLevel(master.level)));
+    if (plotIndex > maxUnlockedPlots) throw new BaseError('Ô đất chưa được mở khóa.', 409);
 
     const now = new Date();
     const created = await db.transaction(async tx => {
@@ -394,8 +410,11 @@ export class BuildingService {
 
     const nextZone = world.baseZones + 1;
     const worldLevel = worldLevelForFloor(world.currentFloor);
-    const required = expansionRequiredWorldLevel(nextZone);
-    if (worldLevel < required) throw new BaseError(`Cần World Level ${required} để mở vùng đất ${nextZone}.`, 409);
+    const requiredWl = expansionRequiredWorldLevel(nextZone);
+    const requiredMasterLvl = requiredMasterLevelForFloor(nextZone);
+    if (worldLevel < requiredWl && master.level < requiredMasterLvl) {
+      throw new BaseError(`Cần Master Level ${requiredMasterLvl} hoặc World Level ${requiredWl} để mở Tầng ${nextZone}.`, 409);
+    }
     const cost = expansionCostSilver(world.baseZones);
     if (master.silverCoins < BigInt(cost)) throw new BaseError('Không đủ Xu Bạc để mở rộng.', 409);
 
@@ -407,6 +426,45 @@ export class BuildingService {
     });
 
     return { zones: nextZone, plots: plotsForZones(nextZone), silverSpent: cost };
+  }
+
+  /**
+   * Promotes an existing Dormitory (`HOUSE`) into a `PARTY_MANSION` (Biệt Thự Tổ Đội)
+   * once the Master reaches Level 30.
+   */
+  async promoteToPartyMansion(masterId: string, buildingId: string) {
+    await this.settle(masterId);
+    const master = await this.master(masterId);
+    if (master.level < PARTY_MANSION_REQUIRED_MASTER_LEVEL) {
+      throw new BaseError(`Cần Master đạt cấp ${PARTY_MANSION_REQUIRED_MASTER_LEVEL} để nâng cấp Nhà Nghỉ thành Party Mansion.`, 409);
+    }
+
+    const [building] = await db.select().from(baseBuildings)
+      .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
+    if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
+    if (building.buildingType !== 'HOUSE') {
+      throw new BaseError('Chỉ có thể nâng cấp Nhà Nghỉ (HOUSE) thành Party Mansion.', 409);
+    }
+    if (building.status !== 'READY') {
+      throw new BaseError('Công trình đang trong quá trình thi công.', 409);
+    }
+    if (master.silverCoins < BigInt(PARTY_MANSION_UPGRADE_COST_SILVER)) {
+      throw new BaseError('Không đủ Xu Bạc để nâng cấp lên Party Mansion.', 409);
+    }
+
+    const now = new Date();
+    const updated = await db.transaction(async tx => {
+      await tx.update(masters)
+        .set({ silverCoins: sql`${masters.silverCoins} - ${PARTY_MANSION_UPGRADE_COST_SILVER}`, updatedAt: now })
+        .where(eq(masters.id, masterId));
+      const [row] = await tx.update(baseBuildings)
+        .set({ buildingType: 'PARTY_MANSION', status: 'READY', updatedAt: now })
+        .where(eq(baseBuildings.id, building.id))
+        .returning();
+      return row;
+    });
+
+    return { building: updated, silverSpent: PARTY_MANSION_UPGRADE_COST_SILVER };
   }
 }
 

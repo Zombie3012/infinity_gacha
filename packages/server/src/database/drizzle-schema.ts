@@ -138,7 +138,7 @@ export const summonRewardPool = pgTable('summon_reward_pool', {
 export const heroes = pgTable('heroes', {
   id: varchar('id', { length: 36 }).primaryKey(),
   masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
-  configId: varchar('config_id', { length: 50 }).notNull().references(() => heroTemplates.code),
+  configId: varchar('config_id', { length: 50 }).notNull(),
   name: varchar('name', { length: 100 }).notNull(),
   rarity: integer('rarity').notNull(),
   category: varchar('category', { length: 20 }).notNull(),
@@ -176,7 +176,7 @@ export const heroes = pgTable('heroes', {
   awakeningRank: integer('awakening_rank').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [unique('uq_master_hero_template').on(table.masterId, table.configId)]);
+});
 
 // --- Combat v2: class, subclass and Mage element affinity catalogues ---
 
@@ -259,7 +259,8 @@ export const heroImprints = pgTable('hero_imprints', {
   acquiredAt: timestamp('acquired_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [unique('uq_hero_imprint').on(table.heroId, table.imprintCode)]);
 
-export const equipmentTemplates = pgTable('equipment_templates', {  id: varchar('id', { length: 36 }).primaryKey(),
+export const equipmentTemplates = pgTable('equipment_templates', {
+  id: varchar('id', { length: 36 }).primaryKey(),
   code: varchar('code', { length: 50 }).notNull().unique(),
   name: varchar('name', { length: 100 }).notNull(),
   slotType: varchar('slot_type', { length: 30 }).notNull(),
@@ -268,6 +269,14 @@ export const equipmentTemplates = pgTable('equipment_templates', {  id: varchar(
   bonusAttack: integer('bonus_atk').notNull().default(0),
   bonusDefense: integer('bonus_def').notNull().default(0),
   bonusSpeed: integer('bonus_spd').notNull().default(0),
+  // Combat v2 base stats & derived additions
+  bonusStr: integer('bonus_str').notNull().default(0),
+  bonusInt: integer('bonus_int').notNull().default(0),
+  bonusSta: integer('bonus_sta').notNull().default(0),
+  bonusAgi: integer('bonus_agi').notNull().default(0),
+  bonusMatk: integer('bonus_matk').notNull().default(0),
+  bonusMdef: integer('bonus_mdef').notNull().default(0),
+  v2Stats: jsonb('v2_stats').$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
   isSample: boolean('is_sample').notNull().default(true),
 });
 

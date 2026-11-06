@@ -250,6 +250,13 @@ CREATE TABLE IF NOT EXISTS equipment_templates (
     bonus_atk INT NOT NULL DEFAULT 0,
     bonus_def INT NOT NULL DEFAULT 0,
     bonus_spd INT NOT NULL DEFAULT 0,
+    bonus_str INT NOT NULL DEFAULT 0,
+    bonus_int INT NOT NULL DEFAULT 0,
+    bonus_sta INT NOT NULL DEFAULT 0,
+    bonus_agi INT NOT NULL DEFAULT 0,
+    bonus_matk INT NOT NULL DEFAULT 0,
+    bonus_mdef INT NOT NULL DEFAULT 0,
+    v2_stats JSONB NOT NULL DEFAULT '{}'::jsonb,
     is_sample BOOLEAN NOT NULL DEFAULT TRUE
 );
 

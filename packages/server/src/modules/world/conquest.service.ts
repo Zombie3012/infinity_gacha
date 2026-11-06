@@ -10,6 +10,7 @@ import { mailboxService } from '../shop/mailbox.service.js';
 import { currencyService } from '../economy/currency.service.js';
 import { allianceService } from './alliance.service.js';
 import { resolvePvp } from './pvp-rules.js';
+import { fetchMasterTopCombatPower } from '../hero/hero-combat-power.js';
 import {
   WAR_POINTS, WONDER_COORDINATES, WONDER_HOLD_SECONDS, accumulateHold, contestOpensAt, decideWar,
   isContestOpen, rankAlliances, seasonRewardFor, seasonWindow, secondsRemaining, warRewardFor, warWindow,
@@ -99,9 +100,11 @@ export class ConquestService {
     const members = await db.select({ masterId: allianceMembers.masterId }).from(allianceMembers)
       .where(eq(allianceMembers.allianceId, allianceId));
     if (members.length === 0) return 0;
-    const rows = await db.select({ hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed })
-      .from(heroes).where(inArray(heroes.masterId, members.map(row => row.masterId)));
-    return topCombatPower(rows.map(row => ({ hp: row.hp, attack: row.attack, defense: row.defense, speed: row.speed })));
+    let totalPower = 0;
+    for (const member of members) {
+      totalPower += await fetchMasterTopCombatPower(member.masterId, 5);
+    }
+    return totalPower;
   }
 
   /** Accrues continuous hold seconds and hourly conquest points. */

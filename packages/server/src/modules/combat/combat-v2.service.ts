@@ -15,8 +15,9 @@ import {
   heroImprints, heroLevelConfigs, heroSkillInstances, heroSkillTemplates, heroTemplates, imprintDefinitions, masterLevelConfigs, masters, worlds,
 } from '../../database/drizzle-schema.js';
 import {
-  combatPowerV2, combineImprintEffects, deriveStats, isEmptyImprintEffects, mulberry32,
-  type DerivedStats, type ElementAffinity, type HeroClass, type ImprintCombatEffects, type StarRating,
+  aggregateEquipment, combatPowerV2, combineImprintEffects, deriveStats, isEmptyImprintEffects, mulberry32,
+  type DerivedOffsets, type DerivedStats, type ElementAffinity, type EquipmentItemInput, type EquipmentV2Stats,
+  type HeroClass, type ImprintCombatEffects, type StarRating,
 } from '@infiniti-gacha/shared';
 import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.js';
 import { currencyService } from '../economy/currency.service.js';
@@ -80,23 +81,17 @@ function applyCombatModifiers(
 }
 
 export class CombatV2Service {
-  async simulate(masterId: string, input: {
-    heroIds?: unknown; enemyCodes?: unknown; maxRounds?: unknown; seed?: unknown; persist?: unknown;
-  }) {
-    const heroIds = Array.isArray(input.heroIds) ? input.heroIds.map(String) : [];
-    if (heroIds.length === 0) throw new CombatV2Error('ERR_COMBAT_V2_NO_HEROES', 400);
-    if (heroIds.length > 5) throw new CombatV2Error('ERR_COMBAT_V2_PARTY_TOO_LARGE', 400);
-
+  async buildHeroUnits(
+    heroIds: string[],
+    masterId: string,
+    side: 'HERO' | 'ENEMY' = 'HERO',
+  ): Promise<CombatV2UnitInput[]> {
+    if (heroIds.length === 0) return [];
     const rows = await db.select({ hero: heroes, template: heroTemplates })
       .from(heroes).leftJoin(heroTemplates, eq(heroTemplates.code, heroes.configId))
       .where(and(eq(heroes.masterId, masterId), inArray(heroes.id, heroIds)))
       .orderBy(asc(heroes.createdAt));
-    if (rows.length !== heroIds.length) throw new CombatV2Error('ERR_COMBAT_V2_HERO_NOT_FOUND', 404);
-    for (const { hero } of rows) {
-      if (hero.state === 'DEAD' || hero.state === 'DISABLED' || hero.hp <= 0) {
-        throw new CombatV2Error('ERR_COMBAT_V2_HERO_UNAVAILABLE', 409);
-      }
-    }
+    if (rows.length === 0) return [];
 
     const skills = await db.select({ instance: heroSkillInstances, template: heroSkillTemplates })
       .from(heroSkillInstances).innerJoin(heroSkillTemplates, eq(heroSkillInstances.skillCode, heroSkillTemplates.code))
@@ -134,20 +129,29 @@ export class CombatV2Service {
         eq(equipmentInstances.location, 'EQUIPPED'),
         inArray(equipmentInstances.equippedHeroId, heroIds),
       ));
-    const gearByHero = new Map<string, { hp: number; attack: number; defense: number; speed: number }>();
+    const itemsByHero = new Map<string, EquipmentItemInput[]>();
     for (const row of gearRows) {
-      const heroId = row.item.equippedHeroId!;
-      const bonus = gearByHero.get(heroId) ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
-      const multiplier = row.item.statMultiplier ?? 1;
-      const substats = row.item.substats ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
-      bonus.hp += Math.round(row.template.bonusHp * multiplier) + substats.hp;
-      bonus.attack += Math.round(row.template.bonusAttack * multiplier) + substats.attack;
-      bonus.defense += Math.round(row.template.bonusDefense * multiplier) + substats.defense;
-      bonus.speed += Math.round(row.template.bonusSpeed * multiplier) + substats.speed;
-      gearByHero.set(heroId, bonus);
+      if (!row.item.equippedHeroId) continue;
+      const list = itemsByHero.get(row.item.equippedHeroId) ?? [];
+      list.push({
+        slotType: row.template.slotType,
+        bonusHp: row.template.bonusHp,
+        bonusAttack: row.template.bonusAttack,
+        bonusDefense: row.template.bonusDefense,
+        bonusSpeed: row.template.bonusSpeed,
+        bonusStr: row.template.bonusStr,
+        bonusInt: row.template.bonusInt,
+        bonusSta: row.template.bonusSta,
+        bonusAgi: row.template.bonusAgi,
+        bonusMatk: row.template.bonusMatk,
+        bonusMdef: row.template.bonusMdef,
+        v2Stats: (row.template.v2Stats as EquipmentV2Stats) ?? null,
+        statMultiplier: row.item.statMultiplier ?? 1,
+        substats: (row.item.substats as EquipmentV2Stats) ?? null,
+      });
+      itemsByHero.set(row.item.equippedHeroId, list);
     }
 
-    // Existing P1 systems: injury, starvation and loyalty/resonance multipliers.
     const [injuryPenalties, personality] = await Promise.all([
       medicalService.penaltyByHero(masterId).catch(() => ({} as Record<string, number>)),
       personalityService.combatModifiers(masterId).catch(() => ({} as Record<string, { loyalty: number; resonance: number }>)),
@@ -159,40 +163,49 @@ export class CombatV2Service {
       readiness = {};
     }
 
-    const heroUnits: CombatV2UnitInput[] = rows.map(({ hero, template }, index) => {
+    return rows.map(({ hero, template }, index) => {
       const useV2 = isV2Origin(hero.originStats);
+      const heroGear = itemsByHero.get(hero.id) ?? [];
+      const aggregatedGear = aggregateEquipment(heroGear);
+      const imprint = imprintBonus(hero.id);
+      const classCode = hero.classCode as HeroClass;
+
+      const combinedOffsets: DerivedOffsets = {
+        ...aggregatedGear.derivedOffsets,
+        hpBase: (aggregatedGear.derivedOffsets.hpBase ?? 0) + imprint.hp,
+        atkBase: (aggregatedGear.derivedOffsets.atkBase ?? 0) + imprint.atk,
+        defBase: (aggregatedGear.derivedOffsets.defBase ?? 0) + imprint.def,
+      };
+
       const snapshot = useV2
         ? progressionFor({
           origin: originOf(hero.originStats),
           star: hero.rarity as StarRating,
           level: hero.level,
-          classCode: hero.classCode as HeroClass,
+          classCode,
           training: hero.trainingStats,
           awakeningRank: hero.awakeningRank,
+          imprint: {
+            str: imprint.str,
+            int: imprint.int,
+            sta: imprint.sta,
+            agi: imprint.agi,
+          },
+          equipmentBase: aggregatedGear.baseStats,
+          equipmentOffsets: combinedOffsets,
           hpPct: 1,
           mpPct: 1,
         })
         : null;
-      const gear = gearByHero.get(hero.id) ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
-      const imprint = imprintBonus(hero.id);
-      const classCode = hero.classCode as HeroClass;
+
       const stats = snapshot
-        ? deriveStats(
-          {
-            str: snapshot.base.str + imprint.str,
-            int: snapshot.base.int + imprint.int,
-            sta: snapshot.base.sta + imprint.sta,
-            agi: snapshot.base.agi + imprint.agi,
-          },
-          classCode,
-          {
-            hpBase: gear.hp + imprint.hp,
-            atkBase: gear.attack + imprint.atk,
-            defBase: gear.defense + imprint.def,
-            agi: gear.speed,
-          },
-        )
-        : legacyStats(hero, gear);
+        ? snapshot.derived
+        : legacyStats(hero, {
+          hp: aggregatedGear.derivedOffsets.hpBase ?? 0,
+          attack: aggregatedGear.derivedOffsets.atkBase ?? 0,
+          defense: aggregatedGear.derivedOffsets.defBase ?? 0,
+          speed: (aggregatedGear.baseStats.agi ?? 0) + (aggregatedGear.derivedOffsets.agi ?? 0),
+        });
       if (!snapshot) {
         stats.maxHp += imprint.hp;
         stats.atk += imprint.atk;
@@ -225,9 +238,11 @@ export class CombatV2Service {
       return {
         id: hero.id,
         name: hero.name,
-        side: 'HERO',
+        side,
         slotIndex: index,
-        agi: (snapshot?.base.agi ?? Math.max(1, hero.speed)) + gear.speed,
+        agi: snapshot
+          ? (snapshot.base.agi + (aggregatedGear.derivedOffsets.agi ?? 0))
+          : (Math.max(1, hero.speed) + (aggregatedGear.baseStats.agi ?? 0) + (aggregatedGear.derivedOffsets.agi ?? 0)),
         stats: modified,
         damageType: classCode === 'MAGE' ? 'MAGICAL' : 'PHYSICAL',
         affinity,
@@ -235,6 +250,27 @@ export class CombatV2Service {
         imprintEffects: isEmptyImprintEffects(imprintEffects) ? undefined : imprintEffects,
       };
     });
+  }
+
+  async simulate(masterId: string, input: {
+    heroIds?: unknown; enemyCodes?: unknown; maxRounds?: unknown; seed?: unknown; persist?: unknown;
+  }) {
+    const heroIds = Array.isArray(input.heroIds) ? input.heroIds.map(String) : [];
+    if (heroIds.length === 0) throw new CombatV2Error('ERR_COMBAT_V2_NO_HEROES', 400);
+    if (heroIds.length > 5) throw new CombatV2Error('ERR_COMBAT_V2_PARTY_TOO_LARGE', 400);
+
+    const rows = await db.select({ hero: heroes, template: heroTemplates })
+      .from(heroes).leftJoin(heroTemplates, eq(heroTemplates.code, heroes.configId))
+      .where(and(eq(heroes.masterId, masterId), inArray(heroes.id, heroIds)))
+      .orderBy(asc(heroes.createdAt));
+    if (rows.length !== heroIds.length) throw new CombatV2Error('ERR_COMBAT_V2_HERO_NOT_FOUND', 404);
+    for (const { hero } of rows) {
+      if (hero.state === 'DEAD' || hero.state === 'DISABLED' || hero.hp <= 0) {
+        throw new CombatV2Error('ERR_COMBAT_V2_HERO_UNAVAILABLE', 409);
+      }
+    }
+
+    const heroUnits = await this.buildHeroUnits(heroIds, masterId, 'HERO');
 
     const requestedCodes = Array.isArray(input.enemyCodes) ? input.enemyCodes.map(String) : [];
     const enemyRows = requestedCodes.length > 0

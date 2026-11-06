@@ -7,6 +7,9 @@ import {
 import { mailboxService } from '../shop/mailbox.service.js';
 import { weeklyPeriodKey } from '../quest/quest-rules.js';
 import {
+  fetchMasterHeroesWithPower, fetchMasterTopCombatPower,
+} from '../hero/hero-combat-power.js';
+import {
   combatPower, rankCombatPower, rankDungeonProgress, rewardForRank, topCombatPower,
   type LeaderboardBoard, type RankInput,
 } from './liveops-rules.js';
@@ -37,20 +40,16 @@ export class LeaderboardService {
     }
 
     if (board === 'COMBAT_POWER') {
-      const heroRows = await db.select({
-        masterId: heroes.masterId, hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed,
-      }).from(heroes).where(inArray(heroes.masterId, ids));
-      const byMaster = new Map<string, typeof heroRows>();
-      for (const hero of heroRows) {
-        byMaster.set(hero.masterId, [...(byMaster.get(hero.masterId) ?? []), hero]);
-      }
+      const powers = await Promise.all(ids.map(async id => ({
+        masterId: id,
+        combatPower: await fetchMasterTopCombatPower(id, 5),
+      })));
+      const powerByMaster = new Map(powers.map(p => [p.masterId, p.combatPower]));
       return masterRows.map(master => ({
         masterId: master.id,
         floor: worldByMaster.get(master.id)?.currentFloor ?? 1,
         rounds: 0,
-        combatPower: topCombatPower((byMaster.get(master.id) ?? []).map(hero => ({
-          hp: hero.hp, attack: hero.attack, defense: hero.defense, speed: hero.speed,
-        }))),
+        combatPower: powerByMaster.get(master.id) ?? 0,
       }));
     }
 
@@ -154,12 +153,12 @@ export class LeaderboardService {
   }
 
   async combatPowerFor(masterId: string) {
-    const rows = await db.select({ hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed })
-      .from(heroes).where(eq(heroes.masterId, masterId));
+    const heroesWithPower = await fetchMasterHeroesWithPower(masterId);
+    const sorted = heroesWithPower.map(h => h.combatPower).sort((a, b) => b - a);
     return {
-      total: topCombatPower(rows.map(row => ({ hp: row.hp, attack: row.attack, defense: row.defense, speed: row.speed }))),
-      heroes: rows.length,
-      single: rows.slice(0, 5).map(row => combatPower({ hp: row.hp, attack: row.attack, defense: row.defense, speed: row.speed })),
+      total: sorted.slice(0, 5).reduce((sum, v) => sum + v, 0),
+      heroes: heroesWithPower.length,
+      single: sorted.slice(0, 5),
     };
   }
 }

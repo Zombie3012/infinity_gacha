@@ -236,17 +236,18 @@ This document specifies the exact, testable **Acceptance Criteria (AC)** for all
 - **Then** a new record in `hero_instances` is inserted with `template_id = 'HERO_VALKYRIE_01'`, `level = 1`, `status = 'ALIVE'`.
 - **And** `summon_origin` is set to the current banner's origin (`NORMAL`, `SPECIAL`, or `LIMITED`).
 
-#### Scenario 8.2: Duplicate Hero of Any Origin (Thiên Mệnh Conversion)
-- **Given** Master already owns a Hero `HERO_SOLAR_01` with any summon origin and `thien_menh_count = 0`.
-- **When** another copy of `HERO_SOLAR_01` is pulled from any banner.
-- **Then** the system does NOT create a second instance in `hero_instances`.
-- **And** increments `thien_menh_count` by `1` (`thien_menh_count = 1`).
+#### Scenario 8.2: Duplicate 5★+ Hero on Special/Limited Banner (Thiên Mệnh Conversion)
+- **Given** Master already owns a 5★ Hero `HERO_SOLAR_01` with `summon_origin = 'LIMITED'` or `'SPECIAL'` and `thien_menh = 0`.
+- **When** another copy of `HERO_SOLAR_01` is pulled from a Limited or Special banner.
+- **Then** the system does NOT create a second instance in `heroes`.
+- **And** increments `thien_menh` by `1` (`thien_menh = 1`).
 
-#### Scenario 8.3: Duplicate Normal Hero Also Grants Thiên Mệnh
-- **Given** Master already owns a `NORMAL` Hero `HERO_WARRIOR_01` with `thien_menh_count = 2`.
-- **When** another copy of `HERO_WARRIOR_01` is pulled.
-- **Then** the system does NOT create a second instance.
-- **And** increments `thien_menh_count` by `1` (`thien_menh_count = 3`).
+#### Scenario 8.3: Normal Banner and 1★–4★ Summons Create Independent Instances
+- **Given** Master already owns a `NORMAL` Hero `HERO_WARRIOR_01`.
+- **When** another copy of `HERO_WARRIOR_01` is pulled from a Normal banner.
+- **Then** the system creates a NEW independent record in `heroes` with its own unique `id`.
+- **And** dynamically rolls level-1 base stats (STR, INT, STA, AGI) according to its star rating budget.
+- **And** the new instance can be trained, specialized, or used as fodder for Star Promotion (Pick Me Up style).
 
 ---
 
@@ -489,7 +490,7 @@ This document specifies the exact, testable **Acceptance Criteria (AC)** for all
 | **Account** | 1 Account = 1 Master | `masters.account_id` Unique constraint test |
 | **Gacha Rate** | 50% Hero / 50% Material | Monte Carlo roll tests on base pool |
 | **Pity Curve** | 0.4% at roll 1-60; $k=4$ polynomial on 61-69; 100% on 70 | Formula evaluation test at $n=60, 65, 69, 70$ |
-| **Duplicate** | All origins -> +1 Thiên Mệnh on the owned Hero | Duplicate summon resolution tests |
+| **Duplicate** | 5★+ Special/Limited -> +1 Thiên Mệnh; Normal & 1★–4★ -> New Instance with rolled stats | Gacha resolution tests |
 | **Hero Death** | Normal -> Permadeath + Gear drop; Special -> Disabled | Battle casualty resolution tests |
 | **Seed** | Globally unique UUID; fixed for World | World initialization and regeneration test |
 | **Buff** | 15s Tactical Buff Cooldown | Cooldown timer boundary tests (at 14s vs 16s) |

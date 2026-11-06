@@ -144,7 +144,7 @@ flowchart LR
 - **Main flow:**
   1. Validate banner/pool and consume Heavenly Scrolls (1 for Single, 10 for Multi-10).
   2. Resolve each roll using the active pool (0.4% 5★, 49.6% 1-4★, 50% Materials on rolls 1-60) and Pity counter.
-  3. If result is an already-owned Hero of any origin, add 1 Thiên Mệnh to that Hero instead of generating a duplicate instance.
+  3. Create a new independent Hero instance with Combat v2 dynamically rolled base stats (STR/INT/STA/AGI), class, and element affinities (available for specialized builds or Star Promotion fodder).
   4. Record summon items/Heroes and update history.
 - **Postconditions:** Summon results/history and resulting Hero/Item instances are recorded.
 - **Alternate/exception paths:** Insufficient scrolls halts action; no roll-backs of consumed items once transaction commits.
@@ -165,7 +165,7 @@ flowchart LR
 - **Main flow:**
   1. Validate banner and consume Heavenly Scrolls (red for Limited, seven-color for Special).
   2. Resolve rolls using the shared Pity curve and this banner's counter.
-  3. If any duplicate Hero is drawn, convert 1 copy into 1 Thiên Mệnh on that owned Hero.
+  3. If a 5★+ duplicate Hero is drawn on this Special/Limited banner and already owned, convert 1 copy into 1 Thiên Mệnh on that owned Hero. Other Heroes generate new independent instances.
   4. Record results and update banner Pity counter.
 - **Postconditions:** Results, Pity state, and Hero origin are recorded.
 - **Alternate/exception paths:** Acquisition of red/seven-color scrolls is deferred to later scope; summons require pre-existing scrolls in inventory.
@@ -210,11 +210,12 @@ flowchart LR
 - **Preconditions:** A summon result and current Hero collection are available.
 - **Trigger:** A Hero result is generated.
 - **Main flow:**
-  1. Check whether the Hero template is already owned in player's collection.
-  2. If duplicate:
-     - For any origin: Grant 1 "Thiên Mệnh" to that owned Hero; do not create a duplicate instance.
-  3. If new: Create Hero Instance with immutable Summon Origin (Normal, Special, or Limited).
-- **Postconditions:** Hero instance or Thiên Mệnh duplicate conversion and immutable origin are recorded.
+  1. Check whether the summoned Hero is 5★+ on a Special/Limited banner and already owned in player's collection.
+  2. If duplicate 5★+ on Special/Limited banner:
+     - Grant 1 "Thiên Mệnh" to that owned Hero; do not create a duplicate instance.
+  3. Otherwise (Normal banner summons, all 1★–4★ Heroes, or new 5★):
+     - Generate a new independent Hero Instance with dynamically rolled Combat v2 base stats (STR/INT/STA/AGI) and immutable Summon Origin (Normal, Special, or Limited).
+- **Postconditions:** Hero instance with dynamically rolled stats or Thiên Mệnh duplicate conversion and immutable origin are recorded.
 - **Alternate/exception paths:** None.
 - **Covered Functions:**
 

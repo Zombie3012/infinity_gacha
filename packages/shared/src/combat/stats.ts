@@ -296,7 +296,7 @@ export function trainingPointsForLevel(level: number): number {
 
 /** Automatic growth spread by class multipliers (largest-remainder rounding). */
 export function classGrowthPoints(points: number, heroClass: HeroClass): BaseStats {
-  const weights = normalizeWeights(CLASS_GROWTH[heroClass]);
+  const weights = normalizeWeights(CLASS_GROWTH[heroClass] ?? CLASS_GROWTH.UNCLASSIFIED);
   const total = Math.max(0, points);
   const exact = BASE_STAT_KEYS.map(key => total * weights[key]);
   return statsFromArray(apportion(Math.round(total), exact));
@@ -376,7 +376,7 @@ export function deriveStats(
   offsets: DerivedOffsets = {},
 ): DerivedStats {
   const agi = Math.max(0, base.agi + (offsets.agi ?? 0));
-  const critRate = CLASS_BASE_CRIT[heroClass] + agi * 0.05 + (offsets.critRate ?? 0);
+  const critRate = (CLASS_BASE_CRIT[heroClass] ?? 5) + agi * 0.05 + (offsets.critRate ?? 0);
   return {
     maxHp: Math.round((offsets.hpBase ?? 0) + 20 * base.sta),
     maxMp: Math.round((offsets.mpBase ?? 0) + 10 * base.int),

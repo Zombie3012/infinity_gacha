@@ -45,6 +45,7 @@ function normalizedBannerKind(bannerType: string): 'STANDARD' | 'SPECIAL' | 'LIM
 }
 
 export interface SummonedHeroBuild {
+  name: string;
   star: StarRating;
   base: BaseStats;
   derived: DerivedStats;
@@ -57,23 +58,28 @@ export interface SummonedHeroBuild {
 }
 
 export function buildSummonedHero(input: {
-  template: HeroTemplateLike;
+  star?: number;
+  template?: HeroTemplateLike | null;
+  procedural?: boolean;
   bannerKind?: string;
   random?: () => number;
 }): SummonedHeroBuild {
-  const star = Math.max(1, Math.min(7, Math.floor(input.template.defaultRarity))) as StarRating;
+  const rawRarity = input.star ?? input.template?.defaultRarity ?? 1;
+  const star = Math.max(1, Math.min(7, Math.floor(rawRarity))) as StarRating;
   if (!isStarEnabled(star)) throw new Error(HERO_STAR_LOCKED);
 
+  const isProcedural = input.procedural ?? !input.template;
   const generated = generateHero({
     star,
     bannerKind: normalizedBannerKind(input.bannerKind ?? 'STANDARD'),
-    archetypeWeights: input.template.archetypeWeights ?? undefined,
-    classOptions: input.template.classOptions ?? undefined,
-    combatRole: (input.template.combatRole as CombatRole | null | undefined) ?? undefined,
+    archetypeWeights: isProcedural ? undefined : (input.template?.archetypeWeights ?? undefined),
+    classOptions: isProcedural ? undefined : (input.template?.classOptions ?? undefined),
+    combatRole: isProcedural ? undefined : ((input.template?.combatRole as CombatRole | null | undefined) ?? undefined),
     random: input.random,
   });
 
   return {
+    name: generated.name,
     star,
     base: generated.base,
     derived: generated.derived,

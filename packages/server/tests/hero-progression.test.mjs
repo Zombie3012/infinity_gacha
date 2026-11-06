@@ -73,6 +73,24 @@ test('Combat v2 - progression recompute', async (t) => {
     assert.ok(awakened.maxHp > base.maxHp);
   });
 
+  await t.test('equipment base stats and offsets are integrated into snapshot', () => {
+    const unequipped = progressionFor({ origin: origin5, star: 5, level: 30, classCode: 'WARRIOR' });
+    const equipped = progressionFor({
+      origin: origin5,
+      star: 5,
+      level: 30,
+      classCode: 'WARRIOR',
+      equipmentBase: { str: 25, sta: 15 },
+      equipmentOffsets: { hpBase: 100, critRate: 5, lifesteal: 10 },
+    });
+    assert.equal(equipped.base.str - unequipped.base.str, 25);
+    assert.equal(equipped.base.sta - unequipped.base.sta, 15);
+    // sta increases maxHp by 15 * 20 = 300, plus flat hpBase 100 => 400 total HP increase
+    assert.equal(equipped.maxHp - unequipped.maxHp, 400);
+    assert.equal(equipped.derived.critRate - unequipped.derived.critRate, 5);
+    assert.equal(equipped.derived.lifesteal, 10);
+  });
+
   await t.test('v2 detection separates new Heroes from legacy demo rows', () => {
     assert.equal(isV2Origin(origin5), true);
     assert.equal(isV2Origin({ str: 0, int: 0, sta: 0, agi: 0 }), false);

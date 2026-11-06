@@ -4,11 +4,13 @@ import cors from 'cors';
 import { and, asc, count, desc, eq, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { timingSafeEqual } from 'node:crypto';
-import { calculateFiveStarRate, roleForClass, rollElementAffinity, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
+import { aggregateEquipment, BREAKTHROUGH_SILVER_COST, breakthroughMaxLevel, calculateFiveStarRate, heroEffectiveMaxLevel, roleForClass, rollElementAffinity, starMaxLevel, type EquipmentItemInput, type EquipmentV2Stats, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
 import { db, pool } from './database/db.js';
 import { accounts, accountSessions, playerProfiles, banners, masterBannerPity, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits, heroImprints, imprintDefinitions } from './database/drizzle-schema.js';
 import { CLASS_CHANGE_ITEM, CLASS_CHANGE_SILVER, ProgressionError, allocateTraining, classChangeCheck, isV2Origin, originOf, progressionFor } from './modules/hero/hero-progression.js';
+import { legacyClassFor } from './modules/hero/hero-generation.js';
 import { imprintSlotsFor } from './modules/hero/imprint-rules.js';
+import { heroPromotionService } from './modules/hero/hero-promotion.service.js';
 import { createAccessToken, hashPassword, readAccessToken, TOKEN_LIFETIME_SECONDS, verifyPassword } from './modules/auth/auth.js';
 import { PersistentGachaService, SummonError } from './modules/gacha/persistent-gacha.service.js';
 import { WorldSeedGenerator } from './modules/dungeon/world-seed.generator.js';
@@ -2030,6 +2032,23 @@ export function createApp() {
     }
   }));
 
+  app.post('/api/base/buildings/:buildingId/promote-mansion', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await buildingService.promoteToPartyMansion(master.id, String(req.params.buildingId));
+      void auditService.record({
+        actorId: master.id, actorType: 'MASTER', action: AUDIT_ACTIONS.BUILDING_UPGRADED,
+        entityType: 'BUILDING', entityId: result.building.id,
+        diff: { promotedTo: 'PARTY_MANSION', silverSpent: result.silverSpent },
+      });
+      return res.json(result);
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
   app.post('/api/base/buildings/:buildingId/demolish', requireAccount, asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
@@ -2212,24 +2231,122 @@ export function createApp() {
       .from(equipmentInstances).innerJoin(equipmentTemplates, eq(equipmentInstances.templateCode, equipmentTemplates.code))
       .where(and(eq(equipmentInstances.masterId, master.id), eq(equipmentInstances.location, 'EQUIPPED')));
     const bonuses = new Map<string, { hp: number; attack: number; defense: number; speed: number }>();
+    const itemsByHero = new Map<string, EquipmentItemInput[]>();
     for (const row of equipped) {
       if (!row.item.equippedHeroId) continue;
       const bonus = bonuses.get(row.item.equippedHeroId) ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
       bonus.hp += row.template.bonusHp; bonus.attack += row.template.bonusAttack;
       bonus.defense += row.template.bonusDefense; bonus.speed += row.template.bonusSpeed;
       bonuses.set(row.item.equippedHeroId, bonus);
+
+      const list = itemsByHero.get(row.item.equippedHeroId) ?? [];
+      list.push({
+        slotType: row.template.slotType,
+        bonusHp: row.template.bonusHp,
+        bonusAttack: row.template.bonusAttack,
+        bonusDefense: row.template.bonusDefense,
+        bonusSpeed: row.template.bonusSpeed,
+        bonusStr: row.template.bonusStr,
+        bonusInt: row.template.bonusInt,
+        bonusSta: row.template.bonusSta,
+        bonusAgi: row.template.bonusAgi,
+        bonusMatk: row.template.bonusMatk,
+        bonusMdef: row.template.bonusMdef,
+        v2Stats: (row.template.v2Stats as EquipmentV2Stats) ?? null,
+        statMultiplier: row.item.statMultiplier ?? 1,
+        substats: (row.item.substats as EquipmentV2Stats) ?? null,
+      });
+      itemsByHero.set(row.item.equippedHeroId, list);
     }
+    const imprintRows = collection.length ? await db.select({ owned: heroImprints, definition: imprintDefinitions })
+      .from(heroImprints).innerJoin(imprintDefinitions, eq(imprintDefinitions.code, heroImprints.imprintCode))
+      .where(inArray(heroImprints.heroId, collection.map(hero => hero.id))) : [];
+    const imprintByHero = new Map<string, { str: number; int: number; sta: number; agi: number }>();
+    for (const row of imprintRows) {
+      const prev = imprintByHero.get(row.owned.heroId) ?? { str: 0, int: 0, sta: 0, agi: 0 };
+      prev.str += row.definition.bonusStr;
+      prev.int += row.definition.bonusInt;
+      prev.sta += row.definition.bonusSta;
+      prev.agi += row.definition.bonusAgi;
+      imprintByHero.set(row.owned.heroId, prev);
+    }
+    const affinityRows = collection.length ? await db.select().from(heroElementAffinities)
+      .where(inArray(heroElementAffinities.heroId, collection.map(hero => hero.id))) : [];
+    const affinityByHero = new Map(affinityRows.map(row => [row.heroId, heroAffinity(row)]));
     return res.json(collection.map(hero => {
-      const bonus = bonuses.get(hero.id) ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
       const template = templateByCode.get(hero.configId);
-      const skills = skillTemplates.filter(skill => skill.heroClass === template?.heroClass).map(skill => {
+      const effectiveClass = (hero.classCode && hero.classCode !== 'UNCLASSIFIED') ? hero.classCode : (template?.heroClass ?? 'UNCLASSIFIED');
+      const legacyCls = legacyClassFor(effectiveClass as HeroClass);
+      const skills = skillTemplates.filter(skill =>
+        skill.heroClass === effectiveClass
+        || skill.heroClass === legacyCls
+        || (template?.heroClass && skill.heroClass === template.heroClass)
+      ).map(skill => {
         const instance = skillByHeroAndCode.get(`${hero.id}:${skill.code}`);
         return { ...skill, skillLevel: instance?.skillLevel ?? 1, isUnlocked: instance?.isUnlocked ?? false, behaviorMode: instance?.behaviorMode ?? 'AUTO', canUnlock: hero.level >= skill.unlockLevel && hero.state !== 'DEAD' && hero.state !== 'DISABLED', skillEffectValue: skill.effectValue + ((instance?.skillLevel ?? 1) - 1) * skill.upgradeIncrement };
       });
+      const isV2 = isV2Origin(hero.originStats);
+      let derivedStats = { hp: hero.hp, maxHp: hero.maxHp, attack: hero.attack, defense: hero.defense, speed: hero.speed };
+      let v2Stats: any = undefined;
+      let effectiveBaseStats: any = undefined;
+
+      if (isV2) {
+        const heroGear = itemsByHero.get(hero.id) ?? [];
+        const aggregatedGear = aggregateEquipment(heroGear);
+        const heroImprint = imprintByHero.get(hero.id) ?? { str: 0, int: 0, sta: 0, agi: 0 };
+        const snapshot = progressionFor({
+          origin: originOf(hero.originStats),
+          star: hero.rarity as StarRating,
+          level: hero.level,
+          classCode: hero.classCode as HeroClass,
+          training: hero.trainingStats,
+          awakeningRank: hero.awakeningRank,
+          imprint: heroImprint,
+          equipmentBase: aggregatedGear.baseStats,
+          equipmentOffsets: aggregatedGear.derivedOffsets,
+          hpPct: hero.currentHpPct,
+          mpPct: hero.currentMpPct,
+        });
+        derivedStats = {
+          hp: snapshot.hp,
+          maxHp: snapshot.maxHp,
+          attack: snapshot.attack,
+          defense: snapshot.defense,
+          speed: snapshot.speed,
+        };
+        v2Stats = snapshot.derived;
+        effectiveBaseStats = snapshot.base;
+      } else {
+        const bonus = bonuses.get(hero.id) ?? { hp: 0, attack: 0, defense: 0, speed: 0 };
+        derivedStats = {
+          hp: Math.min(hero.hp, hero.maxHp + bonus.hp),
+          maxHp: hero.maxHp + bonus.hp,
+          attack: hero.attack + bonus.attack,
+          defense: hero.defense + bonus.defense,
+          speed: hero.speed + bonus.speed,
+        };
+      }
+
+      const elementAffinities = affinityByHero.get(hero.id) ?? (
+        effectiveClass === 'MAGE'
+          ? { FIRE: 60, WATER: 45, WIND: 40, EARTH: 35, LIGHT: 50, DARK: 30, LIGHTNING: 55 }
+          : null
+      );
+      const strongestElement = elementAffinities
+        ? Object.entries(elementAffinities).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0]
+        : undefined;
+
       return {
-        ...hero, heroClass: template?.heroClass ?? 'UNKNOWN', element: template?.element ?? 'UNKNOWN', exp: hero.exp.toString(), nextLevelExp: expThresholdByLevel.get(hero.level + 1) ?? null, maxLevel: hero.promotionRank === 0 ? 20 : maxLevelByPromotionRank.get(hero.promotionRank) ?? 20,
+        ...hero, heroClass: effectiveClass, element: strongestElement ?? template?.element ?? 'NEUTRAL', exp: hero.exp.toString(),
+        nextLevelExp: expThresholdByLevel.get(hero.level + 1) ?? null,
+        currentLevelExp: expThresholdByLevel.get(hero.level) ?? '0',
+        maxLevel: heroEffectiveMaxLevel(hero.rarity, hero.promotionRank),
+        starCeiling: starMaxLevel(hero.rarity),
+        breakthroughCap: breakthroughMaxLevel(hero.promotionRank),
         skills,
-        derivedStats: { hp: Math.min(hero.hp, hero.maxHp + bonus.hp), maxHp: hero.maxHp + bonus.hp, attack: hero.attack + bonus.attack, defense: hero.defense + bonus.defense, speed: hero.speed + bonus.speed },
+        derivedStats,
+        elementAffinities,
+        ...(v2Stats ? { v2Stats, effectiveBaseStats } : {}),
       };
     }));
   }));
@@ -2253,8 +2370,13 @@ export function createApp() {
     if (hero.state === 'DEAD') return res.status(409).json({ error: 'ERR_HERO_PERMANENTLY_DEAD' });
     if (hero.state === 'DISABLED' || hero.hp <= 0) return res.status(409).json({ error: 'Hero is not available for development.' });
     const [heroTemplate] = await db.select().from(heroTemplates).where(eq(heroTemplates.code, hero.configId)).limit(1);
-    const [template] = heroTemplate ? await db.select().from(heroSkillTemplates)
-      .where(and(eq(heroSkillTemplates.code, String(req.params.skillCode)), eq(heroSkillTemplates.heroClass, heroTemplate.heroClass), eq(heroSkillTemplates.isActive, true))).limit(1) : [];
+    const allowedClasses = Array.from(new Set([
+      hero.classCode,
+      legacyClassFor(hero.classCode as HeroClass),
+      ...(heroTemplate?.heroClass ? [heroTemplate.heroClass] : []),
+    ])).filter(Boolean);
+    const [template] = allowedClasses.length ? await db.select().from(heroSkillTemplates)
+      .where(and(eq(heroSkillTemplates.code, String(req.params.skillCode)), inArray(heroSkillTemplates.heroClass, allowedClasses), eq(heroSkillTemplates.isActive, true))).limit(1) : [];
     if (!template) return res.status(404).json({ error: 'Skill is not configured for this Hero class.' });
     if (hero.level < template.unlockLevel) return res.status(409).json({ error: `Hero must reach level ${template.unlockLevel} to unlock this skill.` });
     const [instance] = await db.select().from(heroSkillInstances).where(and(eq(heroSkillInstances.heroId, hero.id), eq(heroSkillInstances.skillCode, String(req.params.skillCode)))).limit(1);
@@ -2277,7 +2399,12 @@ export function createApp() {
       if (hero.state === 'DEAD') return { status: 409, error: 'ERR_HERO_PERMANENTLY_DEAD' } as const;
       if (hero.state === 'DISABLED' || hero.hp <= 0) return { status: 409, error: 'Hero is not available for development.' } as const;
       const [heroTemplate] = await tx.select().from(heroTemplates).where(eq(heroTemplates.code, hero.configId)).limit(1);
-      const [template] = heroTemplate ? await tx.select().from(heroSkillTemplates).where(and(eq(heroSkillTemplates.code, String(req.params.skillCode)), eq(heroSkillTemplates.heroClass, heroTemplate.heroClass), eq(heroSkillTemplates.isActive, true))).limit(1) : [];
+      const allowedClasses = Array.from(new Set([
+        hero.classCode,
+        legacyClassFor(hero.classCode as HeroClass),
+        ...(heroTemplate?.heroClass ? [heroTemplate.heroClass] : []),
+      ])).filter(Boolean);
+      const [template] = allowedClasses.length ? await tx.select().from(heroSkillTemplates).where(and(eq(heroSkillTemplates.code, String(req.params.skillCode)), inArray(heroSkillTemplates.heroClass, allowedClasses), eq(heroSkillTemplates.isActive, true))).limit(1) : [];
       if (!template) return { status: 404, error: 'Skill is not configured for this Hero class.' } as const;
       const [instance] = await tx.select().from(heroSkillInstances).where(and(eq(heroSkillInstances.heroId, hero.id), eq(heroSkillInstances.skillCode, template.code))).for('update').limit(1);
       if (!instance?.isUnlocked) return { status: 409, error: 'Unlock this skill before upgrading it.' } as const;
@@ -2306,24 +2433,44 @@ export function createApp() {
     return res.json(updated);
   }));
 
+  const EXP_BOOK_VALUES: Record<string, bigint> = {
+    SAMPLE_HERO_EXP_100: 1000n,
+    SAMPLE_HERO_EXP_1000: 100000n,
+    SAMPLE_HERO_EXP_10000: 10000000n,
+  };
+
   app.post('/api/heroes/:heroId/level-up', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    const requestedQuantity = Math.max(1, parseInt(String(req.body?.quantity ?? req.body?.amount ?? 1), 10) || 1);
+    const toMax = Boolean(req.body?.toMax);
+    const bookItemId = String(req.body?.bookItemId ?? 'SAMPLE_HERO_EXP_100');
+    const expPerBook = EXP_BOOK_VALUES[bookItemId] ?? 100n;
     const result = await db.transaction(async tx => {
       const [hero] = await tx.select().from(heroes).where(and(eq(heroes.id, String(req.params.heroId)), eq(heroes.masterId, master.id))).for('update').limit(1);
       if (!hero) return { status: 404, error: 'Hero not found.' } as const;
       if (hero.isLocked) return { status: 409, error: 'Hero is locked.' } as const;
       if (hero.state === 'DEAD') return { status: 409, error: 'ERR_HERO_PERMANENTLY_DEAD' } as const;
       if (hero.state === 'DISABLED' || hero.hp <= 0) return { status: 409, error: 'Hero is not available for development.' } as const;
-      const [promotionConfig] = hero.promotionRank === 0 ? [] : await tx.select().from(heroDevelopmentConfigs).where(and(eq(heroDevelopmentConfigs.action, 'PROMOTION'), eq(heroDevelopmentConfigs.rank, hero.promotionRank))).limit(1);
-      const heroLevelCap = promotionConfig?.maxLevelAfter ?? 20;
-      const nextConfigs = await tx.select().from(heroLevelConfigs).where(and(gt(heroLevelConfigs.level, hero.level), lte(heroLevelConfigs.level, heroLevelCap))).orderBy(heroLevelConfigs.level).limit(1);
-      if (!nextConfigs.length) return { status: 409, error: 'Hero is already at the configured level cap.' } as const;
-      const [material] = await tx.select().from(masterItems).where(and(eq(masterItems.masterId, master.id), eq(masterItems.itemId, 'SAMPLE_HERO_EXP_100'))).for('update').limit(1);
-      if (!material || material.quantity < 1) return { status: 409, error: 'Not enough SAMPLE_HERO_EXP_100.' } as const;
+      const heroLevelCap = heroEffectiveMaxLevel(hero.rarity, hero.promotionRank);
+      if (hero.level >= heroLevelCap) return { status: 409, error: 'Hero is already at the configured level cap.' } as const;
+      const [material] = await tx.select().from(masterItems).where(and(eq(masterItems.masterId, master.id), eq(masterItems.itemId, bookItemId))).for('update').limit(1);
+      if (!material || material.quantity < 1) return { status: 409, error: `Not enough ${bookItemId}.` } as const;
 
-      const totalExp = hero.exp + 100n;
       const growthConfigs = await tx.select().from(heroLevelConfigs).where(and(gt(heroLevelConfigs.level, hero.level), lte(heroLevelConfigs.level, heroLevelCap))).orderBy(heroLevelConfigs.level);
+      if (!growthConfigs.length) return { status: 409, error: 'Hero is already at the configured level cap.' } as const;
+
+      let booksToUse = requestedQuantity;
+      if (toMax) {
+        const targetConfig = growthConfigs[growthConfigs.length - 1];
+        const neededExp = BigInt(targetConfig.cumulativeExpRequired) - BigInt(hero.exp);
+        const neededBooks = neededExp > 0n ? Number((neededExp + expPerBook - 1n) / expPerBook) : 1;
+        booksToUse = Math.max(1, Math.min(material.quantity, neededBooks));
+      } else {
+        booksToUse = Math.min(material.quantity, requestedQuantity);
+      }
+
+      const totalExp = BigInt(hero.exp) + BigInt(booksToUse) * expPerBook;
       let level = hero.level, maxHp = hero.maxHp, hp = hero.hp, attack = hero.attack, defense = hero.defense, speed = hero.speed;
       for (const config of growthConfigs) {
         if (totalExp < config.cumulativeExpRequired) continue;
@@ -2337,7 +2484,7 @@ export function createApp() {
       }
       const isV2 = isV2Origin(hero.originStats);
       const imprintBonus = isV2 ? await imprintStatsFor(tx, hero.id) : { str: 0, int: 0, sta: 0, agi: 0 };
-      await tx.update(masterItems).set({ quantity: material.quantity - 1, updatedAt: new Date() }).where(eq(masterItems.id, material.id));
+      await tx.update(masterItems).set({ quantity: material.quantity - booksToUse, updatedAt: new Date() }).where(eq(masterItems.id, material.id));
       const updateValues = isV2
         ? (() => {
           const snapshot = progressionFor({
@@ -2363,7 +2510,7 @@ export function createApp() {
         })()
         : { exp: totalExp, level, maxHp, hp, attack, defense, speed, updatedAt: new Date() };
       const [updated] = await tx.update(heroes).set(updateValues).where(eq(heroes.id, hero.id)).returning();
-      return { status: 200, hero: { id: updated.id, level: updated.level, maxLevel: heroLevelCap, exp: updated.exp.toString(), hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }, materialQuantity: material.quantity - 1 } as const;
+      return { status: 200, hero: { id: updated.id, level: updated.level, maxLevel: heroLevelCap, exp: updated.exp.toString(), hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }, bookItemId, booksUsed: booksToUse, materialQuantity: material.quantity - booksToUse } as const;
     });
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     return res.json(result);
@@ -2549,7 +2696,85 @@ export function createApp() {
     }
   }));
 
-  app.post('/api/heroes/:heroId/promote', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
+  const previewBreakthrough = async (req: any, res: Response) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    const [hero] = await db.select().from(heroes).where(and(eq(heroes.id, String(req.params.heroId)), eq(heroes.masterId, master.id))).limit(1);
+    if (!hero) return res.status(404).json({ error: 'Hero not found.' });
+
+    const currentRank = hero.promotionRank ?? 0;
+    const nextRank = currentRank + 1;
+    const isMax = currentRank >= 4;
+
+    const [config] = await db.select().from(heroDevelopmentConfigs)
+      .where(and(eq(heroDevelopmentConfigs.action, 'PROMOTION'), eq(heroDevelopmentConfigs.rank, nextRank))).limit(1);
+
+    const requiredHeroLevel = config?.requiredHeroLevel ?? (nextRank * 10);
+    const requiredStar = nextRank + 1;
+    const materialItemId = config?.materialItemId ?? 'SAMPLE_HERO_PROMOTION_SEAL';
+    const materialQuantity = config?.materialQuantity ?? (nextRank * 5);
+    const silverCost = BREAKTHROUGH_SILVER_COST[nextRank] ?? (nextRank * 10_000);
+
+    const [material] = await db.select().from(masterItems)
+      .where(and(eq(masterItems.masterId, master.id), eq(masterItems.itemId, materialItemId))).limit(1);
+    const currentMaterialCount = material?.quantity ?? 0;
+
+    const meetsLevel = hero.level >= requiredHeroLevel;
+    const meetsStar = hero.rarity >= requiredStar;
+    const hasEnoughMaterial = currentMaterialCount >= materialQuantity;
+    const hasEnoughSilver = master.silverCoins >= BigInt(silverCost);
+
+    const canPromote = !isMax && !hero.isLocked && hero.state !== 'DEAD' && hero.state !== 'DISABLED' &&
+      meetsLevel && meetsStar && hasEnoughMaterial && hasEnoughSilver;
+
+    const currentMaxLevel = heroEffectiveMaxLevel(hero.rarity, currentRank);
+    const nextMaxLevel = heroEffectiveMaxLevel(hero.rarity, nextRank);
+    const multiplier = config?.statGrowthMultiplier ?? 1.05;
+
+    return res.json({
+      hero: {
+        id: hero.id,
+        name: hero.name,
+        rarity: hero.rarity,
+        level: hero.level,
+        currentRank,
+        nextRank,
+        isMax,
+        currentMaxLevel,
+        nextMaxLevel,
+        starCeiling: starMaxLevel(hero.rarity),
+        isLocked: hero.isLocked,
+        state: hero.state,
+      },
+      requirements: {
+        requiredHeroLevel,
+        meetsLevel,
+        requiredStar,
+        meetsStar,
+        materialItemId,
+        materialQuantity,
+        currentMaterialCount,
+        hasEnoughMaterial,
+        silverCost,
+        currentSilver: master.silverCoins.toString(),
+        hasEnoughSilver,
+      },
+      projected: {
+        maxLevel: nextMaxLevel,
+        hp: Math.floor(hero.hp * multiplier),
+        maxHp: Math.floor(hero.maxHp * multiplier),
+        attack: Math.floor(hero.attack * multiplier),
+        defense: Math.floor(hero.defense * multiplier),
+        speed: Math.floor(hero.speed * multiplier),
+      },
+      canPromote,
+    });
+  };
+
+  app.get('/api/heroes/:heroId/promote/preview', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(previewBreakthrough));
+  app.get('/api/heroes/:heroId/breakthrough/preview', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(previewBreakthrough));
+
+  const executeBreakthrough = async (req: any, res: Response) => {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
     const result = await db.transaction(async tx => {
@@ -2558,17 +2783,163 @@ export function createApp() {
       if (hero.isLocked) return { status: 409, error: 'Hero is locked.' } as const;
       if (hero.state === 'DEAD') return { status: 409, error: 'ERR_HERO_PERMANENTLY_DEAD' } as const;
       if (hero.state === 'DISABLED' || hero.hp <= 0) return { status: 409, error: 'Hero is not available for development.' } as const;
+
       const [config] = await tx.select().from(heroDevelopmentConfigs).where(and(eq(heroDevelopmentConfigs.action, 'PROMOTION'), eq(heroDevelopmentConfigs.rank, hero.promotionRank + 1))).limit(1);
-      if (!config) return { status: 409, error: 'No further promotion is configured.' } as const;
-      if (hero.level < config.requiredHeroLevel || hero.promotionRank < config.requiredPromotionRank) return { status: 409, error: 'Hero does not meet the configured promotion requirements.' } as const;
+      if (!config) return { status: 409, error: 'Đã đạt Bậc Đột Phá tối đa.' } as const;
+
+      const requiredStar = config.rank + 1;
+      if (hero.rarity < requiredStar) {
+        return { status: 409, error: `Cần Thăng Sao lên ít nhất ${requiredStar}★ trước khi Đột phá Bậc ${config.rank}.` } as const;
+      }
+      if (hero.level < config.requiredHeroLevel || hero.promotionRank < config.requiredPromotionRank) {
+        return { status: 409, error: `Cần đạt Lv.${config.requiredHeroLevel} để Đột phá Bậc ${config.rank}.` } as const;
+      }
+
+      const silverCost = BREAKTHROUGH_SILVER_COST[config.rank] ?? (config.rank * 10_000);
+      if (master.silverCoins < BigInt(silverCost)) {
+        return { status: 409, error: `Không đủ Xu Bạc để Đột phá (Cần ${silverCost.toLocaleString()} Bạc).` } as const;
+      }
+
       const [material] = await tx.select().from(masterItems).where(and(eq(masterItems.masterId, master.id), eq(masterItems.itemId, config.materialItemId))).for('update').limit(1);
-      if (!material || material.quantity < config.materialQuantity) return { status: 409, error: `Promotion requires ${config.materialQuantity} configured materials.` } as const;
+      if (!material || material.quantity < config.materialQuantity) {
+        return { status: 409, error: `Cần ${config.materialQuantity} Dấu ấn Đột phá (${config.materialItemId}).` } as const;
+      }
+
       await tx.update(masterItems).set({ quantity: material.quantity - config.materialQuantity, updatedAt: new Date() }).where(eq(masterItems.id, material.id));
-      const [updated] = await tx.update(heroes).set({ promotionRank: config.rank, updatedAt: new Date() }).where(eq(heroes.id, hero.id)).returning();
-      return { status: 200, heroId: updated.id, promotionRank: updated.promotionRank, maxLevel: config.maxLevelAfter, materialQuantity: material.quantity - config.materialQuantity } as const;
+      await tx.update(masters).set({ silverCoins: master.silverCoins - BigInt(silverCost), updatedAt: new Date() }).where(eq(masters.id, master.id));
+
+      const multiplier = config.statGrowthMultiplier ?? 1.05;
+      const maxHp = Math.floor(hero.maxHp * multiplier);
+      const attack = Math.floor(hero.attack * multiplier);
+      const defense = Math.floor(hero.defense * multiplier);
+      const speed = Math.floor(hero.speed * multiplier);
+
+      const [updated] = await tx.update(heroes).set({
+        promotionRank: config.rank,
+        maxHp,
+        hp: Math.min(maxHp, hero.hp + (maxHp - hero.maxHp)),
+        attack,
+        defense,
+        speed,
+        updatedAt: new Date()
+      }).where(eq(heroes.id, hero.id)).returning();
+
+      const effectiveMax = heroEffectiveMaxLevel(updated.rarity, updated.promotionRank);
+      return {
+        status: 200,
+        heroId: updated.id,
+        promotionRank: updated.promotionRank,
+        maxLevel: effectiveMax,
+        starCeiling: starMaxLevel(updated.rarity),
+        silverCost,
+        remainingSilver: (master.silverCoins - BigInt(silverCost)).toString(),
+        materialQuantity: material.quantity - config.materialQuantity,
+        stats: { hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }
+      } as const;
     });
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
     return res.json(result);
+  };
+
+  app.post('/api/heroes/:heroId/promote', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(executeBreakthrough));
+  app.post('/api/heroes/:heroId/breakthrough', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(executeBreakthrough));
+
+  app.get('/api/heroes/:heroId/promote-star/preview', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    try {
+      const preview = await heroPromotionService.previewStarPromotion(master.id, String(req.params.heroId));
+      return res.json(preview);
+    } catch (error) {
+      if (progressionError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/heroes/:heroId/promote-star', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    try {
+      const result = await heroPromotionService.executeStarPromotion(
+        master.id,
+        String(req.params.heroId),
+        req.body?.fodderHeroIds ?? [],
+      );
+      return res.json(result);
+    } catch (error) {
+      if (progressionError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/heroes/:heroId/awaken/preview', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    const [hero] = await db.select().from(heroes).where(and(eq(heroes.id, String(req.params.heroId)), eq(heroes.masterId, master.id))).limit(1);
+    if (!hero) return res.status(404).json({ error: 'Hero not found.' });
+
+    const currentRank = hero.awakeningRank ?? 0;
+    const nextRank = currentRank + 1;
+    const maxRank = imprintSlotsFor(hero.rarity);
+    const isMax = currentRank >= maxRank;
+
+    const [config] = await db.select().from(heroDevelopmentConfigs).where(and(eq(heroDevelopmentConfigs.action, 'AWAKENING'), eq(heroDevelopmentConfigs.rank, nextRank))).limit(1);
+    const materialItemId = config?.materialItemId ?? 'SAMPLE_HERO_AWAKENING_CORE';
+    const materialQuantity = config?.materialQuantity ?? (nextRank * 3);
+    const requiredHeroLevel = config?.requiredHeroLevel ?? 1;
+    const requiredPromotionRank = config?.requiredPromotionRank ?? 0;
+    const silverCost = 5000 * nextRank;
+
+    const [material] = await db.select().from(masterItems).where(and(eq(masterItems.masterId, master.id), eq(masterItems.itemId, materialItemId))).limit(1);
+    const currentMaterialCount = material?.quantity ?? 0;
+
+    const hasEnoughMaterial = currentMaterialCount >= materialQuantity;
+    const hasEnoughSilver = master.silverCoins >= silverCost;
+    const meetsLevel = hero.level >= requiredHeroLevel;
+    const meetsPromotion = (hero.promotionRank >= requiredPromotionRank) || (hero.rarity >= (requiredPromotionRank + 1)) || requiredPromotionRank === 0;
+
+    const canAwaken = !isMax && !hero.isLocked && hero.state !== 'DEAD' && hero.state !== 'DISABLED' && meetsLevel && meetsPromotion && hasEnoughMaterial && hasEnoughSilver;
+
+    const maxSlots = imprintSlotsFor(hero.rarity);
+    const projected = {
+      str: hero.baseStr + 10,
+      int: hero.baseInt + 10,
+      sta: hero.baseSta + 10,
+      agi: hero.baseAgi + 10,
+      statGrowthMultiplier: config?.statGrowthMultiplier ?? 1.05,
+      skillLevelBonus: 1,
+      imprintSlots: maxSlots,
+      unlockedSlot: Math.min(nextRank, maxSlots)
+    };
+
+    return res.json({
+      hero: {
+        id: hero.id,
+        name: hero.name,
+        rarity: hero.rarity,
+        level: hero.level,
+        currentRank,
+        nextRank,
+        maxRank,
+        isMax,
+        isLocked: hero.isLocked,
+        state: hero.state
+      },
+      requirements: {
+        requiredHeroLevel,
+        meetsLevel,
+        requiredPromotionRank,
+        meetsPromotion,
+        materialItemId,
+        materialQuantity,
+        currentMaterialCount,
+        hasEnoughMaterial,
+        silverCost,
+        hasEnoughSilver,
+      },
+      projected,
+      canAwaken
+    });
   }));
 
   app.post('/api/heroes/:heroId/awaken', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
@@ -2580,9 +2951,12 @@ export function createApp() {
       if (hero.isLocked) return { status: 409, error: 'Hero is locked.' } as const;
       if (hero.state === 'DEAD') return { status: 409, error: 'ERR_HERO_PERMANENTLY_DEAD' } as const;
       if (hero.state === 'DISABLED' || hero.hp <= 0) return { status: 409, error: 'Hero is not available for development.' } as const;
+      const maxRank = imprintSlotsFor(hero.rarity);
+      if ((hero.awakeningRank ?? 0) >= maxRank) return { status: 409, error: `Hero has already reached maximum awakening rank (+${maxRank}).` } as const;
       const [config] = await tx.select().from(heroDevelopmentConfigs).where(and(eq(heroDevelopmentConfigs.action, 'AWAKENING'), eq(heroDevelopmentConfigs.rank, hero.awakeningRank + 1))).limit(1);
       if (!config) return { status: 409, error: 'No further awakening is configured.' } as const;
-      if (hero.level < config.requiredHeroLevel || hero.promotionRank < config.requiredPromotionRank) return { status: 409, error: 'Hero does not meet the configured awakening requirements.' } as const;
+      const meetsPromotion = (hero.promotionRank >= config.requiredPromotionRank) || (hero.rarity >= (config.requiredPromotionRank + 1)) || config.requiredPromotionRank === 0;
+      if (hero.level < config.requiredHeroLevel || !meetsPromotion) return { status: 409, error: 'Hero does not meet the configured awakening requirements.' } as const;
       const [material] = await tx.select().from(masterItems).where(and(eq(masterItems.masterId, master.id), eq(masterItems.itemId, config.materialItemId))).for('update').limit(1);
       if (!material || material.quantity < config.materialQuantity) return { status: 409, error: `Awakening requires ${config.materialQuantity} configured materials.` } as const;
       const multiplier = config.statGrowthMultiplier;
@@ -2621,31 +2995,7 @@ export function createApp() {
           await tx.update(heroPersonalityTraits).set({ specialTrait: newTrait, updatedAt: new Date() })
             .where(eq(heroPersonalityTraits.heroId, hero.id));
         }
-        const ownedImprints = await tx.select().from(heroImprints).where(eq(heroImprints.heroId, hero.id));
-        const slots = imprintSlotsFor(hero.rarity);
-        if (ownedImprints.length < slots) {
-          const ownedCodes = new Set(ownedImprints.map(row => row.imprintCode));
-          const [imprint] = await tx.select().from(imprintDefinitions)
-            .where(eq(imprintDefinitions.isEnabled, true))
-            .orderBy(asc(imprintDefinitions.tier)).limit(10);
-          const candidate = imprint && !ownedCodes.has(imprint.code) ? imprint : undefined;
-          const free = candidate ?? (await tx.select().from(imprintDefinitions)
-            .where(eq(imprintDefinitions.isEnabled, true)).orderBy(asc(imprintDefinitions.tier)).limit(10))
-            .find(row => !ownedCodes.has(row.code));
-          if (free) {
-            await tx.insert(heroImprints).values({
-              id: uuidv4(), heroId: hero.id, imprintCode: free.code, rankLevel: 1, acquiredAt: new Date(),
-            });
-            imprintGranted = { code: free.code, rankLevel: 1 };
-          }
-        } else {
-          const upgradeImprint = ownedImprints.find(row => row.rankLevel < 3);
-          if (upgradeImprint) {
-            await tx.update(heroImprints).set({ rankLevel: upgradeImprint.rankLevel + 1 })
-              .where(eq(heroImprints.id, upgradeImprint.id));
-            imprintGranted = { code: upgradeImprint.imprintCode, rankLevel: upgradeImprint.rankLevel + 1 };
-          }
-        }
+        // Awakening v2: Slots are unlocked by awakening rank, but imprints are found in Dungeons / Raids (no free auto-grant)
         [updated] = await tx.update(heroes).set({
           awakeningRank: config.rank,
           baseStr: snapshot.base.str, baseInt: snapshot.base.int,
@@ -2702,6 +3052,26 @@ export function createApp() {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
     try { return res.json(await equipmentService.equip(master.id, String(req.params.itemId), req.body?.heroId)); }
+    catch (error) {
+      if (error instanceof EquipmentError) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+  }));
+
+  app.put('/api/equipment/heroes/:heroId/quick-equip', requireAccount, requireFeature('EQUIPMENT'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    try { return res.json(await equipmentService.quickEquip(master.id, String(req.params.heroId))); }
+    catch (error) {
+      if (error instanceof EquipmentError) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+  }));
+
+  app.post('/api/equipment/heroes/:heroId/quick-unequip', requireAccount, requireFeature('EQUIPMENT'), asyncRoute(async (req, res) => {
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
+    try { return res.json(await equipmentService.quickUnequip(master.id, String(req.params.heroId))); }
     catch (error) {
       if (error instanceof EquipmentError) return res.status(error.statusCode).json({ error: error.message });
       throw error;

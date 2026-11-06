@@ -58,6 +58,7 @@ export class CraftingService {
         slotType: template?.slotType ?? 'UNKNOWN',
         rarity: template?.rarity ?? 1,
         location: instance.location,
+        equippedHeroId: instance.equippedHeroId,
         starLevel: instance.starLevel,
         enhanceLevel: instance.enhanceLevel,
         statMultiplier: instance.statMultiplier,

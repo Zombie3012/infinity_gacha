@@ -5,6 +5,7 @@ import {
   allianceCooldowns, allianceJoinRequests, allianceMembers, allianceMessages, alliances, heroes, masters,
 } from '../../database/drizzle-schema.js';
 import { topCombatPower } from '../liveops/liveops-rules.js';
+import { fetchMasterTopCombatPower } from '../hero/hero-combat-power.js';
 import {
   ALLIANCE_CREATE_GEM_COST, ALLIANCE_CREATE_SILVER_COST, ALLIANCE_CHAT_PAGE, isAllianceRole,
   canCreateAlliance, canLeave, canManageMember, canRequestJoin, canUpgradeTech, cooldownUntil, creationPayment,
@@ -70,13 +71,10 @@ export class AllianceService {
   private async combatPowerByMaster(masterIds: string[]): Promise<Map<string, number>> {
     const result = new Map<string, number>();
     if (masterIds.length === 0) return result;
-    const rows = await db.select({
-      masterId: heroes.masterId, hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed,
-    }).from(heroes).where(inArray(heroes.masterId, masterIds));
-    for (const masterId of masterIds) {
-      const owned = rows.filter(row => row.masterId === masterId);
-      result.set(masterId, topCombatPower(owned.map(row => ({ hp: row.hp, attack: row.attack, defense: row.defense, speed: row.speed }))));
-    }
+    await Promise.all(masterIds.map(async masterId => {
+      const power = await fetchMasterTopCombatPower(masterId, 5);
+      result.set(masterId, power);
+    }));
     return result;
   }
 

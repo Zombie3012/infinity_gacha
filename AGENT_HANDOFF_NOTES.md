@@ -324,3 +324,270 @@ npm run db:migrate && npm run db:seed
 npm run verify
 ```
 Demo account: `demo` / `demo12345`; old Heroes can be cleared with `npm run db:reset-heroes`.
+
+## Update - 2026-11-05 16:30:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Work completed
+
+- Implemented **Star Promotion (Pick Me Up style)**:
+  - **Rules**: Target Hero must be at current Max Level ($10 \times \text{Star}$, e.g. 1★ lv10, 2★ lv20, 3★ lv30, 4★ lv40, 5★ lv50). Promoting an $N$★ hero requires consuming $N$ fodder heroes of the same $N$★ rating.
+  - **Shared logic** (`packages/shared/src/combat/promotion.ts`): `starMaxLevel`, `heroEffectiveMaxLevel`, `requiredFodderCount`, `starPromotionCost`, `checkStarPromotionEligibility`, and `promoteOriginStats` (budget scaling to `BASE_STAT_BUDGET[nextStar]` keeping archetype ratio).
+  - **Backend service & endpoints** (`hero-promotion.service.ts` + `server.ts`):
+    - `GET /api/heroes/:heroId/promote-star/preview`: returns requirements, eligibility, candidate fodders and stat preview.
+    - `POST /api/heroes/:heroId/promote-star`: atomically checks conditions, safely unequips fodder items back to Master inventory, cleans party slots, deducts Silver, deletes fodder heroes, upgrades target hero star, and recomputes Combat v2 stats with imprint slot expansion.
+  - **Web Client UI** (`packages/client/src/main.tsx`):
+    - Added "★ Thăng sao" button on hero cards.
+    - Added Star Promotion modal panel: shows level and Silver requirements, projected stats, imprint slots increase, and fodder selection checklist.
+  - **Testing**:
+    - 6 new tests in `packages/shared/tests/promotion.test.mjs` (70/70 shared tests).
+    - 3 new HTTP integration tests in `packages/server/tests/http.hero-star-promotion.test.mjs` (377/377 server tests).
+    - Full verify passed: `npm run verify` green.
+
+## Update - 2026-11-06 03:55:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Work completed
+
+- Implemented **Equipment System v2 (Nâng cấp Hệ thống Trang bị sang chuẩn Combat v2)**:
+  - **Shared Module** (`packages/shared/src/combat/equipment.ts`):
+    - Added `aggregateEquipment()` consolidating equipped items into `{ baseStats, derivedOffsets }`.
+    - Handles base stats (`bonusStr`, `bonusInt`, `bonusSta`, `bonusAgi`), combat offsets (`bonusMatk`, `bonusMdef`, `bonusHp`, `bonusAttack`, `bonusDefense`), and rich `v2Stats` (`critRate`, `critDamage`, `accuracy`, `evasion`, `blockRate`, `blockEffect`, `damageReduction`, `tenacity`, `armorPen`, `magicPen`, `damageBonus`, `lifesteal`, `hpRegen`, `mpRegen`).
+    - Multiplier scaling (`statMultiplier`) and individual `substats` support.
+  - **Database & Migrations**:
+    - Migration `0043_lying_hydra.sql` adding `bonus_str`, `bonus_int`, `bonus_sta`, `bonus_agi`, `bonus_matk`, `bonus_mdef`, and `v2_stats` jsonb to `equipment_templates`.
+    - Seed `equipment_templates.sample.sql` updated with 11 v2 items across `MAIN_HAND`, `OFF_HAND`, `CHEST`, `HELMET`, `BOOTS`, `ACCESSORY` aligned with existing test fixtures.
+  - **Hero Progression & Equipment Service**:
+    - `packages/server/src/modules/hero/hero-progression.ts`: extended `progressionFor()` to take `equipmentBase?: Partial<BaseStats>` and `equipmentOffsets?: DerivedOffsets`, dynamically incorporating gear into hero base and derived combat statistics.
+    - `packages/server/src/modules/equipment/equipment.service.ts`: added `syncHeroEquippedHp()` to ensure hero HP and Max HP remain synchronized upon equip and unequip without HP desyncs.
+  - **Server Endpoints & Combat v2 Engine**:
+    - `packages/server/src/server.ts`: updated `/api/heroes` to aggregate equipped items per hero, calculating and returning `effectiveBaseStats` and full `v2Stats` alongside backward-compatible `derivedStats`.
+    - `packages/server/src/modules/combat/combat-v2.service.ts`: integrated `aggregateEquipment()`, feeding gear base stats and combat offsets directly into `progressionFor()` and unit inputs during Combat v2 simulation and sessions.
+  - **Client Display** (`packages/client/src/main.tsx`):
+    - Added `renderEquipmentStats()` badges displaying STR/INT/STA/AGI, ATK/MATK, DEF/MDEF, HP, SPD and percentage badges (`ARMORPEN +8%`, `CRITRATE +5%`, `LIFESTEAL +5%`).
+    - Hero cards display effective base stats (`effectiveBaseStats`) when present.
+  - **Verification**:
+    - Unit tests in `packages/shared/tests/equipment.test.mjs` (73/73 shared tests pass).
+    - Unit test in `packages/server/tests/hero-progression.test.mjs` for equipment progression integration.
+    - Full HTTP integration suite in `packages/server/tests/http.equipment-v2.test.mjs` (4/4 tests pass).
+    - `npm run check:encoding` passed (342 files).
+    - Full `npm run verify` passed: **382/382 server tests**, **73/73 shared tests**, client build clean.
+
+## Update - 2026-11-06 04:20:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Work completed
+
+- Implemented **Item 2: Chuyển đổi PvP & Thám hiểm (Expedition) sang Engine Combat v2**:
+  - **Unified Combat Power v2 Calculation** (`packages/server/src/modules/hero/hero-combat-power.ts`):
+    - `calculateDerivedStatsFromLegacy(hero)`: maps legacy `{ hp, attack, defense, speed }` to standard `DerivedStats`.
+    - `computeHeroCombatPower(hero, gearItems?, imprintBonusStats?)`: computes Combat Power v2 using `combatPowerV2(derived)` with full equipment, imprints, training, and awakening for v2 heroes, with clean fallback for legacy fixtures.
+    - `fetchMasterHeroesWithPower(masterId)`: batch loads master's heroes, equipped items, and imprints, returning combat power for each.
+    - `fetchMasterTopCombatPower(masterId, limit)`: computes top $N$ heroes sum according to Combat Power v2.
+    - `fetchPartyCombatPower(heroIds)`: sums combat power of dispatched expedition heroes.
+  - **Expedition Service PvP Engine v2 Transition** (`packages/server/src/modules/world/expedition.service.ts`):
+    - Replaced legacy power formula in `partyPower()` with `fetchPartyCombatPower()`.
+    - Updated `defenseEstimate()` to compute garrison defense power via `fetchMasterTopCombatPower()`.
+    - Transformed Hero-vs-Hero PvP battles in `settle()`:
+      - Defender automatically fields their top 5 heroes by Combat Power v2.
+      - Attacker and defender combat units built with `combatV2Service.buildHeroUnits()`.
+      - Defender territory level bonus applied as stat multiplier to maxHp, atk, matk, def, mdef.
+      - Battle resolved using real Combat v2 engine (`resolveBattleV2` with deterministic seed).
+      - Battle results include full turn-by-turn `battleLog` and `battleSummary` (total damage, rounds, survivors) while maintaining 100% contract compatibility (`kind: 'PVP_REPORT'`, `won`, `winner: 'ATTACKER' | 'DEFENDER'`, `rounds >= 3`, `partyPower`, `defenderPower`).
+  - **Alliance & Conquest Systems Migration**:
+    - `packages/server/src/modules/world/alliance.service.ts`: `combatPowerByMaster()` now evaluates member power using `fetchMasterTopCombatPower(masterId, 5)`.
+    - `packages/server/src/modules/world/conquest.service.ts`: `alliancePower()` sums top hero power across all alliance members via `fetchMasterTopCombatPower()`.
+    - `packages/server/src/modules/liveops/leaderboard.service.ts`: `collect('COMBAT_POWER')` and `combatPowerFor()` updated to report Combat Power v2.
+  - **Robustness & Defensive Typing in Shared Package**:
+    - `packages/shared/src/combat/stats.ts`: guarded `classGrowthPoints()` and `critRate` against unclassified or custom class codes with clean fallback to `UNCLASSIFIED`.
+  - **Testing & Verification**:
+    - Added new integration test suite `packages/server/tests/http.pvp-v2.test.mjs` (5/5 tests passing) verifying v2 heroes, Combat v2 engine resolution, turns log in battle reports, and territory transfer.
+    - Verified `http.pvp.test.mjs` (6/6 tests passing), `http.expedition.test.mjs` (6/6 tests passing), `http.alliance.test.mjs` (11/11 tests passing), and `http.liveops.test.mjs` (5/5 tests passing).
+    - `npm run check:encoding` passed (344 files).
+    - Full `npm run verify` passed: **387/387 server tests**, **73/73 shared tests**, client build clean.
+
+## Update - 2026-11-06 04:30:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Strategic Architecture Transition: Web UI Discontinued, Unity Replaced by Godot 4
+
+- **Strategic Decisions**:
+  - Ceased all further development of Web UI (`packages/client`).
+  - Switched the primary game client engine target from **Unity to Godot 4 (GDScript 2.0)**.
+- **Client Architecture Scaffolded (`client-godot/`)**:
+  - Created `client-godot/project.godot` configured for 1280x720 (canvas_items stretch), registering core singletons.
+  - `ApiClient` singleton (`client-godot/scripts/network/api_client.gd`): handles asynchronous HTTP requests, Bearer token injection, and JSON parsing.
+  - `GameState` singleton (`client-godot/scripts/state/game_state.gd`): manages Master profile, currency synchronization, and hero lists.
+  - `EventBus` singleton (`client-godot/scripts/core/event_bus.gd`): decoupled global event communication.
+  - `GameConstants` (`client-godot/scripts/constants/game_constants.gd`): maps hero classes, rarities, and star promotion formulas from `@infiniti-gacha/shared`.
+  - Auth Scene (`client-godot/scenes/auth/login_screen.tscn` & `.gd`): Register, Login, and automatic Master init against backend endpoints.
+  - Main Hub Scene (`client-godot/scenes/hub/main_hub.tscn` & `.gd`): Top bar currencies, Gacha summoning, Hero Roster inspection, and Combat v2 simulation invocation.
+- **Documentation**:
+  - Replaced `UNITY_BACKLOG.md` with `GODOT_BACKLOG.md`.
+  - Added `client-godot/README.md` with setup and running instructions.
+  - Updated `Combat_V2_Spec.md` referencing Godot 4.
+- **Verification**:
+  - `npm run check:encoding` passed (345 files).
+  - Backend test suite verified: **387/387 server tests** and **73/73 shared tests** pass.
+
+## Update - 2026-11-06 05:05:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Full Isometric 3D Godot 4 Transition Completed (Base, PvE, Hero Roster & Star Promotion)
+
+- **Isometric 3D Architecture**:
+  - `client-godot/scripts/camera/isometric_camera_rig.gd` & `.tscn`: Orthogonal isometric camera with dynamic action zoom on skill cast, crit strikes, and impact camera shake.
+  - `client-godot/scripts/actors/unit_actor_3d.gd` & `.tscn`: Unified 3D Actor handling `BASE_WANDER` (living base residents) and `PVE_COMBAT` (Combat v2 animated lunge, hits, dodge, block, and floating 3D billboard combat numbers).
+- **Scenes Implemented & Integrated**:
+  - `client-godot/scenes/base/isometric_base_3d.tscn` & `.gd`: 3D Fortress Lobby with interactive Summon Altar, Barracks, and Dungeon Portal.
+  - `client-godot/scenes/pve/isometric_pve_arena_3d.tscn` & `.gd`: Full turn-by-turn Combat v2 3D Replay with AGI order, dynamic action cam zoom, 1x/2x speed toggle, and combat log.
+  - `client-godot/scenes/heroes/hero_roster.tscn` & `.gd`: Complete Hero Roster with v2 Base Stats (STR/INT/STA/AGI), Combat Stats, v2 Equipment list, and Star Promotion ritual (Pick Me Up style: max level validation, N-fodder multi-selection, Silver cost, and preview).
+- **Backend Readiness**:
+  - Verified all 205 API routes; `npm run check:encoding` green (345 files); all tests pass (**387 server**, **73 shared**).
+
+
+
+
+
+## Update - 2026-11-06 05:39:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Detailed Isometric 3D Base / Lobby Completed (`client-godot/`)
+
+- **Spatial Architecture (`isometric_base_3d.tscn` & `.gd`, `base_plot_3d.tscn` & `.gd`)**:
+  - **Central Plaza Landmarks (3D Raycast Clickable)**: Central Bonfire (`OmniLight3D` with warm flicker), Summon Altar, Dungeon Tower Portal, Hero Barracks, and Infirmary.
+  - **6 Expandable Zones × 3 Building Plots (`18` `BasePlot3D` nodes)**: Arranged around the Central Plaza, dynamically rendering locked obelisks, unlocked foundation pads, construction scaffolding (`CONSTRUCTING`/`UPGRADING`), or procedural 3D buildings (`LUMBER`, `MINE`, `FARM`, `KITCHEN`, `FORGE`, `HOUSE`, `MEDICAL`) scaled by level with floating harvest badges (`🌾 THU HOẠCH!`).
+- **3D Interactions & Pick Me Up Hero AI (`unit_actor_3d.tscn` & `.gd`)**:
+  - **4 Base Modes**: `BASE_WANDER` (plaza patrol + ambient speech bubbles), `BASE_WORKING` (stationed at assigned building plot with work swing animation), `BASE_INJURED` (resting near Infirmary), and `BASE_DRAGGED` (lifted into the air by the Master with dangling motion and dialogue).
+  - **3D Drag-and-Drop**: Dragging a Hero onto a constructed `BasePlot3D` assigns them as a worker (`POST /api/base/buildings/:id/workers`); dragging onto the `DungeonPortal` toggles them in the active PvE party (`PUT /api/combat/party`); dragging onto the `Infirmary` feeds them (`POST /api/survival/heroes/:id/feed`).
+  - **Dynamic Day / Sunset / Night Campfire Ambiance**: Smooth `Tween` transitions between `🌤️ Ban Ngày`, `🌅 Hoàng Hôn`, and `🔥 Đêm Lửa Trại`.
+- **Minimalist HUD + Contextual Inspector Panel**:
+  - Top bar displays Master info, World Level, Zones/Plots, Silver, Gems, Wood, Stone, Rations, and Scrolls.
+  - Bottom bar provides 5 core actions (`✨ Triệu Hồi`, `🛡️ Tướng & Thăng Sao`, `🏗️ Mở Rộng Khu`, `🌾 Thu Hoạch Tất Cả`, `⚔️ Tháp PvE`).
+  - Right-side Inspector Panel opens contextually when any 3D Plot, Building, Landmark, or Hero is clicked.
+## Update - 2026-11-06 06:15:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Multi-Floor Waiting Room (Sảnh Chờ Đa Tầng) & Authentic Pick Me Up Building Catalogue
+
+- **Backend Catalogue & Rules Updated (`building_types.sample.sql`, `base-rules.ts`, `building.service.ts`, `server.ts`, `http.base.test.mjs`)**:
+  - Removed legacy resource-gathering plots (`LUMBER`, `MINE`, `FARM`).
+  - Reconfigured `FORGE` as an active Equipment Crafting / Enhancement / Fusion facility (`production: NULL`).
+  - Added authentic *Pick Me Up* Waiting Room buildings:
+    - `HOUSE` (Dormitory / Nhà Nghỉ) & `PARTY_MANSION` (Biệt Thự Tổ Đội — unlocked/upgraded from `HOUSE` at **Master Level 30** via `POST /api/base/buildings/:buildingId/promote-mansion`).
+    - `TRAINING_CENTER` (Khu Huấn Luyện).
+    - `WAREHOUSE` (Nhà Kho).
+    - `HALL_OF_MAGIC` (Đại Sảnh Ma Thuật) and its 3 sub-facilities: `LIBRARY` (Thư Viện), `ALCHEMY_WORKSHOP` (Xưởng Giả Kim), and `MAGIC_RESEARCH_LAB` (Phòng Nghiên Cứu Ma Thuật).
+    - `KITCHEN` (Bếp Quân Lương) and `MEDICAL` (Bệnh Xá).
+  - Implemented Multi-Floor Lobby rule (`unlockedLobbyFloorsForMasterLevel`): every **15 Master Levels** unlocks a higher Lobby Floor (`Lv.1 -> Tầng 1`, `Lv.15 -> Tầng 2`, `Lv.30 -> Tầng 3`, `Lv.45 -> Tầng 4`, `Lv.60 -> Tầng 5`, `Lv.75 -> Tầng 6`).
+- **Godot 4 Multi-Floor 3D Lobby (`isometric_base_3d.tscn` & `.gd`, `base_plot_3d.gd`, `isometric_camera_rig.gd`, `unit_actor_3d.gd`)**:
+  - Stacked 6 3D Lobby Floors vertically along the `Y` axis (`FLOOR_HEIGHT = 11.0`, connected by a central 3D Magic Elevator Column).
+  - Added left-side `FloorElevatorPanel` (`🛗 SẢNH ĐA TẦNG`) and keyboard shortcuts (`Q`/`E`, `PageDown`/`PageUp`) to glide the Isometric 3D Camera vertically between floors.
+  - Added specialized Inspector workflows for `FORGE` (Crafting/Enhancing equipment), `TRAINING_CENTER` (Hero stat training), `HALL_OF_MAGIC` (3 sub-wings: Library EXP books, Alchemy stones, Magic Research Class Change), `WAREHOUSE` (Inventory/Equipment storage), and `HOUSE` -> `PARTY_MANSION` promotion.
+
+## 2026-11-06 — Godot 4 10h->4h Terraced Multi-Floor Lobby & Default Demo Auto-Login
+- **Terraced Multi-Floor Layout (`10h -> 4h` "Ruộng Bậc Thang")**:
+  - Updated `client-godot/scenes/base/isometric_base_3d.gd` and `client-godot/scripts/camera/isometric_camera_rig.gd` so Floors 1..6 cascade diagonally along the isometric 10 o'clock (high, top-left) to 4 o'clock (low, bottom-right) axis (`TERRACE_STEP_10H = Vector3(-12.6, 4.2, 4.6)`).
+  - Built 3D stepped stone decks, retaining walls (`Bờ kè đá`), carved rims, and diagonal 10h->4h stone staircases connecting each terrace level.
+  - Preserved strict Floor Focus Isolation (`_apply_floor_focus_isolation`) so the active terrace is 100% sharp and interactive while non-active terraces along the 10h->4h slope fade to ~90% transparency with hidden 3D labels and disabled colliders.
+- **Temporary Login Bypass & Default `demo` Account**:
+  - Set `run/main_scene="res://scenes/base/isometric_base_3d.tscn"` in `client-godot/project.godot`.
+  - Added `GameState.ensure_demo_session()` in `client-godot/scripts/state/game_state.gd` to automatically authenticate with `demo` / `demo12345` on startup and hid login/logout navigation buttons for rapid testing.
+
+## 2026-11-06 — 2D Top/Bottom Bar Clutter Fix & Layout Overflow Resolution
+- **Resource Bar Streamlining**:
+  - Removed all extraneous resource tokens (Sách EXP, Đá cường hóa, Sắt, Gỗ, Đá...) from the main 2D TopBar.
+  - Formatted and displayed strictly the 4 requested assets: **💎 Đá Quý**, **🪙 Vàng**, **📜 Thiên Thư**, **🍖 Khẩu Phần** with thousands digit separation (`_format_num`).
+- **UI Overflow Prevention & Cleanup**:
+  - Compacted `MasterInfoLabel` and TopBar button labels (`🌤️ Ngày`, `🎥 Toàn Cảnh`, `🔄 Làm Mới`), hid redundant `BackHubBtn` and legacy `CollectAllBtn` (from farm/mine era).
+  - Increased TopBar height to 64px (`offset_bottom = 74.0`) and applied `text_overrun_behavior = OVERRUN_TRIM_ELLIPSIS` to prevent multi-line clipping.
+  - Converted `BottomBar` action buttons to `size_flags_horizontal = SIZE_EXPAND_FILL` with `custom_minimum_size = (0, 36)`, guaranteeing dynamic, responsive horizontal distribution without overflowing on any display resolution.
+
+
+## 2026-11-06 — Detailed 3D Building Models & Deep Facility Inspector Workflows (Hướng 1)
+- **Multi-Part Procedural 3D Architecture & Live Animations (`client-godot/scripts/base/base_plot_3d.gd`)**:
+  - `FORGE`: Stone blacksmith workshop with glowing molten furnace core, `OmniLight3D`, 3D Anvil, hot blade, and an animated swinging Hammer (`_anim_hammer_pivot`) striking rhythmically.
+  - `TRAINING_CENTER`: Octagonal wooden dojo arena, glowing martial aura ring, and 2 animated rotating/swaying Wooden Training Dummies (`_anim_dummies`).
+  - `HALL_OF_MAGIC`: Grand arcane spire with 2 tilted counter-rotating 3D rune gyroscope rings (`_anim_magic_rings`), a levitating mana crystal (`_anim_floating_prop`), and 3 distinct colored sub-wing towers (`LIBRARY` Cyan, `ALCHEMY_WORKSHOP` Emerald, `MAGIC_RESEARCH_LAB` Magenta).
+  - `WAREHOUSE`: Timber-framed storage hall with a loading dock of stacked 3D wooden crates and a golden chest.
+  - `PARTY_MANSION`, `HOUSE`, `KITCHEN`, `MEDICAL`: Multi-story noble manor with twin turrets, warm lit dormitory windows, outdoor soup cauldron, and rotating emerald 3D healing cross.
+  - Recursive transparency (`_apply_mesh_transparency`) across all nested `GeometryInstance3D` and `OmniLight3D` nodes so non-observed terraces fade out cleanly.
+- **Deep Interactive Facility Inspector UI (`client-godot/scenes/base/isometric_base_3d.gd`)**:
+  - `FORGE`: 3 sub-tabs (`🔨 Rèn Trang Bị`, `✨ Cường Hóa (+15)`, `🌟 Ghép Thăng Sao` via `POST /api/crafting/fuse`).
+  - `TRAINING_CENTER`: Hero selector + 2x2 grid to train all 4 base stats (`STR`, `AGI`, `INT`, `STA`) + combat skill unlock/upgrade (`POST /api/heroes/:id/skills/:code/unlock|upgrade`).
+  - `HALL_OF_MAGIC`: 3 sub-wing tabs (`📚 1. Thư Viện` for EXP/Skill Books, `⚗️ 2. Giả Kim` for Enhancement Stones & Rations synthesis/feeding, `✨ 3. Nghiên Cứu` for 6-way Class Change `WARRIOR`/`KNIGHT`/`MAGE`/`RANGER`/`ASSASSIN`/`PRIEST` and Bloodline Awakening `POST /api/heroes/:id/awaken`).
+  - `WAREHOUSE`: 3 sub-tabs (`⚔️ Trang Bị` with direct Equip/Unequip onto any Hero via `PUT /api/equipment/:id/equip` and `POST /api/equipment/:id/unequip`, `🎒 Vật Phẩm`, `🪨 Nguyên Liệu`).
+  - `HOUSE` / `PARTY_MANSION` / `MEDICAL`: Hero rest state toggle (`POST/DELETE /api/survival/heroes/:id/rest`), ration feeding, and `HOUSE -> PARTY_MANSION` promotion at Master Lv.30.
+
+
+## 2026-11-06 — 3D Summon Altar Ritual VFX, Gacha Showcase Modal & Deep Hero Barracks / Star Promotion (Hướng 2)
+- **3D Summon Altar Ritual VFX & Interactive Gacha Results Showcase (`client-godot/scenes/base/isometric_base_3d.gd`)**:
+  - Added `_play_3d_summon_ritual_vfx(highest_rarity)`: spawns a 3D Sky Pillar of Arcane Light descending onto the Summon Altar, an expanding 3D Starburst Rune Ring, `OmniLight3D` flash, and rising 3D Mana Orbs colored by rarity (`5★` Radiant Gold, `4★` Royal Violet, `1-3★` Astral Cyan).
+  - Added `_show_gacha_results_modal(...)`: displays a 2D card grid showcase over the 3D Altar with Hero cards (`★..★★★★★`, Class, Rarity border), Material cards, Pity counter (`X / 90`), and quick actions (`✨ Triệu Hồi Tiếp ×1`, `🌟 Triệu Hồi Tiếp ×10`, `🛡️ Xem Tướng & Thăng Sao`).
+- **Upgraded Hero Barracks, 3D Hero Pedestal & Pick Me Up Star Promotion (`client-godot/scenes/heroes/hero_roster.gd`, `api_client.gd`)**:
+  - Built an interactive **3D Hero Pedestal (`SubViewportContainer` + `SubViewport` + `UnitActor3D`)** with auto-rotation, star-colored rune aura ring, and `⚔️ Thử Đòn Đánh` animation preview.
+  - Added Roster Filter bar (`Tất cả`, `⚔️ Đội PvE`, `🌟 4-5★`, `⭐ 1-3★`), Party toggle (`PUT /api/combat/party`), Hero Lock toggle (`PATCH /api/heroes/:id/lock`), and Quick ×10 Summon right inside the Barracks.
+  - Added **4 Deep Hero Profile Tabs**:
+    - `📊 Chỉ Số & Huấn Luyện`: Combat v2 Origin + Effective Base Stats (`STR`, `INT`, `STA`, `AGI`), 4 direct stat training buttons, Derived stats (`HP`, `MP`, `ATK`, `DEF`, `SPD`, `Crit%`, `Dodge%`), and quick EXP Book level-up.
+    - `⚔️ Kỹ Năng & Thức Tỉnh`: Class Skills list with `UNLOCK`, `UPGRADE`, `AUTO`/`MANUAL` behavior toggle (`PATCH /api/heroes/:id/skills/:code/behavior`), and `🌟 Thức Tỉnh Huyết Mạch` (`POST /api/heroes/:id/awaken`).
+    - `💠 Ấn Ký (Imprints)`: Fetches `GET /api/heroes/:id/imprints` and renders unlocked Imprint Slots (`1-4` slots by star rating) with Rank, Level, bonus stats, and passive abilities.
+    - `🛡️ Trang Bị`: Shows worn gear (`✨ Đập +1`, `➖ Tháo`) and unequipped Warehouse gear (`🛡️ Mặc Ngay`).
+  - Upgraded **Nghi Thức Thăng Sao ("Pick Me Up")** to match `StarPromotionPreview` (`hero`, `requirements`, `availableFodders`, `projectedStats`), with Before ➔ After stat comparison, `⚡ Tự Động Chọn Đủ Phôi`, quick EXP Book level-up, and 3D golden ascension burst on promotion.
+
+
+## 2026-11-06 — Hero Level-up Enhancements (Max Level & Custom Quantity)
+- **Backend (`packages/server/src/server.ts`)**:
+  - Upgraded `POST /api/heroes/:heroId/level-up` to support `{ quantity?: number, toMax?: boolean }`.
+  - When `toMax: true`, the server calculates the exact cumulative EXP needed to reach `heroEffectiveMaxLevel` and consumes only the required number of `SAMPLE_HERO_EXP_100` books (up to current inventory quantity).
+  - When `quantity` is specified, it consumes that exact quantity and applies level-up growth multipliers iteratively.
+- **Client UI (`client-godot/scenes/heroes/hero_roster.gd`)**:
+  - Replaced the single "Đọc 1 sách" button with a comprehensive Level-Up panel:
+    - **⚡ Tăng Cấp Tối Đa (Lv.X)**: 1-click level up to the hero's current cap.
+    - **SpinBox + 📖 Đọc Theo Số Lượng**: Allows choosing any number of books (1 up to available inventory).
+    - **Phím tắt nhanh `+1`, `+10`**: Quick single/ten book consumption buttons.
+    - Shows remaining book inventory dynamically.
+
+
+## 2026-11-06 — Gacha v2: Duplicate Rule Standardization & Multi-Instance Combat v2 Roll
+- **Gacha v2 Duplicate Rule (`persistent-gacha.service.ts`)**:
+  - Standardized the "Thiên Mệnh" (`thienMenh`) conversion rule: **Only 5★+ Heroes on `SPECIAL` or `LIMITED` banners** convert duplicate draws into `+1 Thiên Mệnh` on the owned Hero.
+  - For all other cases (`NORMAL`/`STANDARD` banners, and all 1★–4★ Heroes across all banners): every summon draw generates a **new, independent Hero Instance** in the Master's barracks.
+  - Dropped the legacy P0 unique constraint `uq_master_hero_template` from the PostgreSQL `heroes` table and `drizzle-schema.ts`.
+- **Combat v2 Hero Generation (`generateHero`)**:
+  - Each summoned Hero instance dynamically rolls level-1 base stats (`STR`, `INT`, `STA`, `AGI`) according to its star rating budget (`100/130/170/220/280`), class qualification, and 7-element affinities (for Mages).
+  - Multiple instances of the same Hero template can be collected, trained with different stat builds, or consumed as fodder for **Star Promotion** (Pick Me Up style).
+- **Banner Reward Pool Expansion**:
+  - Synchronized all 55 seeded `hero_templates` (1★ to 5★ across all 7 elements and classes) into the active standard summon reward pool (`summon_reward_pool` on `banner-001`), eliminating the old 6-hero limitation.
+- **Documentation Alignment**:
+  - Updated `README.md`, `BRD_P0_Draft.md`, `Use_Case_Spec_P0_Draft.md`, `Acceptance_Criteria_P0_Draft.md`, `Data_Model_P0_Draft.md`, and `Combat_V2_Spec.md` to reflect Combat v2 multi-instance generation and the standardized 5★+ Special/Limited Thiên Mệnh rule.
+
+## 2026-11-06 — Hero Barracks Grid View, Genshin/HSR Equipment Matrix & Set Bonus Inspection Modal
+- **Hero Barracks Grid View (Pick Me Up / MBCC Style)**:
+  - Transitioned the default Hero Roster into a clean 5-column card grid view (`_grid_view_container`).
+  - Cards display Hero Class, Element, Star Rating (`★..★★★★★`), Level/Cap, and Combat Power (LC).
+  - Clicking any Hero transitions seamlessly into the full 3D Pedestal Detail view; added a dedicated "⬅ Quay lại Danh Sách" button to return to the grid.
+- **HSR / Genshin Style Hero Detail & 12-Slot Symmetrical Equipment Flanks**:
+  - Moved navigation tabs to the left side (`Chỉ số`, `Kỹ năng`, `Ấn ký`, `Trang bị`).
+  - Centered 3D Pedestal with 12 equipment slots symmetrically placed around the model:
+    - **Cánh Trái (Bộ Chữ Ký - 6 món)**: Mũ Giáp (`HELMET`), Áo Giáp (`CHEST`), Thắt Lưng (`BELT`), Quần Giáp (`PANTS`), Giày Giáp (`BOOTS`), VK Chính (`MAIN_HAND`).
+    - **Cánh Phải (Bộ Lấp Lánh - 6 món)**: Dây Chuyền (`NECKLACE`), Giáp Vai (`SHOULDER`), Nhẫn Ngọc (`RING`), Găng Tay (`GLOVES`), Pháp Bảo (`ACCESSORY`), VK Phụ (`OFF_HAND`).
+    - Slots sized at `88x56px` with custom rarity borders, enhance levels (`+X`), and clip text to prevent any overflow.
+- **Center "Chi Tiết Bộ Set" Modal Under 3D Model**:
+  - Positioned `✨ Chi Tiết Bộ Set` directly under the 3D model between `🔄 Xoay 3D` and `⚔️ Đòn Đánh`.
+  - Opens a dual-column modal popup (`_open_set_bonus_modal`):
+    - **Bộ Chữ Ký**: Tracks active pieces (X/6), aggregates HP, ATK, DEF, SPD, MATK, and displays 2/4/6 piece set bonus activation states.
+    - **Bộ Lấp Lánh**: Tracks active pieces (Y/6), aggregates Crit Rate, Crit DMG, Evasion, Lifesteal, Damage Reduction, Armor/Magic Penetration, and displays 2/4/6 piece set bonus activation states.
+- **Genshin Artifact Style Equipment Replacement Grid & Inspection Panel**:
+  - Removed wide set ribbons and slot navigation pills from the right panel to completely eliminate horizontal and vertical layout overflow.
+  - Clicking any of the 12 slots focuses that slot and loads matching replacement equipment from inventory/other heroes in a 2-column grid with quick rarity filters (`Tất Cả`, `5★`, `4★`, `1-3★`) and status badges (`✅ Đang mặc`, `📦 Trong Túi`, `👤 Đang dùng`).
+  - Right detail card displays full item inspection: main stat banner, live diff comparison (`▲ +ATK / ▼ -DEF`), substats list, and actions (`Trang Bị` / `Thay Thế`, `Gỡ Trang Bị`, `Cường Hóa`).
+- **Fixed Infinite Stacking Bug**:
+  - Added node clearing (`c.queue_free()`) directly at the start of `_render_tab_equipment`, `_render_tab_stats_and_training`, `_render_tab_skills_and_awakening`, and `_render_tab_imprints`, preventing duplicate panel stacking when clicking filters or pedestal slots repeatedly.
+

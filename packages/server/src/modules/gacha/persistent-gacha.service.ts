@@ -72,8 +72,8 @@ export class PersistentGachaService {
 
       const poolRows = await tx.select().from(summonRewardPool)
         .where(and(eq(summonRewardPool.bannerId, bannerId), eq(summonRewardPool.isActive, true)));
-      const fiveStars = poolRows.filter(row => row.poolGroup === 'FIVE_STAR_HERO' && row.rewardType === 'HERO' && row.rarity === 5 && row.heroTemplateCode);
-      const otherHeroes = poolRows.filter(row => row.poolGroup === 'OTHER_HERO' && row.rewardType === 'HERO' && row.rarity !== null && row.rarity >= 1 && row.rarity <= 4 && row.heroTemplateCode);
+      const fiveStars = poolRows.filter(row => row.poolGroup === 'FIVE_STAR_HERO' && row.rewardType === 'HERO' && row.rarity === 5);
+      const otherHeroes = poolRows.filter(row => row.poolGroup === 'OTHER_HERO' && row.rewardType === 'HERO' && row.rarity !== null && row.rarity >= 1 && row.rarity <= 4);
       const materials = poolRows.filter(row => row.poolGroup === 'MATERIAL' && row.rewardType === 'MATERIAL');
       if (!fiveStars.length || !otherHeroes.length || !materials.length || [...fiveStars, ...otherHeroes, ...materials].some(row => row.weight <= 0)) {
         throw new SummonError('Banner chưa được cấu hình đầy đủ pool 5 sao, Hero 1–4 sao và nguyên liệu.', 409);
@@ -108,30 +108,56 @@ export class PersistentGachaService {
 
         let wasDuplicate = false;
         let thienMenhGranted = 0;
+        let summonedRewardName = picked.rewardName;
         if (picked.rewardType === 'HERO') {
-          const templateCode = picked.heroTemplateCode!;
-          const [template] = await tx.select().from(heroTemplates).where(eq(heroTemplates.code, templateCode)).limit(1);
-          if (!template || template.defaultRarity !== picked.rarity) throw new SummonError(`Hero template '${templateCode}' chưa có hoặc không khớp rarity.`, 409);
-          const [owned] = await tx.select().from(heroes)
-            .where(and(eq(heroes.masterId, masterId), eq(heroes.configId, templateCode))).for('update').limit(1);
+          const pickedRarity = picked.rarity ?? 1;
+          const templateCode = picked.heroTemplateCode;
+          // Quy tắc Thiên Mệnh: Chỉ áp dụng khi Hero từ 5★ trở lên VÀ thuộc Banner SPECIAL hoặc LIMITED
+          const isSpecialOrLimited5Star = (origin === 'SPECIAL' || origin === 'LIMITED') && pickedRarity >= 5;
+
+          const [template] = templateCode
+            ? await tx.select().from(heroTemplates).where(eq(heroTemplates.code, templateCode)).limit(1)
+            : [undefined];
+          if (isSpecialOrLimited5Star && templateCode && (!template || template.defaultRarity !== pickedRarity)) {
+            throw new SummonError(`Hero template '${templateCode}' chưa có hoặc không khớp rarity.`, 409);
+          }
+
+          let owned = null;
+          if (isSpecialOrLimited5Star && templateCode) {
+            [owned] = await tx.select().from(heroes)
+              .where(and(eq(heroes.masterId, masterId), eq(heroes.configId, templateCode))).for('update').limit(1);
+          }
+
           wasDuplicate = Boolean(owned);
           if (owned) {
             thienMenhGranted = 1;
+            summonedRewardName = owned.name;
             await tx.update(heroes).set({ thienMenh: sql`${heroes.thienMenh} + 1`, updatedAt: now }).where(eq(heroes.id, owned.id));
           } else {
             const heroId = uuidv4();
+            // Tướng thường (hoặc <5★) sinh hoàn toàn ngẫu nhiên (tên Fantasy + thiên hướng chỉ số ngẫu nhiên theo số sao), không phụ thuộc template!
+            const isProcedural = !isSpecialOrLimited5Star;
             let build;
             try {
-              build = buildSummonedHero({ template, bannerKind: banner.bannerType });
+              build = buildSummonedHero({
+                star: pickedRarity,
+                template: isProcedural ? null : (template ?? null),
+                procedural: isProcedural,
+                bannerKind: banner.bannerType,
+              });
             } catch (error) {
               if ((error as Error).message === HERO_STAR_LOCKED) {
                 throw new SummonError('Phẩm cấp Hero này chưa được mở.', 409);
               }
               throw error;
             }
+            const finalHeroName = isProcedural ? build.name : (template?.name ?? build.name);
+            const finalConfigId = isProcedural ? `PROCEDURAL_${build.star}S` : (template?.code ?? `PROCEDURAL_${build.star}S`);
+            summonedRewardName = finalHeroName;
+
             await tx.insert(heroes).values({
-              id: heroId, masterId, configId: template.code, name: template.name,
-              rarity: template.defaultRarity, category: origin, state: 'HEALTHY', level: 1,
+              id: heroId, masterId, configId: finalConfigId, name: finalHeroName,
+              rarity: build.star, category: origin, state: 'HEALTHY', level: 1,
               exp: 0n,
               hp: build.derived.maxHp, maxHp: build.derived.maxHp,
               attack: build.derived.atk, defense: build.derived.def, speed: build.legacySpeed,
@@ -161,7 +187,7 @@ export class PersistentGachaService {
 
         const [historyRow] = await tx.insert(summonHistory).values({
           id: uuidv4(), sessionId, masterId, bannerId, rollNumber, pityNumber,
-          rewardType: picked.rewardType, rewardId: picked.rewardId, rewardName: picked.rewardName,
+          rewardType: picked.rewardType, rewardId: picked.rewardId, rewardName: summonedRewardName,
           rarity: picked.rarity ?? 0, wasFiveStar, wasDuplicate, thienMenhGranted,
           summonOrigin: picked.rewardType === 'HERO' ? origin : null, createdAt: now,
         }).returning();
@@ -183,6 +209,7 @@ export class PersistentGachaService {
   private formatResult(row: typeof summonHistory.$inferSelect) {
     return {
       rollNumber: row.rollNumber, pityNumber: row.pityNumber, isFiveStar: row.wasFiveStar,
+      rewardType: row.rewardType,
       itemType: row.rewardType, rewardId: row.rewardId, rewardName: row.rewardName,
       rarity: row.rarity, isDuplicate: row.wasDuplicate,
       duplicateBonus: row.thienMenhGranted ? { thienMenhGranted: row.thienMenhGranted } : undefined,

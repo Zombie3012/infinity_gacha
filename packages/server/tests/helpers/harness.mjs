@@ -7,6 +7,7 @@
  * unit tests stay usable on a bare machine.
  */
 process.env.NODE_ENV = 'test';
+if (!process.env.ADMIN_API_KEY) process.env.ADMIN_API_KEY = 'harness-admin-key-32-chars-long!';
 
 const { pool } = await import('../../dist/database/db.js');
 const { createApp } = await import('../../dist/server.js');

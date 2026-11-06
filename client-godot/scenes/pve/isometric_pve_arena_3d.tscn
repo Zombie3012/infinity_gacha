@@ -1,0 +1,180 @@
+[gd_scene load_steps=7 format=3 uid="uid://d1w8x4n6p2r5m"]
+
+[ext_resource type="Script" path="res://scenes/pve/isometric_pve_arena_3d.gd" id="1_pvescript"]
+[ext_resource type="PackedScene" uid="uid://d3x9p2m7q4k1w" path="res://scenes/common/isometric_camera_rig.tscn" id="2_camrig"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_floor"]
+size = Vector3(16, 0.5, 16)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
+albedo_color = Color(0.14, 0.13, 0.17, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_pillar"]
+top_radius = 0.55
+bottom_radius = 0.65
+height = 3.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pillar"]
+albedo_color = Color(0.28, 0.26, 0.34, 1)
+
+[node name="IsometricPveArena3D" type="Node3D"]
+script = ExtResource("1_pvescript")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, -0.75, 0.433013, 0, 12, 0)
+light_color = Color(0.92, 0.94, 1, 1)
+shadow_enabled = true
+directional_shadow_max_distance = 50.0
+
+[node name="IsometricCameraRig" parent="." instance=ExtResource("2_camrig")]
+
+[node name="ArenaEnvironment" type="Node3D" parent="."]
+
+[node name="DungeonFloor" type="MeshInstance3D" parent="ArenaEnvironment"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+mesh = SubResource("BoxMesh_floor")
+surface_material_override/0 = SubResource("StandardMaterial3D_floor")
+
+[node name="PillarNW" type="MeshInstance3D" parent="ArenaEnvironment"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 1.8, -6.5)
+mesh = SubResource("CylinderMesh_pillar")
+surface_material_override/0 = SubResource("StandardMaterial3D_pillar")
+
+[node name="PillarNE" type="MeshInstance3D" parent="ArenaEnvironment"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.5, 1.8, -6.5)
+mesh = SubResource("CylinderMesh_pillar")
+surface_material_override/0 = SubResource("StandardMaterial3D_pillar")
+
+[node name="PillarSW" type="MeshInstance3D" parent="ArenaEnvironment"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5, 1.8, 6.5)
+mesh = SubResource("CylinderMesh_pillar")
+surface_material_override/0 = SubResource("StandardMaterial3D_pillar")
+
+[node name="PillarSE" type="MeshInstance3D" parent="ArenaEnvironment"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.5, 1.8, 6.5)
+mesh = SubResource("CylinderMesh_pillar")
+surface_material_override/0 = SubResource("StandardMaterial3D_pillar")
+
+[node name="UnitsRoot" type="Node3D" parent="."]
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="TopBar" type="PanelContainer" parent="HUD"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = 58.0
+grow_horizontal = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
+
+[node name="HBoxContainer" type="HBoxContainer" parent="HUD/TopBar/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="FloorTitleLabel" type="Label" parent="HUD/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 15
+text = "🗼 Tháp Thử Thách — Tầng 1 · Phòng #1 (Isometric 3D Combat v2)"
+
+[node name="BackBaseBtn" type="Button" parent="HUD/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "🏰 Về Căn Cứ 3D"
+
+[node name="LogPanel" type="PanelContainer" parent="HUD"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -390.0
+offset_top = 68.0
+offset_right = -16.0
+offset_bottom = 320.0
+grow_horizontal = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/LogPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/LogPanel/MarginContainer"]
+layout_mode = 2
+
+[node name="LogHeader" type="Label" parent="HUD/LogPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.82, 0.95, 1)
+theme_override_font_sizes/font_size = 13
+text = "📜 Nhật Ký Chiến Đấu (AGI Turn Order)"
+
+[node name="CombatLogLabel" type="RichTextLabel" parent="HUD/LogPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+scroll_following = true
+
+[node name="BottomBar" type="PanelContainer" parent="HUD"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -96.0
+offset_right = -16.0
+offset_bottom = -14.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/BottomBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/BottomBar/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TurnBannerLabel" type="Label" parent="HUD/BottomBar/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.85, 0.35, 1)
+theme_override_font_sizes/font_size = 14
+text = "Đội hình sẵn sàng. Bấm 'Bắt Đầu Giao Tranh'!"
+horizontal_alignment = 1
+
+[node name="ControlsRow" type="HBoxContainer" parent="HUD/BottomBar/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="StartBattleBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ControlsRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 36)
+layout_mode = 2
+text = "⚔️ Bắt Đầu Giao Tranh (Combat v2)"
+
+[node name="SpeedToggleBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ControlsRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 36)
+layout_mode = 2
+text = "⏩ Tốc Độ: 1x"
+
+[node name="CameraModeBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ControlsRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 36)
+layout_mode = 2
+text = "🎥 Action Cam: BẬT"

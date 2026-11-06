@@ -1,0 +1,12 @@
+res://scenes/auth/login_screen.gd
+res://scenes/hub/main_hub.gd
+res://scripts/state/game_state.gd
+res://scenes/base/isometric_base_3d.gd
+res://scenes/common/unit_actor_3d.tscn
+res://scripts/actors/unit_actor_3d.gd
+res://scripts/camera/isometric_camera_rig.gd
+res://scripts/core/event_bus.gd
+res://scripts/network/api_client.gd
+res://scenes/base/base_plot_3d.tscn
+res://scripts/base/base_plot_3d.gd
+res://scenes/heroes/hero_roster.gd

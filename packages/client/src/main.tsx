@@ -41,7 +41,26 @@ type Banner = { id: string; name: string; bannerType: string; isActive: boolean;
 type BannerDetail = { banner: Banner; pool: { rewardId: string; rewardName: string; rewardType: string; poolGroup: string; heroTemplateCode: string | null; rarity: number | null }[]; rates: { fiveStarHeroPercent: number; otherHeroPercent: number; materialPercent: number; fiveStarBasePercent: number }; pity: { currentCount: number; nextRoll: number; hardPityAt: number } };
 type Roll = { rollNumber: number; itemType: 'HERO' | 'MATERIAL'; rewardName: string; rarity: number; isDuplicate: boolean };
 type HeroSkill = { code: string; name: string; description: string; effectType: string; effectValue: number; skillEffectValue: number; upgradeIncrement: number; cooldownSeconds: number; unlockLevel: number; maxLevel: number; skillLevel: number; isUnlocked: boolean; behaviorMode: 'AUTO' | 'MANUAL'; canUnlock: boolean };
-type Hero = { id: string; name: string; rarity: number; category: string; state: string; level: number; thienMenh: number; heroClass?: string; isLocked?: boolean; promotionRank?: number; awakeningRank?: number; maxLevel?: number; exp?: string; nextLevelExp?: string | null; skills?: HeroSkill[]; derivedStats?: { hp: number; maxHp: number; attack: number; defense: number; speed: number } };
+type Hero = {
+  id: string;
+  name: string;
+  rarity: number;
+  category: string;
+  state: string;
+  level: number;
+  thienMenh: number;
+  heroClass?: string;
+  isLocked?: boolean;
+  promotionRank?: number;
+  awakeningRank?: number;
+  maxLevel?: number;
+  exp?: string;
+  nextLevelExp?: string | null;
+  skills?: HeroSkill[];
+  derivedStats?: { hp: number; maxHp: number; attack: number; defense: number; speed: number; matk?: number; mdef?: number; critRate?: number };
+  effectiveBaseStats?: { str: number; int: number; sta: number; agi: number };
+  v2Stats?: Record<string, number>;
+};
 type HeroTemplate = { id: string; code: string; name: string; defaultRarity: number; heroClass: string; element: string; baseHp: number; baseAttack: number; baseDefense: number; baseSpeed: number };
 type CombatSession = {
   id: string;
@@ -103,7 +122,63 @@ type CurrencyBalances = {
   summonTickets: { normal: number; special: number };
   weeklyExchange: { exchanged: number; weeklyCap: number; remainingCap: number };
 };
-type EquipmentRow = { equipment: { id: string; location: 'INVENTORY' | 'EQUIPPED' | 'FLOOR_DROP'; equippedHeroId: string | null; dropFloor: number | null }; template: { code: string; name: string; slotType: string; rarity: number; bonusHp: number; bonusAttack: number; bonusDefense: number; bonusSpeed: number }; floor?: number | null };
+type EquipmentRow = {
+  equipment: { id: string; location: 'INVENTORY' | 'EQUIPPED' | 'FLOOR_DROP'; equippedHeroId: string | null; dropFloor: number | null };
+  template: {
+    code: string;
+    name: string;
+    slotType: string;
+    rarity: number;
+    bonusHp: number;
+    bonusAttack: number;
+    bonusDefense: number;
+    bonusSpeed: number;
+    bonusStr?: number;
+    bonusInt?: number;
+    bonusSta?: number;
+    bonusAgi?: number;
+    bonusMatk?: number;
+    bonusMdef?: number;
+    v2Stats?: Record<string, number> | null;
+  };
+  floor?: number | null;
+};
+
+function renderEquipmentStats(template: EquipmentRow['template']) {
+  const parts: string[] = [];
+  if (template.bonusStr) parts.push(`STR +${template.bonusStr}`);
+  if (template.bonusInt) parts.push(`INT +${template.bonusInt}`);
+  if (template.bonusSta) parts.push(`STA +${template.bonusSta}`);
+  if (template.bonusAgi) parts.push(`AGI +${template.bonusAgi}`);
+  if (template.bonusAttack) parts.push(`ATK +${template.bonusAttack}`);
+  if (template.bonusMatk) parts.push(`MATK +${template.bonusMatk}`);
+  if (template.bonusDefense) parts.push(`DEF +${template.bonusDefense}`);
+  if (template.bonusMdef) parts.push(`MDEF +${template.bonusMdef}`);
+  if (template.bonusHp) parts.push(`HP +${template.bonusHp}`);
+  if (template.bonusSpeed) parts.push(`SPD +${template.bonusSpeed}`);
+
+  const v2 = template.v2Stats ?? {};
+  for (const [k, v] of Object.entries(v2)) {
+    if (v && !['str', 'int', 'sta', 'agi', 'atk', 'matk', 'def', 'mdef', 'hp', 'speed'].includes(k)) {
+      const isPct = k.toLowerCase().includes('rate') || k.toLowerCase().includes('damage') || k.toLowerCase().includes('reduction') || k.toLowerCase().includes('lifesteal') || k.toLowerCase().includes('pen');
+      parts.push(`${k.toUpperCase()} +${v}${isPct ? '%' : ''}`);
+    }
+  }
+
+  if (parts.length === 0) {
+    return <p>HP +{template.bonusHp} | ATK +{template.bonusAttack} | DEF +{template.bonusDefense}</p>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', margin: '0.3rem 0' }}>
+      {parts.map((p, i) => (
+        <span key={i} style={{ fontSize: '0.75rem', padding: '0.1rem 0.35rem', background: 'rgba(255,255,255,0.08)', borderRadius: '3px' }}>
+          {p}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 async function api<T>(path: string, token?: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${path}`, {
@@ -165,6 +240,11 @@ function App() {
   const [equipmentTargetHeroId, setEquipmentTargetHeroId] = useState('');
   const [partySaving, setPartySaving] = useState(false);
   const [developmentBusy, setDevelopmentBusy] = useState('');
+  const [starPromotionHero, setStarPromotionHero] = useState<Hero | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [starPromotionPreview, setStarPromotionPreview] = useState<any | null>(null);
+  const [selectedFodderIds, setSelectedFodderIds] = useState<string[]>([]);
+  const [starPromotionBusy, setStarPromotionBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [preCombatBuff, setPreCombatBuff] = useState<string>('');
 
@@ -214,6 +294,44 @@ function App() {
       setNotice(`${hero.name}: kỹ năng ${skill.name} đã được cập nhật.`);
     } catch (e) { setError((e as Error).message); }
     finally { setDevelopmentBusy(''); }
+  };
+
+  const openStarPromotion = async (hero: Hero) => {
+    if (!session) return;
+    setStarPromotionHero(hero);
+    setSelectedFodderIds([]);
+    setError('');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const preview = await api<any>(`/api/heroes/${hero.id}/promote-star/preview`, session.token);
+      setStarPromotionPreview(preview);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const executeStarPromotion = async () => {
+    if (!session || !starPromotionHero || !starPromotionPreview) return;
+    setStarPromotionBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res = await api<any>(`/api/heroes/${starPromotionHero.id}/promote-star`, session.token, {
+        method: 'POST',
+        body: JSON.stringify({ fodderHeroIds: selectedFodderIds }),
+      });
+      const [heroes] = await Promise.all([api<Hero[]>('/api/heroes', session.token), refresh(session.token)]);
+      setHeroCollection(heroes);
+      setNotice(`Chúc mừng! ${starPromotionHero.name} đã thăng lên ${res.newStar}★ thành công (Cấp tối đa Lv.${res.maxLevel})!`);
+      setStarPromotionHero(null);
+      setStarPromotionPreview(null);
+      setSelectedFodderIds([]);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setStarPromotionBusy(false);
+    }
   };
 
   const developmentConfig = (action: string, rank: number) => me?.heroDevelopmentConfigs?.find(config => config.action === action && config.rank === rank);
@@ -808,8 +926,7 @@ function App() {
                     <small>{row.template.slotType}</small>
                   </div>
                   <h3>{row.template.name}</h3>
-                  <p>HP +{row.template.bonusHp} | ATK +{row.template.bonusAttack}</p>
-                  <p>DEF +{row.template.bonusDefense} | SPD +{row.template.bonusSpeed}</p>
+                  {renderEquipmentStats(row.template)}
                   {row.equipment.location === 'EQUIPPED' ? (
                     <>
                       <small>Trang bị bởi: {heroCollection.find(hero => hero.id === row.equipment.equippedHeroId)?.name ?? 'Hero'}</small>
@@ -856,8 +973,7 @@ function App() {
                     <small>{row.template.slotType}</small>
                   </div>
                   <h3>{row.template.name}</h3>
-                  <p>HP +{row.template.bonusHp} | ATK +{row.template.bonusAttack}</p>
-                  <p>DEF +{row.template.bonusDefense} | SPD +{row.template.bonusSpeed}</p>
+                  {renderEquipmentStats(row.template)}
                   <button className="primary-button" onClick={() => void pickUpItem(row.equipment.id)}>Nhặt đồ</button>
                 </article>
               ))}
@@ -871,11 +987,90 @@ function App() {
           </div>
         </section>}
 
-        {page === 'heroes' && <section className="feature-page"><div className="page-heading"><div><div className="eyebrow">COLLECTION · HERO</div><h1>Đồng hành</h1><p>{heroCollection.length} Hero đã lưu trong bộ sưu tập.</p></div><button className="secondary-button" onClick={() => setPage('summon')}>✦ Triệu hồi thêm</button></div><div className="panel hero-filters"><label>Độ hiếm<select value={heroRarityFilter} onChange={e => setHeroRarityFilter(e.target.value)}><option value="ALL">Tất cả</option>{[5,4,3,2,1].map(value => <option key={value} value={value}>{value} sao</option>)}</select></label><label>Class<select value={heroClassFilter} onChange={e => setHeroClassFilter(e.target.value)}><option value="ALL">Tất cả</option>{[...new Set(heroCollection.map(hero => hero.heroClass).filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select></label><label>Trạng thái<select value={heroStateFilter} onChange={e => setHeroStateFilter(e.target.value)}><option value="ALL">Tất cả</option>{[...new Set(heroCollection.map(hero => hero.state))].map(value => <option key={value} value={value}>{value}</option>)}</select></label><label>Sắp xếp<select value={heroSort} onChange={e => setHeroSort(e.target.value)}><option value="RARITY">Độ hiếm</option><option value="LEVEL">Cấp độ</option><option value="POWER">Sức mạnh</option></select></label></div><div className="panel"><b>Vật liệu mẫu</b><p>EXP +100: {me?.itemInventory?.find(item => item.itemId === 'SAMPLE_HERO_EXP_100')?.quantity ?? 0} · Ấn thăng bậc: {me?.itemInventory?.find(item => item.itemId === 'SAMPLE_HERO_PROMOTION_SEAL')?.quantity ?? 0} · Lõi thức tỉnh: {me?.itemInventory?.find(item => item.itemId === 'SAMPLE_HERO_AWAKENING_CORE')?.quantity ?? 0}</p></div>{displayedHeroes.length ? <div className="hero-grid">{displayedHeroes.map(hero => <div className={`hero-card rarity-${hero.rarity}`} key={hero.id}><div className="hero-card-top"><span>{'✦'.repeat(Math.min(hero.rarity, 5))}</span><small>{hero.category}{hero.isLocked ? ' · ĐÃ KHÓA' : ''}</small></div><div className="hero-portrait">♙</div><h3>{hero.name}</h3><p>{hero.rarity}★ · Lv.{hero.level}/{hero.maxLevel ?? 20} · {hero.state}</p><p>EXP {hero.exp ?? '0'}{hero.nextLevelExp ? ` / ${hero.nextLevelExp}` : ' · Chưa đủ dữ liệu cấp tiếp theo'}</p>{hero.derivedStats && <p>HP {hero.derivedStats.hp}/{hero.derivedStats.maxHp} | ATK {hero.derivedStats.attack} | DEF {hero.derivedStats.defense} | SPD {hero.derivedStats.speed}</p>}<p className="hero-resource">Thiên Mệnh: {hero.thienMenh} · Thăng bậc {hero.promotionRank ?? 0} · Thức tỉnh {hero.awakeningRank ?? 0}</p><details className="hero-skills"><summary>Kỹ năng ({hero.skills?.length ?? 0})</summary>{hero.skills?.map(skill => <article className="hero-skill-row" key={skill.code}><b>{skill.name} · Lv.{skill.skillLevel}/{skill.maxLevel}</b><p>{skill.description}</p><small>{skill.effectType} · {skill.skillEffectValue} · Hồi chiêu {skill.cooldownSeconds}s · Mở ở Lv.{skill.unlockLevel}</small>{skill.isUnlocked ? <><label>Hành vi<select value={skill.behaviorMode} disabled={Boolean(developmentBusy) || hero.isLocked} onChange={e => void updateHeroSkill(hero, skill, 'behavior', e.target.value as 'AUTO' | 'MANUAL')}><option value="AUTO">Tự động</option><option value="MANUAL">Thủ công</option></select></label><button className="secondary-button" disabled={Boolean(developmentBusy) || hero.isLocked || skill.skillLevel >= skill.maxLevel || itemQuantity('SAMPLE_HERO_SKILL_BOOK') < 1} onClick={() => void updateHeroSkill(hero, skill, 'upgrade')}>Nâng kỹ năng · 1 sách</button></> : <button className="secondary-button" disabled={Boolean(developmentBusy) || hero.isLocked || !skill.canUnlock} onClick={() => void updateHeroSkill(hero, skill, 'unlock')}>{skill.canUnlock ? 'Mở khóa kỹ năng' : `Mở khóa ở Lv.${skill.unlockLevel}`}</button>}</article>)}</details><button className="secondary-button" onClick={() => void toggleHeroLock(hero)}>{hero.isLocked ? 'Mở khóa Hero' : 'Khóa Hero'}</button><button className="secondary-button" disabled={Boolean(developmentBusy) || itemQuantity('SAMPLE_HERO_EXP_100') < 1 || hero.level >= (hero.maxLevel ?? 20) || hero.state === 'DEAD' || hero.state === 'DISABLED'} onClick={() => void developHero(hero, 'level-up')}>Tăng cấp · +100 EXP</button>{(() => { const config = developmentConfig('PROMOTION', (hero.promotionRank ?? 0) + 1); return <button className="secondary-button" disabled={Boolean(developmentBusy) || !config || itemQuantity(config?.materialItemId ?? '') < (config?.materialQuantity ?? 1) || hero.level < (config?.requiredHeroLevel ?? Infinity) || (hero.promotionRank ?? 0) < (config?.requiredPromotionRank ?? Infinity) || hero.state === 'DEAD' || hero.state === 'DISABLED'} onClick={() => void developHero(hero, 'promote')}>Thăng bậc · {config ? `tốn ${config.materialQuantity} vật liệu` : 'đã đạt giới hạn'}</button>; })()}{(() => { const config = developmentConfig('AWAKENING', (hero.awakeningRank ?? 0) + 1); return <button className="secondary-button" disabled={Boolean(developmentBusy) || !config || itemQuantity(config?.materialItemId ?? '') < (config?.materialQuantity ?? 1) || hero.level < (config?.requiredHeroLevel ?? Infinity) || (hero.promotionRank ?? 0) < (config?.requiredPromotionRank ?? Infinity) || hero.state === 'DEAD' || hero.state === 'DISABLED'} onClick={() => void developHero(hero, 'awaken')}>Thức tỉnh · {config ? `tốn ${config.materialQuantity} vật liệu` : 'đã đạt giới hạn'}</button>; })()}</div>)}</div> : <div className="empty-state compact-empty"><div className="empty-symbol">♙</div><h2>{heroCollection.length ? 'Không có Hero phù hợp' : 'Chưa sở hữu Hero'}</h2><p>{heroCollection.length ? 'Thay đổi bộ lọc để xem Hero.' : 'Hãy triệu hồi để xây dựng bộ sưu tập của bạn.'}</p></div>}<div className="template-section"><div className="panel-head"><div><div className="eyebrow">HERO CONFIGURATION</div><h2>Cấu hình mẫu · 1–5 sao</h2></div><span className="template-note">Chỉ số mẫu ban đầu</span></div><div className="template-grid">{heroTemplates.map(hero => <article className={`template-card rarity-${hero.defaultRarity}`} key={hero.id}><div className="hero-card-top"><span>{'✦'.repeat(hero.defaultRarity)}</span><small>{hero.element}</small></div><h3>{hero.name}</h3><p>{hero.heroClass} · {hero.defaultRarity}★</p><code>{hero.code}</code><div className="template-stats"><span>HP <b>{hero.baseHp}</b></span><span>ATK <b>{hero.baseAttack}</b></span><span>DEF <b>{hero.baseDefense}</b></span><span>SPD <b>{hero.baseSpeed}</b></span></div><small className="sample-tag">MẪU · CHƯA CÂN BẰNG</small></article>)}</div></div></section>}
+        {page === 'heroes' && <section className="feature-page"><div className="page-heading"><div><div className="eyebrow">COLLECTION · HERO</div><h1>Đồng hành</h1><p>{heroCollection.length} Hero đã lưu trong bộ sưu tập.</p></div><button className="secondary-button" onClick={() => setPage('summon')}>✦ Triệu hồi thêm</button></div>
+        {starPromotionHero && starPromotionPreview && (
+          <div className="panel" style={{ border: '2px solid var(--accent, #6cf)', margin: '1rem 0', padding: '1rem', background: 'rgba(20, 30, 48, 0.95)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div className="eyebrow">HERO · STAR PROMOTION (PICK ME UP)</div>
+                <h2>Thăng sao cho {starPromotionHero.name} ({starPromotionPreview.hero.currentStar}★ → {starPromotionPreview.hero.nextStar}★)</h2>
+              </div>
+              <button className="secondary-button" onClick={() => { setStarPromotionHero(null); setStarPromotionPreview(null); }}>Đóng</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', margin: '1rem 0' }}>
+              <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.04)', borderRadius: '6px' }}>
+                <h4>Điều kiện thăng sao</h4>
+                <p>• Cấp độ yêu cầu: <b>Lv.{starPromotionPreview.requirements.requiredLevel}</b> (Hiện tại: Lv.{starPromotionHero.level}) {starPromotionHero.level >= starPromotionPreview.requirements.requiredLevel ? '✔' : '❌'}</p>
+                <p>• Chi phí Silver: <b>{starPromotionPreview.requirements.silverCost.toLocaleString()}</b> (Hiện có: {Number(starPromotionPreview.requirements.currentSilver).toLocaleString()}) {starPromotionPreview.requirements.hasEnoughSilver ? '✔' : '❌'}</p>
+                <p>• Phôi cùng sao hiến tế: <b>{starPromotionPreview.requirements.requiredFodderCount} tướng {starPromotionPreview.requirements.fodderStar}★</b></p>
+              </div>
+
+              <div style={{ padding: '0.8rem', background: 'rgba(255,255,255,0.04)', borderRadius: '6px' }}>
+                <h4>Thay đổi sau khi thăng sao</h4>
+                <p>• Cấp tối đa: Lv.{starPromotionPreview.hero.currentMaxLevel} → <b>Lv.{starPromotionPreview.hero.nextMaxLevel}</b> (+10)</p>
+                <p>• Ô Ấn ký (Imprints): {starPromotionPreview.hero.currentImprintSlots} ô → <b>{starPromotionPreview.hero.nextImprintSlots} ô</b></p>
+                {starPromotionPreview.projectedStats && (
+                  <p>• Chỉ số dự kiến: HP {starPromotionPreview.projectedStats.maxHp} | ATK {starPromotionPreview.projectedStats.attack} | DEF {starPromotionPreview.projectedStats.defense} | SPD {starPromotionPreview.projectedStats.speed}</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h4>Chọn phôi hiến tế (Đã chọn {selectedFodderIds.length}/{starPromotionPreview.requirements.requiredFodderCount}):</h4>
+              <small style={{ color: 'var(--muted, #aaa)', display: 'block', marginBottom: '0.5rem' }}>
+                * Trang bị của tướng hiến tế sẽ được tự động tháo và cất an toàn về kho của Master.
+              </small>
+              {starPromotionPreview.availableFodders.length === 0 ? (
+                <p style={{ color: '#f87171' }}>Không có tướng {starPromotionPreview.requirements.fodderStar}★ hợp lệ nào trong kho để làm phôi hiến tế.</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '6px' }}>
+                  {starPromotionPreview.availableFodders.map((fodder: any) => {
+                    const isChecked = selectedFodderIds.includes(fodder.id);
+                    return (
+                      <label key={fodder.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem', background: isChecked ? 'rgba(100,200,255,0.15)' : 'rgba(255,255,255,0.02)', borderRadius: '4px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              if (selectedFodderIds.length < starPromotionPreview.requirements.requiredFodderCount) {
+                                setSelectedFodderIds([...selectedFodderIds, fodder.id]);
+                              }
+                            } else {
+                              setSelectedFodderIds(selectedFodderIds.filter(id => id !== fodder.id));
+                            }
+                          }}
+                          disabled={!isChecked && selectedFodderIds.length >= starPromotionPreview.requirements.requiredFodderCount}
+                        />
+                        <div>
+                          <b>{fodder.name}</b>
+                          <small style={{ display: 'block', fontSize: '0.75rem', color: '#aaa' }}>{fodder.heroClass} · Lv.{fodder.level}</small>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.8rem' }}>
+              <button
+                className="primary-button"
+                disabled={starPromotionBusy || selectedFodderIds.length !== starPromotionPreview.requirements.requiredFodderCount || !starPromotionPreview.requirements.hasEnoughSilver || starPromotionHero.level < starPromotionPreview.requirements.requiredLevel}
+                onClick={() => void executeStarPromotion()}
+              >
+                {starPromotionBusy ? 'Đang tiến hành thăng sao...' : `Xác nhận hiến tế thăng lên ${starPromotionPreview.hero.nextStar}★`}
+              </button>
+              <button className="secondary-button" onClick={() => { setStarPromotionHero(null); setStarPromotionPreview(null); }}>Hủy bỏ</button>
+            </div>
+          </div>
+        )}
+        <div className="panel hero-filters"><label>Độ hiếm<select value={heroRarityFilter} onChange={e => setHeroRarityFilter(e.target.value)}><option value="ALL">Tất cả</option>{[5,4,3,2,1].map(value => <option key={value} value={value}>{value} sao</option>)}</select></label><label>Class<select value={heroClassFilter} onChange={e => setHeroClassFilter(e.target.value)}><option value="ALL">Tất cả</option>{[...new Set(heroCollection.map(hero => hero.heroClass).filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select></label><label>Trạng thái<select value={heroStateFilter} onChange={e => setHeroStateFilter(e.target.value)}><option value="ALL">Tất cả</option>{[...new Set(heroCollection.map(hero => hero.state))].map(value => <option key={value} value={value}>{value}</option>)}</select></label><label>Sắp xếp<select value={heroSort} onChange={e => setHeroSort(e.target.value)}><option value="RARITY">Độ hiếm</option><option value="LEVEL">Cấp độ</option><option value="POWER">Sức mạnh</option></select></label></div><div className="panel"><b>Vật liệu mẫu</b><p>EXP +100: {me?.itemInventory?.find(item => item.itemId === 'SAMPLE_HERO_EXP_100')?.quantity ?? 0} · Ấn thăng bậc: {me?.itemInventory?.find(item => item.itemId === 'SAMPLE_HERO_PROMOTION_SEAL')?.quantity ?? 0} · Lõi thức tỉnh: {me?.itemInventory?.find(item => item.itemId === 'SAMPLE_HERO_AWAKENING_CORE')?.quantity ?? 0}</p></div>{displayedHeroes.length ? <div className="hero-grid">{displayedHeroes.map(hero => <div className={`hero-card rarity-${hero.rarity}`} key={hero.id}><div className="hero-card-top"><span>{'✦'.repeat(Math.min(hero.rarity, 5))}</span><small>{hero.category}{hero.isLocked ? ' · ĐÃ KHÓA' : ''}</small></div><div className="hero-portrait">♙</div><h3>{hero.name}</h3><p>{hero.rarity}★ · Lv.{hero.level}/{hero.maxLevel ?? 20} · {hero.state}</p><p>EXP {hero.exp ?? '0'}{hero.nextLevelExp ? ` / ${hero.nextLevelExp}` : ' · Chưa đủ dữ liệu cấp tiếp theo'}</p>{hero.derivedStats && <p>HP {hero.derivedStats.hp}/{hero.derivedStats.maxHp} | ATK {hero.derivedStats.attack} | DEF {hero.derivedStats.defense} | SPD {hero.derivedStats.speed}</p>}{hero.effectiveBaseStats && <small style={{ display: 'block', color: 'var(--accent, #6cf)', margin: '0.2rem 0' }}>STR {hero.effectiveBaseStats.str} · INT {hero.effectiveBaseStats.int} · STA {hero.effectiveBaseStats.sta} · AGI {hero.effectiveBaseStats.agi}</small>}<p className="hero-resource">Thiên Mệnh: {hero.thienMenh} · Thăng bậc {hero.promotionRank ?? 0} · Thức tỉnh {hero.awakeningRank ?? 0}</p><details className="hero-skills"><summary>Kỹ năng ({hero.skills?.length ?? 0})</summary>{hero.skills?.map(skill => <article className="hero-skill-row" key={skill.code}><b>{skill.name} · Lv.{skill.skillLevel}/{skill.maxLevel}</b><p>{skill.description}</p><small>{skill.effectType} · {skill.skillEffectValue} · Hồi chiêu {skill.cooldownSeconds}s · Mở ở Lv.{skill.unlockLevel}</small>{skill.isUnlocked ? <><label>Hành vi<select value={skill.behaviorMode} disabled={Boolean(developmentBusy) || hero.isLocked} onChange={e => void updateHeroSkill(hero, skill, 'behavior', e.target.value as 'AUTO' | 'MANUAL')}><option value="AUTO">Tự động</option><option value="MANUAL">Thủ công</option></select></label><button className="secondary-button" disabled={Boolean(developmentBusy) || hero.isLocked || skill.skillLevel >= skill.maxLevel || itemQuantity('SAMPLE_HERO_SKILL_BOOK') < 1} onClick={() => void updateHeroSkill(hero, skill, 'upgrade')}>Nâng kỹ năng · 1 sách</button></> : <button className="secondary-button" disabled={Boolean(developmentBusy) || hero.isLocked || !skill.canUnlock} onClick={() => void updateHeroSkill(hero, skill, 'unlock')}>{skill.canUnlock ? 'Mở khóa kỹ năng' : `Mở khóa ở Lv.${skill.unlockLevel}`}</button>}</article>)}</details><button className="secondary-button" onClick={() => void toggleHeroLock(hero)}>{hero.isLocked ? 'Mở khóa Hero' : 'Khóa Hero'}</button><button className="secondary-button" disabled={Boolean(developmentBusy) || itemQuantity('SAMPLE_HERO_EXP_100') < 1 || hero.level >= (hero.maxLevel ?? 20) || hero.state === 'DEAD' || hero.state === 'DISABLED'} onClick={() => void developHero(hero, 'level-up')}>Tăng cấp · +100 EXP</button>{(() => { const config = developmentConfig('PROMOTION', (hero.promotionRank ?? 0) + 1); return <button className="secondary-button" disabled={Boolean(developmentBusy) || !config || itemQuantity(config?.materialItemId ?? '') < (config?.materialQuantity ?? 1) || hero.level < (config?.requiredHeroLevel ?? Infinity) || (hero.promotionRank ?? 0) < (config?.requiredPromotionRank ?? Infinity) || hero.state === 'DEAD' || hero.state === 'DISABLED'} onClick={() => void developHero(hero, 'promote')}>Thăng bậc · {config ? `tốn ${config.materialQuantity} vật liệu` : 'đã đạt giới hạn'}</button>; })()}{(() => { const config = developmentConfig('AWAKENING', (hero.awakeningRank ?? 0) + 1); return <button className="secondary-button" disabled={Boolean(developmentBusy) || !config || itemQuantity(config?.materialItemId ?? '') < (config?.materialQuantity ?? 1) || hero.level < (config?.requiredHeroLevel ?? Infinity) || (hero.promotionRank ?? 0) < (config?.requiredPromotionRank ?? Infinity) || hero.state === 'DEAD' || hero.state === 'DISABLED'} onClick={() => void developHero(hero, 'awaken')}>Thức tỉnh · {config ? `tốn ${config.materialQuantity} vật liệu` : 'đã đạt giới hạn'}</button>; })()}{hero.rarity < 5 && <button className="primary-button" style={{ marginTop: '0.4rem', width: '100%' }} disabled={Boolean(developmentBusy) || hero.level < (hero.maxLevel ?? 20) || hero.state === 'DEAD' || hero.state === 'DISABLED' || hero.isLocked} onClick={() => void openStarPromotion(hero)}>★ Thăng sao ({hero.rarity}★ → {hero.rarity + 1}★){hero.level < (hero.maxLevel ?? 20) ? ` (cần Lv.${hero.maxLevel ?? 20})` : ''}</button>}</div>)}</div> : <div className="empty-state compact-empty"><div className="empty-symbol">♙</div><h2>{heroCollection.length ? 'Không có Hero phù hợp' : 'Chưa sở hữu Hero'}</h2><p>{heroCollection.length ? 'Thay đổi bộ lọc để xem Hero.' : 'Hãy triệu hồi để xây dựng bộ sưu tập của bạn.'}</p></div>}<div className="template-section"><div className="panel-head"><div><div className="eyebrow">HERO CONFIGURATION</div><h2>Cấu hình mẫu · 1–5 sao</h2></div><span className="template-note">Chỉ số mẫu ban đầu</span></div><div className="template-grid">{heroTemplates.map(hero => <article className={`template-card rarity-${hero.defaultRarity}`} key={hero.id}><div className="hero-card-top"><span>{'✦'.repeat(hero.defaultRarity)}</span><small>{hero.element}</small></div><h3>{hero.name}</h3><p>{hero.heroClass} · {hero.defaultRarity}★</p><code>{hero.code}</code><div className="template-stats"><span>HP <b>{hero.baseHp}</b></span><span>ATK <b>{hero.baseAttack}</b></span><span>DEF <b>{hero.baseDefense}</b></span><span>SPD <b>{hero.baseSpeed}</b></span></div><small className="sample-tag">MẪU · CHƯA CÂN BẰNG</small></article>)}</div></div></section>}
 
         {page === 'equipment' && <section className="feature-page"><div className="page-heading"><div><div className="eyebrow">INVENTORY ? EQUIPMENT</div><h1>Equipment</h1><p>Equip items, replace same-slot gear, and recover items dropped by fallen Normal Heroes.</p></div></div>
-          <div className="template-section"><div className="panel-head"><div><div className="eyebrow">EQUIPMENT INVENTORY</div><h2>Owned items</h2></div><span className="template-note">Sample stats</span></div><div className="template-grid">{equipment.filter(row => row.equipment.location !== 'FLOOR_DROP').map(row => <article className="template-card" key={row.equipment.id}><div className="hero-card-top"><span>{row.template.rarity}-star</span><small>{row.template.slotType}</small></div><h3>{row.template.name}</h3><p>HP +{row.template.bonusHp} | ATK +{row.template.bonusAttack}</p><p>DEF +{row.template.bonusDefense} | SPD +{row.template.bonusSpeed}</p>{row.equipment.location === 'EQUIPPED' ? <><small>Equipped by {heroCollection.find(hero => hero.id === row.equipment.equippedHeroId)?.name ?? 'Hero'}</small><button className="secondary-button" onClick={() => void unequipItem(row.equipment.id)}>Unequip</button></> : <div className="summon-buttons"><select aria-label="Choose Hero" value={equipmentTargetHeroId || heroCollection.find(hero => hero.state !== 'DEAD' && hero.state !== 'DISABLED')?.id || ''} onChange={e => setEquipmentTargetHeroId(e.target.value)}>{heroCollection.filter(hero => hero.state !== 'DEAD' && hero.state !== 'DISABLED').map(hero => <option key={hero.id} value={hero.id}>{hero.name}</option>)}</select><button className="secondary-button" disabled={!heroCollection.some(hero => hero.state !== 'DEAD' && hero.state !== 'DISABLED')} onClick={() => void equipItem(row.equipment.id)}>Equip</button></div>}</article>)}</div>{equipment.filter(row => row.equipment.location !== 'FLOOR_DROP').length === 0 && <div className="empty-state compact-empty"><h2>No equipment in inventory</h2><p>Apply the sample equipment seed after creating a Master.</p></div>}</div>
-          <div className="template-section"><div className="panel-head"><div><div className="eyebrow">WORLD FLOOR DROPS</div><h2>Items to pick up</h2></div><span className="template-note">Must be collected</span></div><div className="template-grid">{floorDrops.map(row => <article className="template-card" key={row.equipment.id}><div className="hero-card-top"><span>FLOOR {row.equipment.dropFloor ?? row.floor ?? '?'}</span><small>{row.template.slotType}</small></div><h3>{row.template.name}</h3><p>HP +{row.template.bonusHp} | ATK +{row.template.bonusAttack}</p><p>DEF +{row.template.bonusDefense} | SPD +{row.template.bonusSpeed}</p><button className="primary-button" onClick={() => void pickUpItem(row.equipment.id)}>Pick up</button></article>)}</div>{floorDrops.length === 0 && <div className="empty-state compact-empty"><h2>No floor drops</h2><p>Items dropped by Normal Hero deaths will appear here.</p></div>}</div>
+          <div className="template-section"><div className="panel-head"><div><div className="eyebrow">EQUIPMENT INVENTORY</div><h2>Owned items</h2></div><span className="template-note">Sample stats</span></div><div className="template-grid">{equipment.filter(row => row.equipment.location !== 'FLOOR_DROP').map(row => <article className="template-card" key={row.equipment.id}><div className="hero-card-top"><span>{row.template.rarity}-star</span><small>{row.template.slotType}</small></div><h3>{row.template.name}</h3>{renderEquipmentStats(row.template)}{row.equipment.location === 'EQUIPPED' ? <><small>Equipped by {heroCollection.find(hero => hero.id === row.equipment.equippedHeroId)?.name ?? 'Hero'}</small><button className="secondary-button" onClick={() => void unequipItem(row.equipment.id)}>Unequip</button></> : <div className="summon-buttons"><select aria-label="Choose Hero" value={equipmentTargetHeroId || heroCollection.find(hero => hero.state !== 'DEAD' && hero.state !== 'DISABLED')?.id || ''} onChange={e => setEquipmentTargetHeroId(e.target.value)}>{heroCollection.filter(hero => hero.state !== 'DEAD' && hero.state !== 'DISABLED').map(hero => <option key={hero.id} value={hero.id}>{hero.name}</option>)}</select><button className="secondary-button" disabled={!heroCollection.some(hero => hero.state !== 'DEAD' && hero.state !== 'DISABLED')} onClick={() => void equipItem(row.equipment.id)}>Equip</button></div>}</article>)}</div>{equipment.filter(row => row.equipment.location !== 'FLOOR_DROP').length === 0 && <div className="empty-state compact-empty"><h2>No equipment in inventory</h2><p>Apply the sample equipment seed after creating a Master.</p></div>}</div>
+          <div className="template-section"><div className="panel-head"><div><div className="eyebrow">WORLD FLOOR DROPS</div><h2>Items to pick up</h2></div><span className="template-note">Must be collected</span></div><div className="template-grid">{floorDrops.map(row => <article className="template-card" key={row.equipment.id}><div className="hero-card-top"><span>FLOOR {row.equipment.dropFloor ?? row.floor ?? '?'}</span><small>{row.template.slotType}</small></div><h3>{row.template.name}</h3>{renderEquipmentStats(row.template)}<button className="primary-button" onClick={() => void pickUpItem(row.equipment.id)}>Pick up</button></article>)}</div>{floorDrops.length === 0 && <div className="empty-state compact-empty"><h2>No floor drops</h2><p>Items dropped by Normal Hero deaths will appear here.</p></div>}</div>
         </section>}
 
         {page === 'battle' && <section className="feature-page"><div className="page-heading"><div><div className="eyebrow">PVE ? TACTICAL COMMAND</div><h1>Battlefield</h1><p>Choose a party, then watch the server resolve each turn automatically.</p></div><div className="cooldown-chip">{combatSession?.status === 'ACTIVE' ? (cooldown ? `BUFF COOLDOWN ${cooldown}s` : 'BUFF READY') : 'PVE PROTOTYPE'}</div></div>

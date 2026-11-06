@@ -1,6 +1,6 @@
 # API route inventory
 
-Generated from `packages/server/src/server.ts` (203 routes).
+Generated from `packages/server/src/server.ts` (205 routes).
 All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response schemas for Combat v2 live in `openapi.combat-v2.yaml`; this inventory is the source list for the remaining OpenAPI coverage.
 
 | Method | Path | Auth | Feature |
@@ -133,6 +133,8 @@ All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response sch
 | POST | `/api/heroes/:heroId/level-up` | Bearer | HERO_COLLECTION |
 | PATCH | `/api/heroes/:heroId/lock` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/promote` | Bearer | HERO_COLLECTION |
+| POST | `/api/heroes/:heroId/promote-star` | Bearer | HERO_COLLECTION |
+| GET | `/api/heroes/:heroId/promote-star/preview` | Bearer | HERO_COLLECTION |
 | PATCH | `/api/heroes/:heroId/skills/:skillCode/behavior` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/skills/:skillCode/unlock` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/skills/:skillCode/upgrade` | Bearer | HERO_COLLECTION |

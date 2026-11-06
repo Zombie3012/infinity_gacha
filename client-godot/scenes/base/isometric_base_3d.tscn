@@ -1,0 +1,488 @@
+[gd_scene load_steps=23 format=3 uid="uid://b9m4w2p8k1x3c"]
+
+[ext_resource type="Script" path="res://scenes/base/isometric_base_3d.gd" id="1_basescript"]
+[ext_resource type="PackedScene" uid="uid://d3x9p2m7q4k1w" path="res://scenes/common/isometric_camera_rig.tscn" id="2_camrig"]
+
+[sub_resource type="Environment" id="Environment_base"]
+background_mode = 1
+background_color = Color(0.11, 0.14, 0.2, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.68, 0.74, 0.86, 1)
+ambient_light_energy = 0.85
+
+[sub_resource type="BoxMesh" id="BoxMesh_ground"]
+size = Vector3(44, 0.5, 44)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+albedo_color = Color(0.15, 0.18, 0.22, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_plaza"]
+top_radius = 11.2
+bottom_radius = 11.6
+height = 0.22
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_plaza"]
+albedo_color = Color(0.23, 0.26, 0.32, 1)
+roughness = 0.78
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_bonfire_ring"]
+top_radius = 1.15
+bottom_radius = 1.35
+height = 0.42
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bonfire_ring"]
+albedo_color = Color(0.32, 0.3, 0.28, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_flame"]
+top_radius = 0.08
+bottom_radius = 0.65
+height = 1.35
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_flame"]
+albedo_color = Color(1, 0.58, 0.12, 1)
+emission_enabled = true
+emission = Color(1, 0.45, 0.08, 1)
+emission_energy_multiplier = 2.2
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_altar"]
+top_radius = 1.5
+bottom_radius = 1.85
+height = 0.75
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_altar"]
+albedo_color = Color(0.22, 0.62, 0.98, 1)
+emission_enabled = true
+emission = Color(0.12, 0.42, 0.85, 1)
+
+[sub_resource type="TorusMesh" id="TorusMesh_portal"]
+inner_radius = 1.15
+outer_radius = 1.65
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_portal"]
+albedo_color = Color(0.68, 0.25, 0.95, 1)
+emission_enabled = true
+emission = Color(0.52, 0.15, 0.85, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_barracks"]
+size = Vector3(2.8, 2.1, 2.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_barracks"]
+albedo_color = Color(0.48, 0.36, 0.24, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_infirmary"]
+size = Vector3(2.7, 1.9, 2.3)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_infirmary"]
+albedo_color = Color(0.24, 0.58, 0.46, 1)
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_landmark"]
+height = 3.0
+radius = 2.0
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_building_landmark"]
+size = Vector3(3.1, 2.6, 2.7)
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_bonfire"]
+height = 2.2
+radius = 1.5
+
+[node name="IsometricBase3D" type="Node3D"]
+script = ExtResource("1_basescript")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_base")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.383022, 0.321394, 0, 0.642788, 0.766044, -0.5, -0.663414, 0.55667, 0, 68, 0)
+shadow_enabled = true
+directional_shadow_max_distance = 120.0
+
+[node name="IsometricCameraRig" parent="." instance=ExtResource("2_camrig")]
+
+[node name="BaseArchitecture" type="Node3D" parent="."]
+
+[node name="Ground" type="MeshInstance3D" parent="BaseArchitecture"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+mesh = SubResource("BoxMesh_ground")
+surface_material_override/0 = SubResource("StandardMaterial3D_ground")
+
+[node name="CentralPlazaDisc" type="MeshInstance3D" parent="BaseArchitecture"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("CylinderMesh_plaza")
+surface_material_override/0 = SubResource("StandardMaterial3D_plaza")
+
+[node name="CentralBonfire" type="Node3D" parent="BaseArchitecture"]
+
+[node name="FirepitMesh" type="MeshInstance3D" parent="BaseArchitecture/CentralBonfire"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.21, 0)
+mesh = SubResource("CylinderMesh_bonfire_ring")
+surface_material_override/0 = SubResource("StandardMaterial3D_bonfire_ring")
+
+[node name="FlameMesh" type="MeshInstance3D" parent="BaseArchitecture/CentralBonfire"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+mesh = SubResource("CylinderMesh_flame")
+surface_material_override/0 = SubResource("StandardMaterial3D_flame")
+
+[node name="BonfireOmniLight3D" type="OmniLight3D" parent="BaseArchitecture/CentralBonfire"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.85, 0)
+light_color = Color(1, 0.64, 0.24, 1)
+light_energy = 2.2
+omni_range = 15.0
+
+[node name="BonfireLabel" type="Label3D" parent="BaseArchitecture/CentralBonfire"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.35, 0)
+billboard = 1
+no_depth_test = true
+modulate = Color(1, 0.78, 0.35, 1)
+text = "🔥 TRỤC LỬA TRUNG TÂM"
+font_size = 21
+outline_size = 6
+
+[node name="BonfireBody" type="StaticBody3D" parent="BaseArchitecture/CentralBonfire"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/CentralBonfire/BonfireBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
+shape = SubResource("CylinderShape3D_bonfire")
+
+[node name="SummonAltar" type="MeshInstance3D" parent="BaseArchitecture"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 0.38, -4.8)
+mesh = SubResource("CylinderMesh_altar")
+surface_material_override/0 = SubResource("StandardMaterial3D_altar")
+
+[node name="AltarLabel" type="Label3D" parent="BaseArchitecture/SummonAltar"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, 0)
+billboard = 1
+no_depth_test = true
+modulate = Color(0.45, 0.88, 1, 1)
+text = "✨ ĐÀI TRIỆU HỒI"
+font_size = 25
+outline_size = 6
+
+[node name="AltarSubLabel" type="Label3D" parent="BaseArchitecture/SummonAltar"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.48, 0)
+billboard = 1
+no_depth_test = true
+modulate = Color(0.78, 0.92, 1, 1)
+text = "[Nhấn để Triệu Hồi Tướng]"
+font_size = 18
+outline_size = 5
+
+[node name="AltarBody" type="StaticBody3D" parent="BaseArchitecture/SummonAltar"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/SummonAltar/AltarBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
+shape = SubResource("CylinderShape3D_landmark")
+
+[node name="DungeonPortal" type="MeshInstance3D" parent="BaseArchitecture"]
+transform = Transform3D(0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0, 0, 1, 5.5, 1.65, -4.8)
+mesh = SubResource("TorusMesh_portal")
+surface_material_override/0 = SubResource("StandardMaterial3D_portal")
+
+[node name="PortalLabel" type="Label3D" parent="BaseArchitecture"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 3.65, -4.8)
+billboard = 1
+no_depth_test = true
+modulate = Color(0.88, 0.58, 1, 1)
+text = "🌀 CỔNG THÁP PvE"
+font_size = 25
+outline_size = 6
+
+[node name="PortalSubLabel" type="Label3D" parent="BaseArchitecture"]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 3.22, -4.8)
+billboard = 1
+no_depth_test = true
+modulate = Color(0.92, 0.82, 1, 1)
+text = "[Kéo thả Tướng vào đây để lập Đội hình]"
+font_size = 18
+outline_size = 5
+
+[node name="PortalBody" type="StaticBody3D" parent="BaseArchitecture"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, -4.8)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/PortalBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("CylinderShape3D_landmark")
+
+[node name="Barracks" type="MeshInstance3D" parent="BaseArchitecture"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 1.05, 4.6)
+mesh = SubResource("BoxMesh_barracks")
+surface_material_override/0 = SubResource("StandardMaterial3D_barracks")
+
+[node name="BarracksLabel" type="Label3D" parent="BaseArchitecture/Barracks"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.85, 0)
+billboard = 1
+no_depth_test = true
+modulate = Color(0.98, 0.85, 0.55, 1)
+text = "🛡️ DOANH TRẠI & THĂNG SAO"
+font_size = 23
+outline_size = 6
+
+[node name="BarracksBody" type="StaticBody3D" parent="BaseArchitecture/Barracks"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/Barracks/BarracksBody"]
+shape = SubResource("BoxShape3D_building_landmark")
+
+[node name="Infirmary" type="MeshInstance3D" parent="BaseArchitecture"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0.95, 4.6)
+mesh = SubResource("BoxMesh_infirmary")
+surface_material_override/0 = SubResource("StandardMaterial3D_infirmary")
+
+[node name="InfirmaryLabel" type="Label3D" parent="BaseArchitecture/Infirmary"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
+billboard = 1
+no_depth_test = true
+modulate = Color(0.52, 0.98, 0.75, 1)
+text = "✚ BỆNH XÁ & HẬU CẦN"
+font_size = 23
+outline_size = 6
+
+[node name="InfirmaryBody" type="StaticBody3D" parent="BaseArchitecture/Infirmary"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/Infirmary/InfirmaryBody"]
+shape = SubResource("BoxShape3D_building_landmark")
+
+[node name="ZonesContainer" type="Node3D" parent="."]
+
+[node name="PlotsContainer" type="Node3D" parent="."]
+
+[node name="HeroesContainer" type="Node3D" parent="."]
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="TopBar" type="PanelContainer" parent="HUD"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 14.0
+offset_top = 10.0
+offset_right = -14.0
+offset_bottom = 74.0
+grow_horizontal = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 6
+
+[node name="HBoxContainer" type="HBoxContainer" parent="HUD/TopBar/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="VBoxInfo" type="VBoxContainer" parent="HUD/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="MasterInfoLabel" type="Label" parent="HUD/TopBar/MarginContainer/HBoxContainer/VBoxInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "🏰 Sảnh Chờ Đa Tầng — Master"
+text_overrun_behavior = 3
+
+[node name="ResourceInfoLabel" type="Label" parent="HUD/TopBar/MarginContainer/HBoxContainer/VBoxInfo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.92, 0.62, 1)
+theme_override_font_sizes/font_size = 13
+text = "💎 Đá Quý: 0   |   🪙 Vàng: 0   |   📜 Thiên Thư: 0   |   🍖 Khẩu Phần: 0"
+text_overrun_behavior = 3
+
+[node name="LightingToggleBtn" type="Button" parent="HUD/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 36)
+layout_mode = 2
+text = "🌤️ Ngày"
+
+[node name="FocusBaseBtn" type="Button" parent="HUD/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 36)
+layout_mode = 2
+text = "🎥 Toàn Cảnh"
+
+[node name="RefreshBaseBtn" type="Button" parent="HUD/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 36)
+layout_mode = 2
+text = "🔄 Làm Mới"
+
+[node name="BackHubBtn" type="Button" parent="HUD/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "⬅ Menu Sảnh"
+
+[node name="FloorElevatorPanel" type="PanelContainer" parent="HUD"]
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 14.0
+offset_top = -175.0
+offset_right = 198.0
+offset_bottom = 175.0
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/FloorElevatorPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/FloorElevatorPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="FloorHeaderLabel" type="Label" parent="HUD/FloorElevatorPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.38, 1)
+theme_override_font_sizes/font_size = 13
+text = "🛗 SẢNH ĐA TẦNG (Q/E)"
+horizontal_alignment = 1
+
+[node name="FloorButtonsContainer" type="VBoxContainer" parent="HUD/FloorElevatorPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 5
+
+[node name="InspectorPanel" type="PanelContainer" parent="HUD"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -430.0
+offset_top = 76.0
+offset_right = -14.0
+offset_bottom = -104.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/InspectorPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/InspectorPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HeaderRow" type="HBoxContainer" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="InspectorTitleLabel" type="Label" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer/HeaderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.88, 0.38, 1)
+theme_override_font_sizes/font_size = 17
+text = "Chi Tiết Công Trình"
+autowrap_mode = 3
+
+[node name="CloseInspectorBtn" type="Button" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer/HeaderRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 30)
+layout_mode = 2
+text = "✖"
+
+[node name="InspectorSubtitleLabel" type="Label" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_font_sizes/font_size = 13
+text = "Thông tin trạng thái"
+autowrap_mode = 3
+
+[node name="HSeparator" type="HSeparator" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="InspectorActionContainer" type="VBoxContainer" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer/ScrollContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="BottomBar" type="PanelContainer" parent="HUD"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 14.0
+offset_top = -90.0
+offset_right = -14.0
+offset_bottom = -12.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="HUD/BottomBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 6
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/BottomBar/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="StatusBannerLabel" type="Label" parent="HUD/BottomBar/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.45, 1)
+theme_override_font_sizes/font_size = 12
+text = "💡 Sảnh Đa Tầng (Ruộng Bậc Thang): Dùng Q/E để đổi tầng, WASD để trượt, chuột để kéo-thả Tướng."
+horizontal_alignment = 1
+text_overrun_behavior = 3
+
+[node name="ActionRow" type="HBoxContainer" parent="HUD/BottomBar/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="SummonAltarBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "✨ Triệu Hồi"
+
+[node name="BarracksBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🛡️ Tướng & Thăng Sao"
+
+[node name="ExpandZoneBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "🏗️ Mở Tầng Kế"
+
+[node name="CollectAllBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "🌾 Thu Hoạch"
+
+[node name="EnterPveBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "⚔️ Tháp PvE"

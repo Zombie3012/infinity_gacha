@@ -1,0 +1,239 @@
+[gd_scene load_steps=2 format=3 uid="uid://d2r8k5m1n9q7w"]
+
+[ext_resource type="Script" path="res://scenes/heroes/hero_roster.gd" id="1_roster"]
+
+[node name="HeroRoster" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_roster")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.08, 0.11, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TopBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="MarginContainer/VBoxContainer/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "🛡️ DOANH TRẠI TƯỚNG & THĂNG SAO (PICK ME UP STYLE)"
+
+[node name="BackBtn" type="Button" parent="MarginContainer/VBoxContainer/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "⬅ Về Căn Cứ 3D"
+
+[node name="MainLayout" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="LeftListPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/MainLayout"]
+custom_minimum_size = Vector2(245, 0)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/VBoxContainer/MainLayout/LeftListPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/MainLayout/LeftListPanel/MarginContainer"]
+layout_mode = 2
+
+[node name="ListHeader" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/LeftListPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "DANH SÁCH TƯỚNG SỞ HỮU"
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer/MainLayout/LeftListPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="HeroItemList" type="ItemList" parent="MarginContainer/VBoxContainer/MainLayout/LeftListPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CenterDetailPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/MainLayout"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HeroNameLabel" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Tên Tướng"
+
+[node name="HeaderStatsRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="HeroStarLabel" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer/HeaderStatsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.25, 1)
+theme_override_font_sizes/font_size = 13
+text = "Phẩm chất: ★★★★"
+
+[node name="HeroClassLabel" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer/HeaderStatsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.75, 1, 1)
+theme_override_font_sizes/font_size = 13
+text = "Hệ lớp: WARRIOR"
+
+[node name="HeroLevelLabel" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer/HeaderStatsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Cấp độ: Lv.40 / 40"
+
+[node name="HeroCpLabel" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer/HeaderStatsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.45, 0.35, 1)
+theme_override_font_sizes/font_size = 13
+text = "CP: 4200"
+
+[node name="HSeparator1" type="HSeparator" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="BaseStatsHeader" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.85, 0.95, 1)
+text = "CHỈ SỐ CƠ BẢN (GỐC + HUẤN LUYỆN + TRANG BỊ)"
+
+[node name="BaseStatsLabel" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "STR: 60 | INT: 20 | STA: 50 | AGI: 40"
+
+[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="CombatStatsHeader" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.85, 0.95, 1)
+text = "CHỈ SỐ CHIẾN ĐẤU THỰC CHIẾN"
+
+[node name="CombatStatsLabel" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 15
+text = "HP: 4000/4000 | ATK: 520 | DEF: 310"
+
+[node name="HSeparator3" type="HSeparator" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="EquipmentListLabel" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.85, 0.75, 1)
+text = "Trang bị v2: Chưa có"
+
+[node name="Spacer" type="Control" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="OpenPromoteBtn" type="Button" parent="MarginContainer/VBoxContainer/MainLayout/CenterDetailPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "★ Thăng Lên 5★ (Pick Me Up style)"
+
+[node name="PromotePanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/MainLayout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/VBoxContainer/MainLayout/PromotePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/MainLayout/PromotePanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PromoteHeader" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/PromotePanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "NGHI THỨC THĂNG SAO"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer/MainLayout/PromotePanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="PromoteInfoLabel" type="Label" parent="MarginContainer/VBoxContainer/MainLayout/PromotePanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.82, 0.5, 1)
+text = "Chọn tướng hiến tế:"
+autowrap_mode = 3
+
+[node name="FodderItemList" type="ItemList" parent="MarginContainer/VBoxContainer/MainLayout/PromotePanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+select_mode = 1
+
+[node name="ConfirmPromoteBtn" type="Button" parent="MarginContainer/VBoxContainer/MainLayout/PromotePanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Xác Nhận Thăng Sao"
+
+[node name="ClosePromoteBtn" type="Button" parent="MarginContainer/VBoxContainer/MainLayout/PromotePanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Hủy Bỏ"
+
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.35, 1)
+text = "Sẵn sàng."
+horizontal_alignment = 1

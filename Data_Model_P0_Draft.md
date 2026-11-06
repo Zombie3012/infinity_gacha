@@ -355,7 +355,7 @@ Individual Hero owned by a Master.
 | `exp` | BIGINT | NOT NULL, DEFAULT 0 | Current EXP |
 | `promotion_rank` | INT | NOT NULL, DEFAULT 0 | Ascension / rank level |
 | `talent_points` | INT | NOT NULL, DEFAULT 0 | Hero talent progression points |
-| `thien_menh_count` | INT | NOT NULL, DEFAULT 0 | Thien Menh from duplicate copies of any origin |
+| `thien_menh_count` | INT | NOT NULL, DEFAULT 0 | Thiên Mệnh from duplicate 5★+ copies on Special/Limited banners |
 | `status` | VARCHAR(20) | NOT NULL, DEFAULT 'ALIVE' | `ALIVE`, `DISABLED`, `DEAD` |
 | `is_locked` | BOOLEAN | NOT NULL, DEFAULT FALSE | Lock flag to prevent accidental actions |
 | `death_at` | TIMESTAMP WITH TIME ZONE | NULL | Time of demise |

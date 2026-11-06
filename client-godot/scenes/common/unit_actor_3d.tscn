@@ -1,0 +1,60 @@
+[gd_scene load_steps=5 format=3 uid="uid://c7n1k5w9x2q4r"]
+
+[ext_resource type="Script" path="res://scripts/actors/unit_actor_3d.gd" id="1_unitactor"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+radius = 0.42
+height = 1.55
+
+[sub_resource type="BoxMesh" id="BoxMesh_weapon"]
+size = Vector3(0.14, 0.95, 0.18)
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_click"]
+radius = 0.6
+height = 2.0
+
+[node name="UnitActor3D" type="Node3D"]
+script = ExtResource("1_unitactor")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="BodyMesh" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.78, 0)
+mesh = SubResource("CapsuleMesh_body")
+
+[node name="WeaponMesh" type="MeshInstance3D" parent="VisualRoot"]
+transform = Transform3D(1, 0, 0, 0, 0.866025, -0.5, 0, 0.5, 0.866025, 0.52, 0.95, -0.25)
+mesh = SubResource("BoxMesh_weapon")
+
+[node name="SpeechBubbleLabel3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.72, 0)
+visible = false
+billboard = 1
+no_depth_test = true
+modulate = Color(1, 0.96, 0.78, 1)
+text = "💬 ..."
+font_size = 19
+outline_size = 6
+
+[node name="NameplateLabel3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.22, 0)
+billboard = 1
+no_depth_test = true
+text = "Hero"
+font_size = 24
+outline_size = 6
+
+[node name="HpBarLabel3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, 0)
+billboard = 1
+no_depth_test = true
+modulate = Color(0.35, 0.95, 0.52, 1)
+text = "HP: 100/100"
+font_size = 20
+outline_size = 5
+
+[node name="ClickBody" type="StaticBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ClickBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
+shape = SubResource("CapsuleShape3D_click")

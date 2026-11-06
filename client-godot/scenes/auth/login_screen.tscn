@@ -1,0 +1,118 @@
+[gd_scene load_steps=2 format=3 uid="uid://c5q0n3x6k8r1p"]
+
+[ext_resource type="Script" path="res://scenes/auth/login_screen.gd" id="1_login"]
+
+[node name="LoginScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_login")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0823529, 0.0901961, 0.129412, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(420, 480)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="CenterContainer/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 32
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "INFINITE GACHA"
+horizontal_alignment = 1
+
+[node name="SubtitleLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.658824, 0.709804, 0.792157, 1)
+theme_override_font_sizes/font_size = 14
+text = "Godot 4 Client Prototype"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="UsernameLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Tài khoản (Username):"
+
+[node name="UsernameInput" type="LineEdit" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Nhập username..."
+
+[node name="PasswordLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Mật khẩu (Password):"
+
+[node name="PasswordInput" type="LineEdit" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+secret = true
+placeholder_text = "Nhập mật khẩu..."
+
+[node name="MasterNameLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Tên Master (khi tạo mới):"
+
+[node name="MasterNameInput" type="LineEdit" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Tên hiển thị trong game..."
+
+[node name="Spacer" type="Control" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LoginButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+layout_mode = 3
+size_flags_horizontal = 3
+text = "Đăng Nhập"
+
+[node name="RegisterButton" type="Button" parent="CenterContainer/Panel/MarginContainer/VBoxContainer/ButtonContainer"]
+unique_name_in_owner = true
+layout_mode = 3
+size_flags_horizontal = 3
+text = "Đăng Ký"
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/Panel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.898039, 0.729412, 0.282353, 1)
+theme_override_font_sizes/font_size = 13
+text = "Đang kết nối..."
+horizontal_alignment = 1
+autowrap_mode = 3

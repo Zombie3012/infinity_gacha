@@ -9,7 +9,7 @@
 
 import {
   computeHeroBaseStats, deriveStats, eligibleClasses, trainingPointsForLevel,
-  type BaseStats, type DerivedStats, type HeroClass, type StarRating,
+  type BaseStats, type DerivedOffsets, type DerivedStats, type HeroClass, type StarRating,
 } from '@infiniti-gacha/shared';
 
 export const CLASS_CHANGE_LEVEL = 20;
@@ -78,12 +78,17 @@ export function progressionFor(input: {
   awakeningRank?: number;
   /** Flat base-stat bonus from imprints. */
   imprint?: Partial<BaseStats>;
+  /** Flat base-stat bonus from equipment. */
+  equipmentBase?: Partial<BaseStats>;
+  /** Derived combat stat offsets from equipment. */
+  equipmentOffsets?: DerivedOffsets;
 }): ProgressionSnapshot {
   const training = trainingOf(input.training);
   const origin = originOf(input.origin);
   const imprint = originOf(input.imprint ?? {});
+  const equipBase = originOf(input.equipmentBase ?? {});
   const awakeningBonus = 10 * Math.max(0, Math.floor(input.awakeningRank ?? 0));
-  const base = computeHeroBaseStats({
+  const baseWithoutEquip = computeHeroBaseStats({
     templateBase: {
       str: origin.str + awakeningBonus + imprint.str,
       int: origin.int + awakeningBonus + imprint.int,
@@ -95,7 +100,13 @@ export function progressionFor(input: {
     heroClass: input.classCode,
     training,
   });
-  const derived = deriveStats(base, input.classCode);
+  const base: BaseStats = {
+    str: baseWithoutEquip.str + equipBase.str,
+    int: baseWithoutEquip.int + equipBase.int,
+    sta: baseWithoutEquip.sta + equipBase.sta,
+    agi: baseWithoutEquip.agi + equipBase.agi,
+  };
+  const derived = deriveStats(base, input.classCode, input.equipmentOffsets ?? {});
   const hpPct = Math.max(0, Math.min(1, input.hpPct ?? 1));
   const mpPct = Math.max(0, Math.min(1, input.mpPct ?? 1));
 

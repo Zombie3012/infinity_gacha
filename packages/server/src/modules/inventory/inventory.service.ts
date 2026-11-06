@@ -33,11 +33,29 @@ export type ItemMetadata = {
 export const KNOWN_ITEM_DEFINITIONS: Record<string, ItemMetadata> = {
   SAMPLE_HERO_EXP_100: {
     itemId: 'SAMPLE_HERO_EXP_100',
-    name: 'Sách EXP Hero (+100)',
-    description: 'Bí tịch truyền thụ kinh nghiệm cơ bản, gia tăng 100 EXP cho một Hero.',
+    name: 'Sách EXP Hero Sơ Cấp (+1,000)',
+    description: 'Bí tịch truyền thụ kinh nghiệm sơ cấp, gia tăng 1,000 EXP cho một Hero.',
     category: 'DEVELOPMENT',
     rarity: 2,
     sellPrice: 50,
+    canUse: true,
+  },
+  SAMPLE_HERO_EXP_1000: {
+    itemId: 'SAMPLE_HERO_EXP_1000',
+    name: 'Sách EXP Hero Trung Cấp (+100,000)',
+    description: 'Bí tịch truyền thụ kinh nghiệm trung cấp, gia tăng 100,000 EXP cho một Hero.',
+    category: 'DEVELOPMENT',
+    rarity: 3,
+    sellPrice: 200,
+    canUse: true,
+  },
+  SAMPLE_HERO_EXP_10000: {
+    itemId: 'SAMPLE_HERO_EXP_10000',
+    name: 'Sách EXP Hero Cao Cấp (+10,000,000)',
+    description: 'Bí tịch truyền thụ kinh nghiệm cao cấp, gia tăng 10,000,000 EXP cho một Hero.',
+    category: 'DEVELOPMENT',
+    rarity: 4,
+    sellPrice: 1000,
     canUse: true,
   },
   SAMPLE_HERO_PROMOTION_SEAL: {
@@ -224,7 +242,7 @@ export class InventoryService {
         throw new InventoryError(`Không đủ vật phẩm trong kho (Hiện có: ${inventoryRow?.quantity ?? 0}).`, 400);
       }
 
-      if (itemId === 'SAMPLE_HERO_EXP_100') {
+      if (itemId === 'SAMPLE_HERO_EXP_100' || itemId === 'SAMPLE_HERO_EXP_1000' || itemId === 'SAMPLE_HERO_EXP_10000') {
         if (!targetHeroId) throw new InventoryError('Cần chọn Hero để sử dụng sách EXP.', 400);
 
         const [hero] = await tx.select().from(heroes)
@@ -235,8 +253,9 @@ export class InventoryService {
           throw new InventoryError('Không thể sử dụng vật phẩm cho Hero đã tử trận hoặc vô hiệu hóa.', 409);
         }
 
-        const expGained = 100 * quantity;
-        const totalExp = BigInt(hero.exp) + BigInt(expGained);
+        const expPerBook = itemId === 'SAMPLE_HERO_EXP_10000' ? 10000000n : (itemId === 'SAMPLE_HERO_EXP_1000' ? 100000n : 1000n);
+        const expGained = expPerBook * BigInt(quantity);
+        const totalExp = BigInt(hero.exp) + expGained;
 
         // Get promotion cap
         const [devConfig] = await tx.select().from(heroDevelopmentConfigs)

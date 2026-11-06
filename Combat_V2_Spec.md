@@ -5,7 +5,7 @@
 | Version | 1.0 |
 | Status | Implemented prototype; PvP/expedition still on legacy stats (decision b) |
 | Code | `packages/shared/src/combat`, `packages/server/src/modules/combat`, `packages/server/src/modules/hero` |
-| Migrations | `0039_same_spyke.sql`, `0040_absurd_joshua_kane.sql`, `0041_curly_mandroid.sql`, `0042_woozy_drax.sql` |
+| Migrations | `0039_same_spyke.sql`, `0040_absurd_joshua_kane.sql`, `0041_curly_mandroid.sql`, `0042_woozy_drax.sql`, `0043_lying_hydra.sql` |
 
 ## 1. Base stats
 Four persisted base stats: **STR, INT, STA, AGI**. Every other stat is derived at runtime.
@@ -114,7 +114,53 @@ crowd-control skills exist; it is aggregated and reported but has no damage effe
 `POST /api/combat/v2/simulate` returns the aggregated bundle as `heroes[].imprintEffects`.
 
 - APIs: `GET /api/imprints` (now includes `abilityCode`/`abilityParams`), `GET /api/heroes/:heroId/imprints`.
-- Pending: slot limits by star/rank promotion, rank-up UI.
+- Slot limits by star (1–2★: 1, 3★: 2, 4★: 3, 5★+: 4) are now dynamically unlocked via Star Promotion.
 
-## 11. Known gaps (Unity backlog)
-Imprint Evolution UI, trait tiers, skill-choice UI, Rank Promotion flow, client UI/VFX, TTK tuning. See `UNITY_BACKLOG.md`.
+## 11. Star Promotion (Pick Me Up style)
+- **Concept:** Normal Heroes do not have unique template restrictions; multiple instances of the same template can be summoned with independent rolled base stats and used as fodder or specialized builds. Only 5★+ Heroes on SPECIAL/LIMITED banners convert duplicates to Thiên Mệnh. Star promotion consumes fodder Heroes of the **same star rating**.
+- **Requirement:** Target Hero must be at current maximum level:
+  - 1★: Max Level 10
+  - 2★: Max Level 20
+  - 3★: Max Level 30
+  - 4★: Max Level 40
+  - 5★: Max Level 50
+- **Fodder formula:** Promoting an $N$★ Hero requires exactly $N$ fodder Heroes of $N$★ rating:
+  - 1★ → 2★: 1x 1★ fodder + 10,000 Silver.
+  - 2★ → 3★: 2x 2★ fodders + 25,000 Silver.
+  - 3★ → 4★: 3x 3★ fodders + 50,000 Silver.
+  - 4★ → 5★: 4x 4★ fodders + 100,000 Silver.
+- **Safety & Gear:** Equipment on fodder Heroes is automatically unequipped and returned to Master inventory before sacrifice. Fodders in active party slots are safely cleaned up.
+- **Stat boost:** The origin stats are scaled to the new star budget (`BASE_STAT_BUDGET[nextStar]`) preserving the hero's stat distribution (`promoteOriginStats`), then derived stats and level caps are recomputed.
+- **APIs:**
+  - `GET /api/heroes/:heroId/promote-star/preview`
+  - `POST /api/heroes/:heroId/promote-star` `{ fodderHeroIds: string[] }`
+
+## 12. Equipment System v2
+- **Architecture (`packages/shared/src/combat/equipment.ts`):**
+  - Multi-slot support: `MAIN_HAND`, `OFF_HAND`, `CHEST`, `HELMET`, `BOOTS`, `ACCESSORY`.
+  - Base stat contributions: flat `bonusStr`, `bonusInt`, `bonusSta`, `bonusAgi`, plus item enhancement/fusion `statMultiplier` and substats.
+  - Derived stat & percentage combat offsets: `bonusHp`, `bonusMatk`, `bonusMdef`, and structured `v2Stats` (`critRate`, `critDamage`, `accuracy`, `evasion`, `blockRate`, `blockEffect`, `damageReduction`, `tenacity`, `armorPen`, `magicPen`, `damageBonus`, `lifesteal`, `hpRegen`, `mpRegen`).
+- **Aggregation (`aggregateEquipment`):**
+  - Aggregates multiple equipped items into a consolidated `{ baseStats, derivedOffsets }` snapshot.
+  - Scales template stats by instance `statMultiplier` (crafting/enhancement) and adds individual rolled `substats`.
+- **Runtime Propagation:**
+  - `progressionFor({ equipmentBase, equipmentOffsets, ... })` seamlessly factors equipment base stats into the Hero's base stats before deriving runtime attributes.
+  - Equipment HP bonuses (`STA * 20 + hpBase`) sync dynamically upon equip/unequip via `syncHeroEquippedHp()` without desyncing Max HP.
+  - `/api/heroes` exposes both `derivedStats` (backward-compatible) and `effectiveBaseStats` / `v2Stats` for the client.
+  - Combat simulation v2 engine consumes aggregated equipment stats directly on units.
+
+## 13. PvP & World Expeditions Migration to Combat v2 Engine
+- **Combat Power v2 (`hero-combat-power.ts`):**
+  - Legacy formula ($3 \cdot \text{ATK} + 2 \cdot \text{DEF} + 2 \cdot \text{SPD} + \text{HP}/10$) replaced across leaderboards, alliance, wonder siege, and expeditions with `combatPowerV2()` incorporating full derived stats.
+  - Multi-hero batch computation via `fetchMasterTopCombatPower()`, `fetchMasterHeroesWithPower()`, and `fetchPartyCombatPower()`.
+- **Expedition PvP Battle Resolution (`expedition.service.ts`):**
+  - Raiding enemy player territory engages the defender's top 5 Heroes (by Combat Power v2).
+  - Both sides built into `CombatV2UnitInput` units via `combatV2Service.buildHeroUnits()`.
+  - Territory level defensive advantage applied directly to defender combat unit attributes.
+  - Battle executed through `resolveBattleV2` with deterministic seed, producing comprehensive turn-by-turn `battleLog` and `battleSummary`.
+  - Stored in `pvp_battles` table while preserving existing HTTP contract (`kind: 'PVP_REPORT'`, `rounds >= 3`, `winner: 'ATTACKER' | 'DEFENDER'`).
+- **Alliance & Conquest Integration:**
+  - Wonder Siege garrison power and Alliance War combat estimates now reflect aggregate Combat Power v2.
+
+## 14. Known gaps (Godot 4 backlog)
+Imprint Evolution UI, trait tiers, skill-choice UI, Godot star promotion cinematic/flow, equipment inventory / character sheet 2D/3D view, client UI/VFX, TTK tuning. See `GODOT_BACKLOG.md`.

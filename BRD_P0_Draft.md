@@ -72,7 +72,7 @@ Define the P0 business scope and trace its 164 functions in the current P0 draft
 | BR-14-001 | Administration | Quyền quản trị |
 | BR-14-002 | Administration | Audit Log |
 | BR-14-003 | Administration | Configuration Versioning |
-| BR-02-004 | Gacha | Mọi Hero trùng (Normal, Special hoặc Limited) không tạo instance thứ hai; mỗi bản trùng cấp 1 Thiên Mệnh vào chính Hero đã sở hữu để mở khóa thêm sức mạnh. |
+| BR-02-004 | Gacha | Chỉ Hero từ 5★ trở lên thuộc banner Limited/Special khi trùng mới chuyển đổi thành 1 Thiên Mệnh trên chính Hero đã sở hữu; Banner Normal và toàn bộ Hero <5★ khi triệu hồi luôn tạo cá thể Hero mới với chỉ số gốc ngẫu nhiên phục vụ thăng sao (Pick Me Up style) và tùy biến lối chơi. |
 | BR-04-005 | Hero Death | Hero Normal tử trận làm rơi trang bị đang mặc; không hoàn trả tài nguyên nâng cấp/huấn luyện. |
 | BR-06-004 | Combat | Cooldown thay Tactical Buff cố định 15 giây. |
 | BR-07-004 | Dungeon | Seed phải duy nhất trên toàn game; sử dụng định danh UUID/GUID chuẩn toàn cầu khi khởi tạo World, không trùng lặp và không đổi khi thất bại. |
@@ -102,7 +102,7 @@ Define the P0 business scope and trace its 164 functions in the current P0 draft
 - Silver Coins are basic currency; Gems are premium currency. One white Normal Heavenly Scroll costs 10,000 Silver Coins.
 - A player may exchange for at most 50 white Normal Heavenly Scrolls per fixed week. Reset is Thursday at 00:00 UTC+7.
 - Acquisition settings for red Limited and seven-color Special scrolls, and Gem acquisition, are later configuration.
-- Duplicate handling: Any duplicate Hero, regardless of Normal/Special/Limited origin, does not create a second instance. Each duplicate grants 1 "Thien Menh" to that owned Hero.
+- Duplicate handling: Only 5★+ duplicate Heroes on Special/Limited banners convert into 1 "Thien Menh" on the owned Hero. Normal banner summons and all <5★ Hero summons generate new independent Hero instances with level-1 rolled base stats (STR/INT/STA/AGI), class, and elemental affinities for specialized builds and Star Promotion fodder (Pick Me Up style).
 
 ### Hero death, combat, and Dungeon rules
 

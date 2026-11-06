@@ -1,0 +1,181 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8y1v4m8j2k3l"]
+
+[ext_resource type="Script" path="res://scenes/hub/main_hub.gd" id="1_hub"]
+
+[node name="MainHub" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_hub")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0627451, 0.0705882, 0.101961, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TopBar" type="PanelContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/VBoxContainer/TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="MasterNameLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Master: —"
+
+[node name="LevelLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.384314, 0.772549, 0.988235, 1)
+text = "Lv.1"
+
+[node name="VSeparator" type="VSeparator" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+
+[node name="SilverLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92549, 0.811765, 0.419608, 1)
+text = "🪙 Bạc: 0"
+
+[node name="GemsLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.247059, 0.835294, 0.611765, 1)
+text = "💎 Gem: 0"
+
+[node name="HeroCountLabel" type="Label" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Số Tướng: 0"
+
+[node name="Spacer" type="Control" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RefreshBtn" type="Button" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "🔄 Đồng Bộ"
+
+[node name="LogoutBtn" type="Button" parent="MarginContainer/VBoxContainer/TopBar/MarginContainer/HBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Đăng Xuất"
+
+[node name="ContentContainer" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 20
+
+[node name="MenuPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/ContentContainer"]
+custom_minimum_size = Vector2(260, 0)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/VBoxContainer/ContentContainer/MenuPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentContainer/MenuPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="MenuTitle" type="Label" parent="MarginContainer/VBoxContainer/ContentContainer/MenuPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "CHỨC NĂNG"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer/ContentContainer/MenuPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="SummonBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentContainer/MenuPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "🎰 Triệu Hồi Tướng (Gacha)"
+
+[node name="RosterBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentContainer/MenuPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "🛡️ Doanh Trại Tướng"
+
+[node name="CombatBtn" type="Button" parent="MarginContainer/VBoxContainer/ContentContainer/MenuPanel/MarginContainer/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "⚔️ Mô Phỏng Combat v2"
+
+[node name="LogPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/ContentContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/VBoxContainer/ContentContainer/LogPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/ContentContainer/LogPanel/MarginContainer"]
+layout_mode = 2
+
+[node name="ConsoleTitle" type="Label" parent="MarginContainer/VBoxContainer/ContentContainer/LogPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "BẢNG ĐIỀU KHIỂN & KẾT QUẢ THAO TÁC"
+
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/VBoxContainer/ContentContainer/LogPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer/ContentContainer/LogPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LogLabel" type="Label" parent="MarginContainer/VBoxContainer/ContentContainer/LogPanel/MarginContainer/VBoxContainer/ScrollContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.85098, 0.87451, 0.913725, 1)
+theme_override_font_sizes/font_size = 14
+text = "Chào mừng Master đến với Infinite Gacha.
+Chọn chức năng bên trái để thao tác và xem phản hồi trực tiếp từ Backend API."
+autowrap_mode = 3

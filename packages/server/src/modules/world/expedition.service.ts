@@ -5,7 +5,12 @@ import {
   expeditionMembers, heroExpeditions, heroes, masters, masterWorldStatus, pvpBattles, territories,
   tileDiscoveries, tileClearances, territoryEvents, worldTiles,
 } from '../../database/drizzle-schema.js';
-import { topCombatPower } from '../liveops/liveops-rules.js';
+import { mulberry32 } from '@infiniti-gacha/shared';
+import { resolveBattleV2 } from '../combat/combat-v2.engine.js';
+import { combatV2Service } from '../combat/combat-v2.service.js';
+import {
+  fetchMasterHeroesWithPower, fetchMasterTopCombatPower, fetchPartyCombatPower,
+} from '../hero/hero-combat-power.js';
 import { conquestService } from './conquest.service.js';
 import { tileDistance } from './world-rules.js';
 import {
@@ -13,8 +18,18 @@ import {
   type ExpeditionMission, type ExpeditionStatus,
 } from './expedition-rules.js';
 import {
-  canAttack, canHoldMoreTerritories, defenderPower, protectionAfterCapture, resolvePvp,
+  DEFENDER_BONUS, LEVEL_BONUS_PER_LEVEL, canAttack, canHoldMoreTerritories,
+  defenderPower, protectionAfterCapture,
 } from './pvp-rules.js';
+
+function hashSeed(seed: string): number {
+  let hash = 2166136261;
+  for (const char of seed) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
 
 export class ExpeditionError extends Error {
   constructor(message: string, readonly statusCode = 400) {
@@ -40,10 +55,7 @@ export class ExpeditionService {
   }
 
   private async partyPower(heroIds: string[]): Promise<number> {
-    if (heroIds.length === 0) return 0;
-    const rows = await db.select({ hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed })
-      .from(heroes).where(inArray(heroes.id, heroIds));
-    return topCombatPower(rows.map(row => ({ hp: row.hp, attack: row.attack, defense: row.defense, speed: row.speed })));
+    return fetchPartyCombatPower(heroIds);
   }
 
   /** Scenario P3-03/04: dispatch 1–5 idle Heroes to scout or attack a known tile. */
@@ -134,13 +146,13 @@ export class ExpeditionService {
       const [owner] = territoryRow?.masterId
         ? await db.select({ id: masters.id, name: masters.masterName }).from(masters).where(eq(masters.id, territoryRow.masterId)).limit(1)
         : [];
-      const defenderHeroes = territoryRow?.masterId
-        ? await db.select({ hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed })
-          .from(heroes).where(eq(heroes.masterId, territoryRow.masterId))
+      const defenderHeroesWithPower = territoryRow?.masterId
+        ? await fetchMasterHeroesWithPower(territoryRow.masterId)
         : [];
-      const defenderPowerBase = topCombatPower(defenderHeroes.map(row => ({
-        hp: row.hp, attack: row.attack, defense: row.defense, speed: row.speed,
-      })));
+      const topDefenders = defenderHeroesWithPower
+        .sort((a, b) => b.combatPower - a.combatPower)
+        .slice(0, 5);
+      const defenderPowerBase = topDefenders.reduce((sum, d) => sum + d.combatPower, 0);
 
       let result: Record<string, unknown>;
       if (expedition.mission === 'SCOUT') {
@@ -149,30 +161,56 @@ export class ExpeditionService {
           tile: { x: tile?.x ?? 0, y: tile?.y ?? 0, terrain: tile?.terrain ?? 'UNKNOWN', resourceType: tile?.resourceType ?? 'UNKNOWN' },
           guardianPower: tile?.requiredPower ?? 0,
           owner: owner ? { masterId: owner.id, name: owner.name, level: territoryRow?.level ?? 1 } : null,
-          defenderHeroes: defenderHeroes.length,
-          defenderPower,
+          defenderHeroes: defenderHeroesWithPower.length,
+          defenderPower: defenderPower(defenderPowerBase, territoryRow?.level ?? 1),
           partyPower: power,
           scoutedAt: now.toISOString(),
         };
       } else if (territoryRow?.masterId && territoryRow.masterId !== expedition.masterId) {
-        // Hero-vs-Hero: the defender fights with their strongest five Heroes.
+        // Hero-vs-Hero: the defender fights with their strongest five Heroes via Combat v2 Engine.
         const strength = defenderPower(defenderPowerBase, territoryRow.level);
-        const battle = resolvePvp(power, strength, expedition.id);
-        const won = battle.winner === 'ATTACKER';
+        const defenderHeroIds = topDefenders.map(d => d.hero.id);
+        const attackerUnits = await combatV2Service.buildHeroUnits(heroIds, expedition.masterId, 'HERO');
+        const defenderUnits = await combatV2Service.buildHeroUnits(defenderHeroIds, territoryRow.masterId, 'ENEMY');
+
+        // Defender territory bonus applies to combat stats
+        const mult = DEFENDER_BONUS * (1 + LEVEL_BONUS_PER_LEVEL * Math.max(0, Math.floor(territoryRow.level) - 1));
+        for (const unit of defenderUnits) {
+          unit.stats.maxHp = Math.round(unit.stats.maxHp * mult);
+          unit.stats.atk = Math.round(unit.stats.atk * mult);
+          unit.stats.matk = Math.round(unit.stats.matk * mult);
+          unit.stats.def = Math.round(unit.stats.def * mult);
+          unit.stats.mdef = Math.round(unit.stats.mdef * mult);
+        }
+
+        const seedNum = hashSeed(expedition.id);
+        const report = (defenderUnits.length > 0 && attackerUnits.length > 0)
+          ? resolveBattleV2(attackerUnits, defenderUnits, { maxRounds: 30, random: mulberry32(seedNum) })
+          : null;
+        const won = report ? report.winner === 'HERO' : attackerUnits.length > 0;
+        const winner: 'ATTACKER' | 'DEFENDER' = won ? 'ATTACKER' : 'DEFENDER';
+        const rounds = Math.max(3, report?.rounds ?? 3);
+
         result = {
           kind: 'PVP_REPORT',
           won,
-          winner: battle.winner,
+          winner,
           partyPower: power,
           defenderPower: strength,
-          rounds: battle.rounds,
+          rounds,
           owner: owner ? { masterId: owner.id, name: owner.name } : null,
           resolvedAt: now.toISOString(),
+          battleLog: report?.log ?? [],
+          battleSummary: report ? {
+            totalDamage: report.totalDamage,
+            rounds: report.rounds,
+            survivingUnits: report.units.filter(u => u.alive).length,
+          } : null,
         };
         await db.insert(pvpBattles).values({
           id: uuidv4(), tileId: expedition.tileId, attackerMasterId: expedition.masterId,
           defenderMasterId: territoryRow.masterId, expeditionId: expedition.id,
-          winner: battle.winner, attackerPower: power, defenderPower: strength, rounds: battle.rounds,
+          winner, attackerPower: power, defenderPower: strength, rounds,
           report: { ...result, ownerName: owner?.name ?? null }, createdAt: now,
         });
         if (won && tile) {
@@ -188,7 +226,7 @@ export class ExpeditionService {
         await db.insert(territoryEvents).values({
           id: uuidv4(), tileId: expedition.tileId, masterId: expedition.masterId,
           action: won ? 'PVP_CAPTURED' : 'PVP_REPELLED',
-          detail: { defenderMasterId: territoryRow.masterId, attackerPower: power, defenderPower: strength, rounds: battle.rounds },
+          detail: { defenderMasterId: territoryRow.masterId, attackerPower: power, defenderPower: strength, rounds },
           createdAt: now,
         });
         // MOD-13-07: won raids and repelled defences score alliance-war points.
@@ -283,11 +321,7 @@ export class ExpeditionService {
       .from(territories).innerJoin(worldTiles, eq(worldTiles.id, territories.tileId))
       .where(eq(territories.tileId, tileId)).limit(1);
     if (!row?.territory.masterId) return { owned: false, defensePower: 0, protected: false, protectedUntil: null };
-    const defenders = await db.select({ hp: heroes.maxHp, attack: heroes.attack, defense: heroes.defense, speed: heroes.speed })
-      .from(heroes).where(eq(heroes.masterId, row.territory.masterId));
-    const base = topCombatPower(defenders.map(defender => ({
-      hp: defender.hp, attack: defender.attack, defense: defender.defense, speed: defender.speed,
-    })));
+    const base = await fetchMasterTopCombatPower(row.territory.masterId, 5);
     return {
       owned: true,
       ownerMasterId: row.territory.masterId,
