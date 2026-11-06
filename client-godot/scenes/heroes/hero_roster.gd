@@ -55,6 +55,7 @@ var _pedestal_right_slots_vbox: VBoxContainer = null
 # Grid View & Detail View Navigation references
 var _in_detail_view: bool = false
 var _grid_sort_mode: int = 0 # 0: CP, 1: Level, 2: Stars, 3: Name
+var _grid_sort_ascending: bool = false
 var _grid_view_container: VBoxContainer = null
 var _hero_grid_container: GridContainer = null
 var _grid_total_label: Label = null
@@ -136,10 +137,10 @@ func _get_rarity_border_color(star: int) -> Color:
 	if star >= 5:
 		return Color(1.0, 0.82, 0.24, 0.95)
 	elif star == 4:
-		return Color(0.75, 0.45, 0.95, 0.95)
+		return Color(0.78, 0.48, 0.95, 0.95)
 	elif star == 3:
-		return Color(0.28, 0.68, 0.98, 0.9)
-	return Color(0.35, 0.75, 0.48, 0.85)
+		return Color(0.32, 0.72, 0.95, 0.90)
+	return Color(0.68, 0.52, 0.36, 0.90)
 
 func _get_rarity_rank_name(star: int) -> String:
 	if star >= 5:
@@ -287,7 +288,7 @@ func _setup_enhanced_layout() -> void:
 		sort_lbl.add_theme_color_override("font_color", Color(0.7, 0.78, 0.88))
 		grid_ctrl_row.add_child(sort_lbl)
 
-		var sort_names := ["🔥 Lực Chiến ▼", "📈 Cấp Độ ▼", "⭐ Sao ▼", "🔤 Tên A-Z"]
+		var sort_names := ["🔥 Lực Chiến ▼", "📈 Cấp Độ ▼", "⭐ Sao ▼", "🔤 Tên A-Z ▲"]
 		_sort_buttons.clear()
 		for s_idx in range(sort_names.size()):
 			var sbtn := Button.new()
@@ -296,7 +297,12 @@ func _setup_enhanced_layout() -> void:
 			sbtn.add_theme_font_size_override("font_size", 12)
 			var cur_s := s_idx
 			sbtn.pressed.connect(func():
-				_grid_sort_mode = cur_s
+				if _grid_sort_mode == cur_s:
+					_grid_sort_ascending = not _grid_sort_ascending
+				else:
+					_grid_sort_mode = cur_s
+					_grid_sort_ascending = false
+				_update_sort_button_labels()
 				_refresh_hero_list(str(_selected_hero.get("id", "")))
 			)
 			grid_ctrl_row.add_child(sbtn)
@@ -1550,42 +1556,54 @@ func _play_3d_star_promotion_burst() -> void:
 # HERO LIST & FILTERING
 # ==============================================================================
 
+func _update_sort_button_labels() -> void:
+	var labels := [
+		"🔥 Lực Chiến " + ("▲" if _grid_sort_ascending and _grid_sort_mode == 0 else "▼"),
+		"📈 Cấp Độ " + ("▲" if _grid_sort_ascending and _grid_sort_mode == 1 else "▼"),
+		"⭐ Sao " + ("▲" if _grid_sort_ascending and _grid_sort_mode == 2 else "▼"),
+		"🔤 Tên " + ("Z-A ▼" if _grid_sort_ascending and _grid_sort_mode == 3 else "A-Z ▲")
+	]
+	for i in range(_sort_buttons.size()):
+		if i < labels.size():
+			_sort_buttons[i].text = labels[i]
+			_sort_buttons[i].modulate = Color(1.0, 0.92, 0.42) if i == _grid_sort_mode else Color(0.82, 0.88, 0.96)
+
 func _sort_filtered_heroes() -> void:
 	match _grid_sort_mode:
-		0: # Combat Power (descending)
+		0: # Combat Power
 			_filtered_heroes.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 				var cpa := int(a.get("combatPower", 0))
 				var cpb := int(b.get("combatPower", 0))
 				if cpa != cpb:
-					return cpa > cpb
+					return (cpa < cpb) if _grid_sort_ascending else (cpa > cpb)
 				return int(a.get("level", 1)) > int(b.get("level", 1))
 			)
-		1: # Level (descending)
+		1: # Level
 			_filtered_heroes.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 				var lva := int(a.get("level", 1))
 				var lvb := int(b.get("level", 1))
 				if lva != lvb:
-					return lva > lvb
+					return (lva < lvb) if _grid_sort_ascending else (lva > lvb)
 				return int(a.get("combatPower", 0)) > int(b.get("combatPower", 0))
 			)
-		2: # Rarity / Stars (descending)
+		2: # Rarity / Stars
 			_filtered_heroes.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 				var sta := int(a.get("rarity", 1))
 				var stb := int(b.get("rarity", 1))
 				if sta != stb:
-					return sta > stb
+					return (sta < stb) if _grid_sort_ascending else (sta > stb)
 				return int(a.get("combatPower", 0)) > int(b.get("combatPower", 0))
 			)
-		3: # Name A-Z
+		3: # Name A-Z / Z-A
 			_filtered_heroes.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-				return str(a.get("name", "")).nocasecmp_to(str(b.get("name", ""))) < 0
+				var cmp := str(a.get("name", "")).nocasecmp_to(str(b.get("name", "")))
+				return (cmp > 0) if _grid_sort_ascending else (cmp < 0)
 			)
 
 func _refresh_hero_list(preserve_hero_id: String = "") -> void:
 	for i in range(_filter_buttons.size()):
 		_filter_buttons[i].modulate = Color(1.0, 0.92, 0.42) if i == _roster_filter_mode else Color(0.82, 0.88, 0.96)
-	for i in range(_sort_buttons.size()):
-		_sort_buttons[i].modulate = Color(1.0, 0.92, 0.42) if i == _grid_sort_mode else Color(0.82, 0.88, 0.96)
+	_update_sort_button_labels()
 
 	hero_item_list.clear()
 	_filtered_heroes.clear()
@@ -1745,8 +1763,7 @@ func _render_hero_grid() -> void:
 
 	for i in range(_filter_buttons.size()):
 		_filter_buttons[i].modulate = Color(1.0, 0.92, 0.42) if i == _roster_filter_mode else Color(0.82, 0.88, 0.96)
-	for i in range(_sort_buttons.size()):
-		_sort_buttons[i].modulate = Color(1.0, 0.92, 0.42) if i == _grid_sort_mode else Color(0.82, 0.88, 0.96)
+	_update_sort_button_labels()
 
 	if _filtered_heroes.is_empty():
 		var empty_lbl := Label.new()
@@ -1762,6 +1779,31 @@ func _render_hero_grid() -> void:
 			var card := _build_hero_card(h)
 			_hero_grid_container.add_child(card)
 
+func _draw_card_occult_rings(canvas: Control, rarity_col: Color) -> void:
+	var c: Vector2 = canvas.size / 2.0
+	var ring_col := Color(rarity_col.r, rarity_col.g, rarity_col.b, 0.26)
+	var thin_ring_col := Color(rarity_col.r, rarity_col.g, rarity_col.b, 0.16)
+	var spoke_col := Color(rarity_col.r, rarity_col.g, rarity_col.b, 0.14)
+
+	# Concentric summoning rings (Pick Me Up Tarot halo)
+	canvas.draw_arc(c, 58.0, 0.0, TAU, 48, ring_col, 1.5, true)
+	canvas.draw_arc(c, 44.0, 0.0, TAU, 36, thin_ring_col, 1.0, true)
+	canvas.draw_arc(c, 30.0, 0.0, TAU, 28, thin_ring_col, 1.0, true)
+
+	# Cardinal crosshair ticks
+	canvas.draw_line(c - Vector2(66.0, 0.0), c - Vector2(50.0, 0.0), spoke_col, 1.2, true)
+	canvas.draw_line(c + Vector2(50.0, 0.0), c + Vector2(66.0, 0.0), spoke_col, 1.2, true)
+	canvas.draw_line(c - Vector2(0.0, 66.0), c - Vector2(0.0, 50.0), spoke_col, 1.2, true)
+	canvas.draw_line(c + Vector2(0.0, 50.0), c + Vector2(0.0, 66.0), spoke_col, 1.2, true)
+
+	# Diagonal occult ticks (45 deg)
+	var d45 := Vector2(0.7071, 0.7071)
+	canvas.draw_line(c + d45 * 52.0, c + d45 * 62.0, spoke_col, 1.0, true)
+	canvas.draw_line(c - d45 * 52.0, c - d45 * 62.0, spoke_col, 1.0, true)
+	var d135 := Vector2(-0.7071, 0.7071)
+	canvas.draw_line(c + d135 * 52.0, c + d135 * 62.0, spoke_col, 1.0, true)
+	canvas.draw_line(c - d135 * 52.0, c - d135 * 62.0, spoke_col, 1.0, true)
+
 func _build_hero_card(h: Dictionary) -> Control:
 	var hid: String = str(h.get("id", ""))
 	var star: int = int(h.get("rarity", 1))
@@ -1776,6 +1818,7 @@ func _build_hero_card(h: Dictionary) -> Control:
 	var is_locked: bool = bool(h.get("isLocked", false))
 	var hname: String = str(h.get("name", "Hero"))
 	var state_str: String = str(h.get("state", "ALIVE"))
+	var rarity_col: Color = _get_rarity_border_color(star)
 
 	var d_stats: Dictionary = h.get("derivedStats", {}) if h.get("derivedStats") is Dictionary else {}
 	var atk: int = int(d_stats.get("attack", h.get("attack", 10)))
@@ -1784,92 +1827,122 @@ func _build_hero_card(h: Dictionary) -> Control:
 	var spd: int = int(d_stats.get("speed", h.get("speed", 10)))
 	var cp: int = int(h.get("combatPower", mhp + atk * 4 + def_val * 3 + spd * 2))
 
+	# Outer Card Panel (Pick Me Up Tarot proportions ~230x335)
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(230, 275)
+	card.custom_minimum_size = Vector2(230, 335)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var cstyle := StyleBoxFlat.new()
-	cstyle.bg_color = Color(0.06, 0.08, 0.13, 0.96)
-	cstyle.border_width_left = 2
-	cstyle.border_width_top = 2
-	cstyle.border_width_right = 2
-	cstyle.border_width_bottom = 2
-	cstyle.border_color = _get_rarity_border_color(star)
-	cstyle.corner_radius_top_left = 8
-	cstyle.corner_radius_top_right = 8
-	cstyle.corner_radius_bottom_left = 8
-	cstyle.corner_radius_bottom_right = 8
-	cstyle.shadow_size = 4
-	cstyle.shadow_color = Color(0, 0, 0, 0.45)
+	cstyle.bg_color = Color(0.065, 0.075, 0.10, 0.98)
+	cstyle.border_width_left = 3 if star >= 5 else 2
+	cstyle.border_width_top = 3 if star >= 5 else 2
+	cstyle.border_width_right = 3 if star >= 5 else 2
+	cstyle.border_width_bottom = 3 if star >= 5 else 2
+	cstyle.border_color = rarity_col
+	cstyle.corner_radius_top_left = 10
+	cstyle.corner_radius_top_right = 10
+	cstyle.corner_radius_bottom_left = 10
+	cstyle.corner_radius_bottom_right = 10
+	cstyle.shadow_size = 6
+	cstyle.shadow_color = Color(0, 0, 0, 0.55)
 	card.add_theme_stylebox_override("panel", cstyle)
 
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 8)
-	margin.add_theme_constant_override("margin_top", 7)
-	margin.add_theme_constant_override("margin_right", 8)
-	margin.add_theme_constant_override("margin_bottom", 7)
-	card.add_child(margin)
+	# Inset margin for double-line ornate border
+	var outer_margin := MarginContainer.new()
+	outer_margin.add_theme_constant_override("margin_left", 4)
+	outer_margin.add_theme_constant_override("margin_top", 4)
+	outer_margin.add_theme_constant_override("margin_right", 4)
+	outer_margin.add_theme_constant_override("margin_bottom", 4)
+	card.add_child(outer_margin)
+
+	# Inner Inset Frame
+	var inner_frame := PanelContainer.new()
+	var if_style := StyleBoxFlat.new()
+	if_style.bg_color = Color(0, 0, 0, 0)
+	if_style.border_width_left = 1
+	if_style.border_width_top = 1
+	if_style.border_width_right = 1
+	if_style.border_width_bottom = 1
+	if_style.border_color = Color(rarity_col.r, rarity_col.g, rarity_col.b, 0.38)
+	if_style.corner_radius_top_left = 6
+	if_style.corner_radius_top_right = 6
+	if_style.corner_radius_bottom_left = 6
+	if_style.corner_radius_bottom_right = 6
+	inner_frame.add_theme_stylebox_override("panel", if_style)
+	outer_margin.add_child(inner_frame)
+
+	var content_margin := MarginContainer.new()
+	content_margin.add_theme_constant_override("margin_left", 6)
+	content_margin.add_theme_constant_override("margin_top", 5)
+	content_margin.add_theme_constant_override("margin_right", 6)
+	content_margin.add_theme_constant_override("margin_bottom", 6)
+	inner_frame.add_child(content_margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 5)
+	vbox.add_theme_constant_override("separation", 4)
 	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	margin.add_child(vbox)
+	content_margin.add_child(vbox)
 
-	# 1. Header Row: Class/Element Pill + Party/Lock Status
+	# 1. Header Row: Class/Element Pill + Top Celestial Crest + Party/Lock Status
 	var header_row := HBoxContainer.new()
 	header_row.add_theme_constant_override("separation", 4)
 	vbox.add_child(header_row)
 
 	var class_pill := PanelContainer.new()
 	var cp_style := StyleBoxFlat.new()
-	cp_style.bg_color = Color(0.12, 0.16, 0.23, 0.85)
-	cp_style.corner_radius_top_left = 4
-	cp_style.corner_radius_top_right = 4
-	cp_style.corner_radius_bottom_left = 4
-	cp_style.corner_radius_bottom_right = 4
+	cp_style.bg_color = Color(0.10, 0.13, 0.18, 0.90)
+	cp_style.corner_radius_top_left = 3
+	cp_style.corner_radius_top_right = 3
+	cp_style.corner_radius_bottom_left = 3
+	cp_style.corner_radius_bottom_right = 3
 	class_pill.add_theme_stylebox_override("panel", cp_style)
 	var cp_margin := MarginContainer.new()
 	cp_margin.add_theme_constant_override("margin_left", 5)
 	cp_margin.add_theme_constant_override("margin_right", 5)
-	cp_margin.add_theme_constant_override("margin_top", 2)
-	cp_margin.add_theme_constant_override("margin_bottom", 2)
+	cp_margin.add_theme_constant_override("margin_top", 1)
+	cp_margin.add_theme_constant_override("margin_bottom", 1)
 	class_pill.add_child(cp_margin)
 	var class_lbl := Label.new()
 	class_lbl.text = "%s %s" % [_get_hero_class_icon(cls), cls.to_upper()]
-	class_lbl.add_theme_font_size_override("font_size", 10)
+	class_lbl.add_theme_font_size_override("font_size", 9)
 	class_lbl.add_theme_color_override("font_color", _get_hero_element_color(elem))
 	cp_margin.add_child(class_lbl)
 	header_row.add_child(class_pill)
 
-	var elem_lbl := Label.new()
-	elem_lbl.text = "• " + elem.to_upper()
-	elem_lbl.add_theme_font_size_override("font_size", 10)
-	elem_lbl.add_theme_color_override("font_color", _get_hero_element_color(elem).lerp(Color.WHITE, 0.3))
-	header_row.add_child(elem_lbl)
+	var spacer_left := Control.new()
+	spacer_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_row.add_child(spacer_left)
 
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_row.add_child(spacer)
+	# Top Center Celestial Compass Emblem (Pick Me Up tarot crest)
+	var crest_lbl := Label.new()
+	crest_lbl.text = "✦ ☼ ✦"
+	crest_lbl.add_theme_font_size_override("font_size", 9)
+	crest_lbl.add_theme_color_override("font_color", rarity_col.lerp(Color.WHITE, 0.25))
+	header_row.add_child(crest_lbl)
+
+	var spacer_right := Control.new()
+	spacer_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_row.add_child(spacer_right)
 
 	if in_party:
 		var party_pill := PanelContainer.new()
 		var pp_style := StyleBoxFlat.new()
 		pp_style.bg_color = Color(0.85, 0.20, 0.20, 0.95)
-		pp_style.corner_radius_top_left = 4
-		pp_style.corner_radius_top_right = 4
-		pp_style.corner_radius_bottom_left = 4
-		pp_style.corner_radius_bottom_right = 4
+		pp_style.corner_radius_top_left = 3
+		pp_style.corner_radius_top_right = 3
+		pp_style.corner_radius_bottom_left = 3
+		pp_style.corner_radius_bottom_right = 3
 		party_pill.add_theme_stylebox_override("panel", pp_style)
 		var pp_margin := MarginContainer.new()
-		pp_margin.add_theme_constant_override("margin_left", 5)
-		pp_margin.add_theme_constant_override("margin_right", 5)
-		pp_margin.add_theme_constant_override("margin_top", 2)
-		pp_margin.add_theme_constant_override("margin_bottom", 2)
+		pp_margin.add_theme_constant_override("margin_left", 4)
+		pp_margin.add_theme_constant_override("margin_right", 4)
+		pp_margin.add_theme_constant_override("margin_top", 1)
+		pp_margin.add_theme_constant_override("margin_bottom", 1)
 		party_pill.add_child(pp_margin)
 		var party_lbl := Label.new()
-		party_lbl.text = "⚔️ ĐỘI PVE"
-		party_lbl.add_theme_font_size_override("font_size", 9)
+		party_lbl.text = "⚔️ PVE"
+		party_lbl.add_theme_font_size_override("font_size", 8)
 		party_lbl.add_theme_color_override("font_color", Color.WHITE)
 		pp_margin.add_child(party_lbl)
 		header_row.add_child(party_pill)
@@ -1877,20 +1950,20 @@ func _build_hero_card(h: Dictionary) -> Control:
 	if is_locked:
 		var lock_lbl := Label.new()
 		lock_lbl.text = "🔒"
-		lock_lbl.add_theme_font_size_override("font_size", 11)
+		lock_lbl.add_theme_font_size_override("font_size", 10)
 		header_row.add_child(lock_lbl)
 
-	# 2. Hero Avatar Box (Centerpiece)
+	# 2. Hero Avatar Box with Concentric Occult Halo (Pick Me Up center arch)
 	var avatar_box := PanelContainer.new()
-	avatar_box.custom_minimum_size = Vector2(0, 125)
+	avatar_box.custom_minimum_size = Vector2(0, 155)
 	avatar_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var ab_style := StyleBoxFlat.new()
-	ab_style.bg_color = Color(0.08, 0.10, 0.16, 0.95).lerp(_get_hero_element_color(elem), 0.12)
+	ab_style.bg_color = Color(0.045, 0.055, 0.08, 0.95).lerp(_get_hero_element_color(elem), 0.08)
 	ab_style.border_width_left = 1
 	ab_style.border_width_top = 1
 	ab_style.border_width_right = 1
 	ab_style.border_width_bottom = 1
-	ab_style.border_color = Color(0.2, 0.28, 0.38, 0.5)
+	ab_style.border_color = Color(rarity_col.r, rarity_col.g, rarity_col.b, 0.25)
 	ab_style.corner_radius_top_left = 6
 	ab_style.corner_radius_top_right = 6
 	ab_style.corner_radius_bottom_left = 6
@@ -1898,6 +1971,24 @@ func _build_hero_card(h: Dictionary) -> Control:
 	avatar_box.add_theme_stylebox_override("panel", ab_style)
 	vbox.add_child(avatar_box)
 
+	# Halo Canvas for drawing concentric summoning rings
+	var halo_canvas := Control.new()
+	halo_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
+	halo_canvas.draw.connect(_draw_card_occult_rings.bind(halo_canvas, rarity_col))
+	avatar_box.add_child(halo_canvas)
+
+	# Center Hero Silhouette / Class Icon
+	var icon_center := CenterContainer.new()
+	icon_center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	avatar_box.add_child(icon_center)
+
+	var big_icon := Label.new()
+	big_icon.text = _get_hero_class_icon(cls)
+	big_icon.add_theme_font_size_override("font_size", 48)
+	big_icon.modulate = Color(1.0, 1.0, 1.0, 0.90)
+	icon_center.add_child(big_icon)
+
+	# Overlay badges (Awakening top-left, Rank bottom-right)
 	var av_overlay := MarginContainer.new()
 	av_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	av_overlay.add_theme_constant_override("margin_left", 6)
@@ -1906,23 +1997,12 @@ func _build_hero_card(h: Dictionary) -> Control:
 	av_overlay.add_theme_constant_override("margin_bottom", 6)
 	avatar_box.add_child(av_overlay)
 
-	var icon_center := CenterContainer.new()
-	icon_center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	avatar_box.add_child(icon_center)
-
-	var big_icon := Label.new()
-	big_icon.text = _get_hero_class_icon(cls)
-	big_icon.add_theme_font_size_override("font_size", 46)
-	big_icon.modulate = Color(1.0, 1.0, 1.0, 0.85)
-	icon_center.add_child(big_icon)
-
-	# Awakening rank badge top-left
 	if awaken_rank > 0:
 		var awk_pill := PanelContainer.new()
 		awk_pill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		awk_pill.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		var awk_style := StyleBoxFlat.new()
-		awk_style.bg_color = Color(0.12, 0.38, 0.52, 0.9)
+		awk_style.bg_color = Color(0.10, 0.35, 0.48, 0.92)
 		awk_style.corner_radius_top_left = 3
 		awk_style.corner_radius_top_right = 3
 		awk_style.corner_radius_bottom_left = 3
@@ -1930,22 +2010,22 @@ func _build_hero_card(h: Dictionary) -> Control:
 		awk_pill.add_theme_stylebox_override("panel", awk_style)
 		var awk_lbl := Label.new()
 		awk_lbl.text = "⚡ +%d" % awaken_rank
-		awk_lbl.add_theme_font_size_override("font_size", 10)
+		awk_lbl.add_theme_font_size_override("font_size", 9)
 		awk_lbl.add_theme_color_override("font_color", Color(0.5, 0.95, 1.0))
 		awk_pill.add_child(awk_lbl)
 		av_overlay.add_child(awk_pill)
 
-	# S/A/B Rank Box bottom-right (Path to Nowhere style)
+	# Rank badge bottom-right (S RANK, A RANK, etc.)
 	var rank_box := PanelContainer.new()
 	rank_box.size_flags_horizontal = Control.SIZE_SHRINK_END
 	rank_box.size_flags_vertical = Control.SIZE_SHRINK_END
 	var rb_style := StyleBoxFlat.new()
-	rb_style.bg_color = Color(0.05, 0.07, 0.11, 0.88)
+	rb_style.bg_color = Color(0.04, 0.06, 0.09, 0.90)
 	rb_style.border_width_left = 1
 	rb_style.border_width_top = 1
 	rb_style.border_width_right = 1
 	rb_style.border_width_bottom = 1
-	rb_style.border_color = _get_rarity_border_color(star)
+	rb_style.border_color = rarity_col
 	rb_style.corner_radius_top_left = 3
 	rb_style.corner_radius_top_right = 3
 	rb_style.corner_radius_bottom_left = 3
@@ -1960,7 +2040,7 @@ func _build_hero_card(h: Dictionary) -> Control:
 	var rank_lbl := Label.new()
 	rank_lbl.text = "%s RANK" % _get_rarity_rank_name(star)
 	rank_lbl.add_theme_font_size_override("font_size", 9)
-	rank_lbl.add_theme_color_override("font_color", _get_rarity_border_color(star))
+	rank_lbl.add_theme_color_override("font_color", rarity_col)
 	rb_margin.add_child(rank_lbl)
 	av_overlay.add_child(rank_box)
 
@@ -1969,7 +2049,7 @@ func _build_hero_card(h: Dictionary) -> Control:
 		var dead_panel := PanelContainer.new()
 		dead_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 		var dp_style := StyleBoxFlat.new()
-		dp_style.bg_color = Color(0.4, 0.05, 0.05, 0.75)
+		dp_style.bg_color = Color(0.4, 0.05, 0.05, 0.78)
 		dead_panel.add_theme_stylebox_override("panel", dp_style)
 		var dead_lbl := Label.new()
 		dead_lbl.text = "TỬ TRẬN" if state_str == "DEAD" else "THƯƠNG NẶNG"
@@ -1980,68 +2060,87 @@ func _build_hero_card(h: Dictionary) -> Control:
 		dead_panel.add_child(dead_lbl)
 		avatar_box.add_child(dead_panel)
 
-	# 3. Level & CP Row
-	var lvl_row := HBoxContainer.new()
-	lvl_row.add_theme_constant_override("separation", 4)
-	vbox.add_child(lvl_row)
-
-	var lvl_lbl := Label.new()
-	lvl_lbl.text = "Lv.%d" % lvl
-	lvl_lbl.add_theme_font_size_override("font_size", 15)
-	lvl_lbl.add_theme_color_override("font_color", Color.WHITE)
-	lvl_row.add_child(lvl_lbl)
-
-	var max_lvl_lbl := Label.new()
-	max_lvl_lbl.text = "/%d" % max_lvl
-	max_lvl_lbl.add_theme_font_size_override("font_size", 11)
-	max_lvl_lbl.add_theme_color_override("font_color", Color(0.68, 0.75, 0.85))
-	lvl_row.add_child(max_lvl_lbl)
-
-	if star_ceiling > max_lvl:
-		var bt_tag := Label.new()
-		bt_tag.text = "(Trần %d)" % star_ceiling
-		bt_tag.add_theme_font_size_override("font_size", 10)
-		bt_tag.add_theme_color_override("font_color", Color(0.9, 0.7, 0.3))
-		lvl_row.add_child(bt_tag)
-
-	var lvl_spacer := Control.new()
-	lvl_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lvl_row.add_child(lvl_spacer)
-
-	var cp_lbl := Label.new()
-	cp_lbl.text = "🔥 LC: %s" % _format_num(cp)
-	cp_lbl.add_theme_font_size_override("font_size", 12)
-	cp_lbl.add_theme_color_override("font_color", Color(1.0, 0.58, 0.25))
-	lvl_row.add_child(cp_lbl)
-
-	# 4. Hero Name
-	var name_lbl := Label.new()
-	name_lbl.text = hname
-	name_lbl.clip_text = true
-	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_lbl.add_theme_font_size_override("font_size", 13)
-	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0))
-	vbox.add_child(name_lbl)
-
-	# 5. Stars & Breakthrough Status Row
-	var star_row := HBoxContainer.new()
-	star_row.add_theme_constant_override("separation", 6)
-	vbox.add_child(star_row)
+	# 3. Centered Glowing Stars (Directly above nameplate banner, matching Image 2)
+	var star_box := HBoxContainer.new()
+	star_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	star_box.add_theme_constant_override("separation", 4)
+	vbox.add_child(star_box)
 
 	var star_lbl := Label.new()
 	star_lbl.text = "★".repeat(clampi(star, 1, 7))
-	star_lbl.add_theme_font_size_override("font_size", 12)
-	star_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.25))
-	star_row.add_child(star_lbl)
+	star_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	star_lbl.add_theme_font_size_override("font_size", 15)
+	star_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.32))
+	star_box.add_child(star_lbl)
 
 	if promo_rank > 0:
 		var promo_lbl := Label.new()
-		promo_lbl.text = "• Đột Phá +%d" % promo_rank
+		promo_lbl.text = "+%d" % promo_rank
 		promo_lbl.add_theme_font_size_override("font_size", 10)
 		promo_lbl.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
-		star_row.add_child(promo_lbl)
+		star_box.add_child(promo_lbl)
 
-	# Click overlay button
+	# 4. Iconic Pick Me Up Nameplate Banner (< HERO NAME >)
+	var name_plate := PanelContainer.new()
+	name_plate.custom_minimum_size = Vector2(0, 26)
+	var np_style := StyleBoxFlat.new()
+	np_style.bg_color = Color(0.04, 0.05, 0.07, 0.98)
+	np_style.border_width_left = 1
+	np_style.border_width_top = 1
+	np_style.border_width_right = 1
+	np_style.border_width_bottom = 1
+	np_style.border_color = Color(rarity_col.r, rarity_col.g, rarity_col.b, 0.70)
+	np_style.corner_radius_top_left = 3
+	np_style.corner_radius_top_right = 3
+	np_style.corner_radius_bottom_left = 3
+	np_style.corner_radius_bottom_right = 3
+	name_plate.add_theme_stylebox_override("panel", np_style)
+	vbox.add_child(name_plate)
+
+	var np_margin := MarginContainer.new()
+	np_margin.add_theme_constant_override("margin_left", 6)
+	np_margin.add_theme_constant_override("margin_right", 6)
+	np_margin.add_theme_constant_override("margin_top", 3)
+	np_margin.add_theme_constant_override("margin_bottom", 3)
+	name_plate.add_child(np_margin)
+
+	var name_lbl := Label.new()
+	name_lbl.text = "<  %s  >" % hname.to_upper()
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.clip_text = true
+	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_lbl.add_theme_font_size_override("font_size", 12)
+	name_lbl.add_theme_color_override("font_color", Color(0.96, 0.97, 1.0))
+	np_margin.add_child(name_lbl)
+
+	# 5. Tactical Status Ribbon (Level on left, Combat Power on right)
+	var ribbon := HBoxContainer.new()
+	ribbon.add_theme_constant_override("separation", 4)
+	vbox.add_child(ribbon)
+
+	var lvl_lbl := Label.new()
+	lvl_lbl.text = "Lv.%d" % lvl
+	lvl_lbl.add_theme_font_size_override("font_size", 12)
+	lvl_lbl.add_theme_color_override("font_color", Color.WHITE)
+	ribbon.add_child(lvl_lbl)
+
+	var max_lvl_lbl := Label.new()
+	max_lvl_lbl.text = "/%d" % max_lvl
+	max_lvl_lbl.add_theme_font_size_override("font_size", 10)
+	max_lvl_lbl.add_theme_color_override("font_color", Color(0.68, 0.75, 0.85))
+	ribbon.add_child(max_lvl_lbl)
+
+	var ribbon_spacer := Control.new()
+	ribbon_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ribbon.add_child(ribbon_spacer)
+
+	var cp_lbl := Label.new()
+	cp_lbl.text = "🔥 LC: %s" % _format_num(cp)
+	cp_lbl.add_theme_font_size_override("font_size", 11)
+	cp_lbl.add_theme_color_override("font_color", Color(1.0, 0.62, 0.25))
+	ribbon.add_child(cp_lbl)
+
+	# Full-card Click overlay button
 	var click_btn := Button.new()
 	click_btn.flat = true
 	click_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -2049,7 +2148,7 @@ func _build_hero_card(h: Dictionary) -> Control:
 	card.add_child(click_btn)
 
 	click_btn.mouse_entered.connect(func():
-		card.modulate = Color(1.18, 1.18, 1.18)
+		card.modulate = Color(1.15, 1.15, 1.15)
 	)
 	click_btn.mouse_exited.connect(func():
 		card.modulate = Color(1.0, 1.0, 1.0)
