@@ -655,3 +655,17 @@ Signed: Antigravity Assistant
   4. Locked Column 3 (`right_card`) to fill the exact remaining space (`custom_minimum_size = Vector2(520, 0)`, `clip_contents = true`).
   5. Unified the header typography of Tab 0 ("Chỉ Số") to use `_add_tab_header` identical to Tabs 1, 2, and 3.
   6. Verified Godot engine syntax check (0 errors) and encoding check (clean).
+
+## Update - 2026-11-07 05:36:30 ICT (UTC+7)
+
+Signed: Antigravity Assistant
+
+### Work Completed
+
+- Resolved all 5 Godot linter warnings in `client-godot/scenes/heroes/hero_roster.gd`:
+  1. Removed unused class variable `_equipment_filter_slot` (Line 35).
+  2. Prefixed unused local variable `hid` with underscore `_hid` in `_render_tab_stats_and_training` (Line 2281).
+  3. Renamed shadowed parameter `is_visible` to `show_overlay` in `_update_pedestal_equipment_overlay` to avoid shadowing `CanvasItem.is_visible()` (Line 2803).
+  4. Prefixed unused local variable `hid` with underscore `_hid` in `_on_unequip_pressed` (Line 4122).
+  5. Prefixed unused local variable `hid` with underscore `_hid` in `_on_enhance_eq_pressed` (Line 4135).
+- Verified Godot engine syntax check (0 errors, 0 warnings) and encoding check (clean).
