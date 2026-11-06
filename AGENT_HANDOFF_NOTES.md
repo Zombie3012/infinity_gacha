@@ -591,3 +591,29 @@ Signed: Antigravity, project assistant
 - **Fixed Infinite Stacking Bug**:
   - Added node clearing (`c.queue_free()`) directly at the start of `_render_tab_equipment`, `_render_tab_stats_and_training`, `_render_tab_skills_and_awakening`, and `_render_tab_imprints`, preventing duplicate panel stacking when clicking filters or pedestal slots repeatedly.
 
+
+## Update - 2026-11-07 04:50:00 ICT (UTC+7)
+
+Signed: Antigravity Assistant
+
+### Work Completed
+
+1. **Pick Me Up Webtoon Tarot Card Aesthetic (`media_1794000000188_d2e878d6.jpg`)**:
+   - Redesigned Hero Cards in `client-godot/scenes/heroes/hero_roster.gd` to match the Pick Me Up webtoon tarot card proportions (`230x335px`).
+   - Implemented double-line ornate border framing with rounded corners and antique metallic rarity coloring (Radiant Gold for 5★, Imperial Purple for 4★, Arcane Azure for 3★, Antique Bronze for 1-2★).
+   - Added top center celestial crest (`✦ ☼ ✦`) flanked by Class/Element pill and PvE party / lock badges.
+   - Built concentric occult summoning circle rings (`_draw_card_occult_rings`) with dynamic anti-aliased arcs and cardinal/diagonal occult tick lines behind the center hero avatar.
+   - Added top-left awakening badge (`⚡ +X`) and bottom-right evaluation plaque (`S RANK`, `A RANK`, `B RANK`, `C RANK`).
+   - Positioned luminous gold stars (`★`) directly above the hero nameplate banner.
+   - Created iconic Pick Me Up nameplate plaque: beveled metallic banner `<  HERO NAME  >` in bold uppercase typography.
+   - Bottom status ribbon: clean `Lv.X/Y` and Combat Power `🔥 LC: ...`.
+
+2. **Bidirectional Sorting (Cao Xuống Thấp & Thấp Lên Cao)**:
+   - Added `_grid_sort_ascending: bool` toggle to hero roster grid.
+   - Clicking the active sort button toggles between Descending (`▼`) and Ascending (`▲`).
+   - Dynamic button labels: `🔥 Lực Chiến ▼/▲`, `📈 Cấp Độ ▼/▲`, `⭐ Sao ▼/▲`, `🔤 Tên A-Z ▲ / Z-A ▼`.
+   - Updated `_sort_filtered_heroes()` to sort in both ascending and descending directions for all 4 sort modes.
+
+3. **Verification**:
+   - Godot syntax validation passed clean (`--headless --check-only --quit` exited with 0).
+   - File encoding check passed (350 files clean, UTF-8 without BOM).
