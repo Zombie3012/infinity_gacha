@@ -1956,58 +1956,25 @@ func _build_hero_card(h: Dictionary) -> Control:
 	halo_canvas.draw.connect(_draw_card_occult_rings.bind(halo_canvas, rarity_col))
 	avatar_box.add_child(halo_canvas)
 
-	# Center Hero Silhouette + Class Pill (positioned in image above stars)
+	# Center Hero Silhouette (centered on occult halo rings)
 	var icon_center := CenterContainer.new()
 	icon_center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	avatar_box.add_child(icon_center)
 
-	var center_vbox := VBoxContainer.new()
-	center_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	center_vbox.add_theme_constant_override("separation", 6)
-	icon_center.add_child(center_vbox)
-
 	var big_icon := Label.new()
 	big_icon.text = _get_hero_class_icon(cls)
 	big_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	big_icon.add_theme_font_size_override("font_size", 46)
+	big_icon.add_theme_font_size_override("font_size", 48)
 	big_icon.modulate = Color(1.0, 1.0, 1.0, 0.90)
-	center_vbox.add_child(big_icon)
+	icon_center.add_child(big_icon)
 
-	var class_pill := PanelContainer.new()
-	class_pill.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	var cp_style := StyleBoxFlat.new()
-	cp_style.bg_color = Color(0.07, 0.09, 0.14, 0.88)
-	cp_style.border_width_left = 1
-	cp_style.border_width_top = 1
-	cp_style.border_width_right = 1
-	cp_style.border_width_bottom = 1
-	cp_style.border_color = Color(rarity_col.r, rarity_col.g, rarity_col.b, 0.40)
-	cp_style.corner_radius_top_left = 3
-	cp_style.corner_radius_top_right = 3
-	cp_style.corner_radius_bottom_left = 3
-	cp_style.corner_radius_bottom_right = 3
-	class_pill.add_theme_stylebox_override("panel", cp_style)
-	var cp_margin := MarginContainer.new()
-	cp_margin.add_theme_constant_override("margin_left", 6)
-	cp_margin.add_theme_constant_override("margin_right", 6)
-	cp_margin.add_theme_constant_override("margin_top", 1)
-	cp_margin.add_theme_constant_override("margin_bottom", 1)
-	class_pill.add_child(cp_margin)
-	var class_lbl := Label.new()
-	class_lbl.text = "%s %s" % [_get_hero_class_icon(cls), cls.to_upper()]
-	class_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	class_lbl.add_theme_font_size_override("font_size", 9)
-	class_lbl.add_theme_color_override("font_color", _get_hero_element_color(elem))
-	cp_margin.add_child(class_lbl)
-	center_vbox.add_child(class_pill)
-
-	# Overlay badges (Awakening top-left)
+	# Overlay badges (Awakening top-left, Class pill at bottom-center border)
 	var av_overlay := MarginContainer.new()
 	av_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	av_overlay.add_theme_constant_override("margin_left", 6)
 	av_overlay.add_theme_constant_override("margin_top", 6)
 	av_overlay.add_theme_constant_override("margin_right", 6)
-	av_overlay.add_theme_constant_override("margin_bottom", 6)
+	av_overlay.add_theme_constant_override("margin_bottom", 4)
 	avatar_box.add_child(av_overlay)
 
 	if awaken_rank > 0:
@@ -2027,6 +1994,36 @@ func _build_hero_card(h: Dictionary) -> Control:
 		awk_lbl.add_theme_color_override("font_color", Color(0.5, 0.95, 1.0))
 		awk_pill.add_child(awk_lbl)
 		av_overlay.add_child(awk_pill)
+
+	# Class Pill at bottom edge, horizontally centered (viền dưới, ở giữa trên các sao)
+	var class_pill := PanelContainer.new()
+	class_pill.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	class_pill.size_flags_vertical = Control.SIZE_SHRINK_END
+	var cp_style := StyleBoxFlat.new()
+	cp_style.bg_color = Color(0.06, 0.08, 0.12, 0.92)
+	cp_style.border_width_left = 1
+	cp_style.border_width_top = 1
+	cp_style.border_width_right = 1
+	cp_style.border_width_bottom = 1
+	cp_style.border_color = Color(rarity_col.r, rarity_col.g, rarity_col.b, 0.45)
+	cp_style.corner_radius_top_left = 3
+	cp_style.corner_radius_top_right = 3
+	cp_style.corner_radius_bottom_left = 3
+	cp_style.corner_radius_bottom_right = 3
+	class_pill.add_theme_stylebox_override("panel", cp_style)
+	var cp_margin := MarginContainer.new()
+	cp_margin.add_theme_constant_override("margin_left", 7)
+	cp_margin.add_theme_constant_override("margin_right", 7)
+	cp_margin.add_theme_constant_override("margin_top", 1)
+	cp_margin.add_theme_constant_override("margin_bottom", 1)
+	class_pill.add_child(cp_margin)
+	var class_lbl := Label.new()
+	class_lbl.text = "%s %s" % [_get_hero_class_icon(cls), cls.to_upper()]
+	class_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	class_lbl.add_theme_font_size_override("font_size", 9)
+	class_lbl.add_theme_color_override("font_color", _get_hero_element_color(elem))
+	cp_margin.add_child(class_lbl)
+	av_overlay.add_child(class_pill)
 
 	# Dead / disabled status overlay
 	if state_str == "DEAD" or state_str == "DISABLED":
