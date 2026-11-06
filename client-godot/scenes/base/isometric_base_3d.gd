@@ -155,6 +155,8 @@ func _ready() -> void:
 			GameState.master_name,
 			GameState.master_level
 		]
+	else:
+		status_banner_label.text = "⚠️ KHÔNG THỂ KẾT NỐI SERVER BACKEND (PORT 3000)! Vui lòng kiểm tra lại server."
 
 func _setup_landmark_metadata() -> void:
 	bonfire_body.set_meta("interactable_type", "LANDMARK")
