@@ -641,3 +641,17 @@ Signed: Antigravity Assistant
   - Moved the Class pill to the **bottom border/edge** (`SIZE_SHRINK_END`) of the avatar box, horizontally centered (`SIZE_SHRINK_CENTER`), positioned cleanly right above the stars.
   - Kept the hero silhouette/icon centered in the middle of the avatar box (`CenterContainer`), perfectly aligned with the occult halo rings.
 - Verified Godot syntax check and encoding check (clean).
+
+## Update - 2026-11-07 05:29:00 ICT (UTC+7)
+
+Signed: Antigravity Assistant
+
+### Work Completed
+
+- Fixed layout shifting / misalignment across hero detail profile tabs ("Chỉ Số", "Kỹ Năng", "Ấn Ký", "Trang Bị"):
+  1. Identified root cause: Both `pedestal_card` (Center Column 2) and `right_card` (Right Column 3) used dynamic `SIZE_EXPAND_FILL` without fixed widths. When children in each tab had different natural minimum widths (e.g. EXP book controls vs 2-column imprint grid vs Genshin artifact split vs pedestal 10-slot overlay), Godot's `HBoxContainer` dynamically resized the columns, causing the 3D model frame and right detail panel to shift 45-55 pixels horizontally on tab switches.
+  2. Locked Column 1 (`left_col`) to fixed width `175px` (`size_flags_horizontal = 0`).
+  3. Locked Column 2 (`pedestal_card`) to fixed width `490px` (`size_flags_horizontal = 0`, `clip_contents = true`, inner `stage_stack` `470x480px`).
+  4. Locked Column 3 (`right_card`) to fill the exact remaining space (`custom_minimum_size = Vector2(520, 0)`, `clip_contents = true`).
+  5. Unified the header typography of Tab 0 ("Chỉ Số") to use `_add_tab_header` identical to Tabs 1, 2, and 3.
+  6. Verified Godot engine syntax check (0 errors) and encoding check (clean).
