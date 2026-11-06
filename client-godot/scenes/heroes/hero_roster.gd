@@ -363,7 +363,8 @@ func _setup_enhanced_layout() -> void:
 	# COLUMN 1: LEFT NAVIGATION & TABS (Honkai Star Rail Style)
 	# ==============================================================================
 	var left_col := VBoxContainer.new()
-	left_col.custom_minimum_size = Vector2(185, 0)
+	left_col.custom_minimum_size = Vector2(175, 0)
+	left_col.size_flags_horizontal = 0
 	left_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left_col.add_theme_constant_override("separation", 8)
 	hsr_layout.add_child(left_col)
@@ -467,8 +468,10 @@ func _setup_enhanced_layout() -> void:
 	# COLUMN 2: CENTER STAGE 3D PEDESTAL
 	# ==============================================================================
 	var pedestal_card := PanelContainer.new()
-	pedestal_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pedestal_card.custom_minimum_size = Vector2(490, 0)
+	pedestal_card.size_flags_horizontal = 0
 	pedestal_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pedestal_card.clip_contents = true
 	var pstyle := StyleBoxFlat.new()
 	pstyle.bg_color = Color(0.04, 0.06, 0.10, 0.94)
 	pstyle.border_width_left = 1
@@ -490,9 +493,10 @@ func _setup_enhanced_layout() -> void:
 	pedestal_card.add_child(ped_vbox)
 
 	var stage_stack := Control.new()
-	stage_stack.custom_minimum_size = Vector2(420, 480)
+	stage_stack.custom_minimum_size = Vector2(470, 480)
 	stage_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stage_stack.clip_contents = true
 	ped_vbox.add_child(stage_stack)
 
 	var sub_vp_container := SubViewportContainer.new()
@@ -572,9 +576,10 @@ func _setup_enhanced_layout() -> void:
 	# COLUMN 3: RIGHT PANEL (Header, Active Tab Scroll, and Ascend Button)
 	# ==============================================================================
 	var right_card := PanelContainer.new()
-	right_card.custom_minimum_size = Vector2(480, 0)
+	right_card.custom_minimum_size = Vector2(520, 0)
 	right_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_card.clip_contents = true
 	var rstyle := StyleBoxFlat.new()
 	rstyle.bg_color = Color(0.06, 0.08, 0.14, 0.95)
 	rstyle.border_width_left = 1
@@ -2292,15 +2297,7 @@ func _render_tab_stats_and_training(h: Dictionary) -> void:
 	var cp := int(h.get("combatPower", max_hp + atk * 4 + def_val * 3 + spd * 2))
 
 	# Sub-header: Stats (Honkai Star Rail style)
-	var header_bar := HBoxContainer.new()
-	header_bar.add_theme_constant_override("separation", 6)
-	_tab_content_vbox.add_child(header_bar)
-
-	var sub_head := Label.new()
-	sub_head.text = "THÔNG SỐ CHIẾN ĐẤU (STATS)"
-	sub_head.add_theme_font_size_override("font_size", 14)
-	sub_head.add_theme_color_override("font_color", Color(0.9, 0.94, 1.0))
-	header_bar.add_child(sub_head)
+	_add_tab_header("⚔️ THÔNG SỐ CHIẾN ĐẤU (STATS)", Color(0.9, 0.94, 1.0))
 
 	# Essential Stats Panel (Clean key-value rows matching HSR screenshot)
 	var stats_card := PanelContainer.new()
