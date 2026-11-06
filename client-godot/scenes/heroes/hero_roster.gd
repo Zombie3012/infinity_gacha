@@ -32,7 +32,6 @@ var _hero_imprints: Array = []
 var _active_profile_tab: int = 0 # 0: Stats, 1: Skills, 2: Imprints, 3: Equipment
 var _roster_filter_mode: int = 0 # 0: All, 1: Party, 2: 4-5★, 3: 1-3★
 var _selected_exp_book_id: String = "SAMPLE_HERO_EXP_100"
-var _equipment_filter_slot: String = "ALL"
 var _equipment_selected_slot: String = "HELMET"
 var _equipment_inspected_item_id: String = ""
 var _equipment_rarity_filter: int = 0 # 0: All, 5: 5★, 4: 4★, 3: 1-3★
@@ -2278,7 +2277,7 @@ func _render_tab_stats_and_training(h: Dictionary) -> void:
 	for c in _tab_content_vbox.get_children():
 		c.queue_free()
 
-	var hid := str(h.get("id", ""))
+	var _hid := str(h.get("id", ""))
 	var star := int(h.get("rarity", 1))
 	var lvl := int(h.get("level", 1))
 	var max_lvl := int(h.get("maxLevel", star * 10))
@@ -2800,10 +2799,10 @@ func _is_item_matching_slot(item_slot: String, target_slot: String) -> bool:
 		return true
 	return false
 
-func _update_pedestal_equipment_overlay(is_visible: bool) -> void:
+func _update_pedestal_equipment_overlay(show_overlay: bool) -> void:
 	if _pedestal_equipment_overlay == null:
 		return
-	if not is_visible or _selected_hero.is_empty():
+	if not show_overlay or _selected_hero.is_empty():
 		_pedestal_equipment_overlay.visible = false
 		return
 
@@ -4119,7 +4118,7 @@ func _on_equip_pressed(item_id: String, item_name: String, hid: String, hname: S
 		status_label.text = "❌ Không thể mặc trang bị: " + str(res["error"])
 
 func _on_unequip_pressed(item_id: String, item_name: String) -> void:
-	var hid := str(_selected_hero.get("id", ""))
+	var _hid := str(_selected_hero.get("id", ""))
 	var res := await ApiClient.post_req("/api/equipment/%s/unequip" % item_id, {})
 	if res["ok"]:
 		status_label.text = "📦 Đã tháo [%s] về Nhà Kho!" % item_name
@@ -4132,7 +4131,7 @@ func _on_unequip_pressed(item_id: String, item_name: String) -> void:
 		status_label.text = "❌ Không thể tháo trang bị: " + str(res["error"])
 
 func _on_enhance_eq_pressed(item_id: String, item_name: String) -> void:
-	var hid := str(_selected_hero.get("id", ""))
+	var _hid := str(_selected_hero.get("id", ""))
 	var res := await ApiClient.post_req("/api/crafting/equipment/%s/enhance" % item_id, {})
 	if res["ok"]:
 		status_label.text = "✨ Cường hóa thành công [%s]!" % item_name
