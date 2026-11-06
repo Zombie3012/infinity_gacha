@@ -630,3 +630,14 @@ Signed: Antigravity Assistant
   3. Removed the `+4` / `+3` breakthrough badge to the right of the stars, leaving the glowing golden stars (`★`) completely centered.
   4. Preserved top celestial crest (`✦ ☼ ✦`) centered on top, with PVE / lock badges on the right.
 - Verified Godot engine syntax check and encoding check (all 350 files clean).
+
+## Update - 2026-11-07 05:04:00 ICT (UTC+7)
+
+Signed: Antigravity Assistant
+
+### Work Completed
+
+- Refined the position of the Class pill on hero cards:
+  - Moved the Class pill to the **bottom border/edge** (`SIZE_SHRINK_END`) of the avatar box, horizontally centered (`SIZE_SHRINK_CENTER`), positioned cleanly right above the stars.
+  - Kept the hero silhouette/icon centered in the middle of the avatar box (`CenterContainer`), perfectly aligned with the occult halo rings.
+- Verified Godot syntax check and encoding check (clean).
