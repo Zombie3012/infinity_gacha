@@ -617,3 +617,16 @@ Signed: Antigravity Assistant
 3. **Verification**:
    - Godot syntax validation passed clean (`--headless --check-only --quit` exited with 0).
    - File encoding check passed (350 files clean, UTF-8 without BOM).
+
+## Update - 2026-11-07 04:58:00 ICT (UTC+7)
+
+Signed: Antigravity Assistant
+
+### Work Completed
+
+- Refined the Pick Me Up hero cards in `client-godot/scenes/heroes/hero_roster.gd` based on user feedback:
+  1. Removed the evaluation rank badge (`S RANK`, `A RANK`, `C RANK`) from the bottom-right corner of the avatar box.
+  2. Moved the Class badge (`⚔️ WARRIOR`, `🔮 MAGE`, etc.) from the top-left bar into the center of the card image, positioned together with the hero silhouette directly above the stars.
+  3. Removed the `+4` / `+3` breakthrough badge to the right of the stars, leaving the glowing golden stars (`★`) completely centered.
+  4. Preserved top celestial crest (`✦ ☼ ✦`) centered on top, with PVE / lock badges on the right.
+- Verified Godot engine syntax check and encoding check (all 350 files clean).
