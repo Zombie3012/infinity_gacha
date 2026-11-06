@@ -1884,31 +1884,10 @@ func _build_hero_card(h: Dictionary) -> Control:
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_margin.add_child(vbox)
 
-	# 1. Header Row: Class/Element Pill + Top Celestial Crest + Party/Lock Status
+	# 1. Header Row: Top Celestial Crest + Party/Lock Status
 	var header_row := HBoxContainer.new()
 	header_row.add_theme_constant_override("separation", 4)
 	vbox.add_child(header_row)
-
-	var class_pill := PanelContainer.new()
-	var cp_style := StyleBoxFlat.new()
-	cp_style.bg_color = Color(0.10, 0.13, 0.18, 0.90)
-	cp_style.corner_radius_top_left = 3
-	cp_style.corner_radius_top_right = 3
-	cp_style.corner_radius_bottom_left = 3
-	cp_style.corner_radius_bottom_right = 3
-	class_pill.add_theme_stylebox_override("panel", cp_style)
-	var cp_margin := MarginContainer.new()
-	cp_margin.add_theme_constant_override("margin_left", 5)
-	cp_margin.add_theme_constant_override("margin_right", 5)
-	cp_margin.add_theme_constant_override("margin_top", 1)
-	cp_margin.add_theme_constant_override("margin_bottom", 1)
-	class_pill.add_child(cp_margin)
-	var class_lbl := Label.new()
-	class_lbl.text = "%s %s" % [_get_hero_class_icon(cls), cls.to_upper()]
-	class_lbl.add_theme_font_size_override("font_size", 9)
-	class_lbl.add_theme_color_override("font_color", _get_hero_element_color(elem))
-	cp_margin.add_child(class_lbl)
-	header_row.add_child(class_pill)
 
 	var spacer_left := Control.new()
 	spacer_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1977,18 +1956,52 @@ func _build_hero_card(h: Dictionary) -> Control:
 	halo_canvas.draw.connect(_draw_card_occult_rings.bind(halo_canvas, rarity_col))
 	avatar_box.add_child(halo_canvas)
 
-	# Center Hero Silhouette / Class Icon
+	# Center Hero Silhouette + Class Pill (positioned in image above stars)
 	var icon_center := CenterContainer.new()
 	icon_center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	avatar_box.add_child(icon_center)
 
+	var center_vbox := VBoxContainer.new()
+	center_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	center_vbox.add_theme_constant_override("separation", 6)
+	icon_center.add_child(center_vbox)
+
 	var big_icon := Label.new()
 	big_icon.text = _get_hero_class_icon(cls)
-	big_icon.add_theme_font_size_override("font_size", 48)
+	big_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	big_icon.add_theme_font_size_override("font_size", 46)
 	big_icon.modulate = Color(1.0, 1.0, 1.0, 0.90)
-	icon_center.add_child(big_icon)
+	center_vbox.add_child(big_icon)
 
-	# Overlay badges (Awakening top-left, Rank bottom-right)
+	var class_pill := PanelContainer.new()
+	class_pill.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var cp_style := StyleBoxFlat.new()
+	cp_style.bg_color = Color(0.07, 0.09, 0.14, 0.88)
+	cp_style.border_width_left = 1
+	cp_style.border_width_top = 1
+	cp_style.border_width_right = 1
+	cp_style.border_width_bottom = 1
+	cp_style.border_color = Color(rarity_col.r, rarity_col.g, rarity_col.b, 0.40)
+	cp_style.corner_radius_top_left = 3
+	cp_style.corner_radius_top_right = 3
+	cp_style.corner_radius_bottom_left = 3
+	cp_style.corner_radius_bottom_right = 3
+	class_pill.add_theme_stylebox_override("panel", cp_style)
+	var cp_margin := MarginContainer.new()
+	cp_margin.add_theme_constant_override("margin_left", 6)
+	cp_margin.add_theme_constant_override("margin_right", 6)
+	cp_margin.add_theme_constant_override("margin_top", 1)
+	cp_margin.add_theme_constant_override("margin_bottom", 1)
+	class_pill.add_child(cp_margin)
+	var class_lbl := Label.new()
+	class_lbl.text = "%s %s" % [_get_hero_class_icon(cls), cls.to_upper()]
+	class_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	class_lbl.add_theme_font_size_override("font_size", 9)
+	class_lbl.add_theme_color_override("font_color", _get_hero_element_color(elem))
+	cp_margin.add_child(class_lbl)
+	center_vbox.add_child(class_pill)
+
+	# Overlay badges (Awakening top-left)
 	var av_overlay := MarginContainer.new()
 	av_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	av_overlay.add_theme_constant_override("margin_left", 6)
@@ -2014,35 +2027,6 @@ func _build_hero_card(h: Dictionary) -> Control:
 		awk_lbl.add_theme_color_override("font_color", Color(0.5, 0.95, 1.0))
 		awk_pill.add_child(awk_lbl)
 		av_overlay.add_child(awk_pill)
-
-	# Rank badge bottom-right (S RANK, A RANK, etc.)
-	var rank_box := PanelContainer.new()
-	rank_box.size_flags_horizontal = Control.SIZE_SHRINK_END
-	rank_box.size_flags_vertical = Control.SIZE_SHRINK_END
-	var rb_style := StyleBoxFlat.new()
-	rb_style.bg_color = Color(0.04, 0.06, 0.09, 0.90)
-	rb_style.border_width_left = 1
-	rb_style.border_width_top = 1
-	rb_style.border_width_right = 1
-	rb_style.border_width_bottom = 1
-	rb_style.border_color = rarity_col
-	rb_style.corner_radius_top_left = 3
-	rb_style.corner_radius_top_right = 3
-	rb_style.corner_radius_bottom_left = 3
-	rb_style.corner_radius_bottom_right = 3
-	rank_box.add_theme_stylebox_override("panel", rb_style)
-	var rb_margin := MarginContainer.new()
-	rb_margin.add_theme_constant_override("margin_left", 4)
-	rb_margin.add_theme_constant_override("margin_right", 4)
-	rb_margin.add_theme_constant_override("margin_top", 1)
-	rb_margin.add_theme_constant_override("margin_bottom", 1)
-	rank_box.add_child(rb_margin)
-	var rank_lbl := Label.new()
-	rank_lbl.text = "%s RANK" % _get_rarity_rank_name(star)
-	rank_lbl.add_theme_font_size_override("font_size", 9)
-	rank_lbl.add_theme_color_override("font_color", rarity_col)
-	rb_margin.add_child(rank_lbl)
-	av_overlay.add_child(rank_box)
 
 	# Dead / disabled status overlay
 	if state_str == "DEAD" or state_str == "DISABLED":
@@ -2072,13 +2056,6 @@ func _build_hero_card(h: Dictionary) -> Control:
 	star_lbl.add_theme_font_size_override("font_size", 15)
 	star_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.32))
 	star_box.add_child(star_lbl)
-
-	if promo_rank > 0:
-		var promo_lbl := Label.new()
-		promo_lbl.text = "+%d" % promo_rank
-		promo_lbl.add_theme_font_size_override("font_size", 10)
-		promo_lbl.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
-		star_box.add_child(promo_lbl)
 
 	# 4. Iconic Pick Me Up Nameplate Banner (< HERO NAME >)
 	var name_plate := PanelContainer.new()
