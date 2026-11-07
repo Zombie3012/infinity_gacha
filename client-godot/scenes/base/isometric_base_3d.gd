@@ -34,7 +34,7 @@ const TIER2_GX_MIN := -29
 const TIER2_GX_MAX := -1
 const GRID_GZ_MIN := 1
 const GRID_GZ_MAX := 49
-const CASTLE_LAYOUT_SAVE_PATH := "user://castle_grid_layout_v3.json"
+const CASTLE_LAYOUT_SAVE_PATH := "user://castle_grid_layout_v4.json"
 
 enum GridEditMode {
 	NONE = 0,
@@ -226,19 +226,44 @@ func _setup_grand_citadel_floor1() -> void:
 		ground.position = Vector3(0.0, -0.3, 0.0)
 
 	# 2. Tier 2 Upper Citadel Deck: 60m (X: -110..-50) x 100m (Z: -50..+50) at Y = 5.2
-	var tier2_deck := arch.get_node_or_null("Tier2GroundDeck") as MeshInstance3D
-	if tier2_deck == null:
-		tier2_deck = MeshInstance3D.new()
-		tier2_deck.name = "Tier2GroundDeck"
-		arch.add_child(tier2_deck)
-	var t2_box := BoxMesh.new()
-	t2_box.size = Vector3(60.0, FLOOR_HEIGHT + 0.6, 100.0)
-	tier2_deck.mesh = t2_box
-	tier2_deck.position = Vector3(-80.0, (FLOOR_HEIGHT - 0.6) * 0.5, 0.0)
+	# Cut out a central stairwell slot (X in [-62.0, -50.0], Z in [-4.2, +4.2]) so the single central staircase is recessed inside Tier 2
+	var old_t2 := arch.get_node_or_null("Tier2GroundDeck")
+	if old_t2 != null:
+		old_t2.queue_free()
+	var tier2_deck := Node3D.new()
+	tier2_deck.name = "Tier2GroundDeck"
+	arch.add_child(tier2_deck)
+
 	var t2_mat := StandardMaterial3D.new()
 	t2_mat.albedo_color = Color(0.42, 0.38, 0.33) # Medieval cliff retaining stone
 	t2_mat.roughness = 0.88
-	tier2_deck.material_override = t2_mat
+
+	# Main West Tier 2 Deck (X in [-110.0, -62.0], Z in [-50.0, +50.0]): 48m x 100m
+	var main_t2 := MeshInstance3D.new()
+	var mt2_box := BoxMesh.new()
+	mt2_box.size = Vector3(48.0, FLOOR_HEIGHT + 0.6, 100.0)
+	main_t2.mesh = mt2_box
+	main_t2.position = Vector3(-86.0, (FLOOR_HEIGHT - 0.6) * 0.5, 0.0)
+	main_t2.material_override = t2_mat
+	tier2_deck.add_child(main_t2)
+
+	# North Flank Deck (X in [-62.0, -50.0], Z in [-50.0, -4.2]): 12m x 45.8m
+	var n_flank := MeshInstance3D.new()
+	var nf_box := BoxMesh.new()
+	nf_box.size = Vector3(12.0, FLOOR_HEIGHT + 0.6, 45.8)
+	n_flank.mesh = nf_box
+	n_flank.position = Vector3(-56.0, (FLOOR_HEIGHT - 0.6) * 0.5, -27.1)
+	n_flank.material_override = t2_mat
+	tier2_deck.add_child(n_flank)
+
+	# South Flank Deck (X in [-62.0, -50.0], Z in [+4.2, +50.0]): 12m x 45.8m
+	var s_flank := MeshInstance3D.new()
+	var sf_box := BoxMesh.new()
+	sf_box.size = Vector3(12.0, FLOOR_HEIGHT + 0.6, 45.8)
+	s_flank.mesh = sf_box
+	s_flank.position = Vector3(-56.0, (FLOOR_HEIGHT - 0.6) * 0.5, 27.1)
+	s_flank.material_override = t2_mat
+	tier2_deck.add_child(s_flank)
 
 	# Remove legacy CrossAvenues if present (replaced by interactive Road Building System)
 	var old_avenues := arch.get_node_or_null("CrossAvenues")
@@ -351,8 +376,8 @@ func _setup_grand_citadel_floor1() -> void:
 	# D. Tier 2 West Back Wall (X = -109.3, Z in [-46, +46], sitting at Y = 5.2)
 	build_crenellated_wall.call(Vector3(-109.3, FLOOR_HEIGHT, -46.0), Vector3(-109.3, FLOOR_HEIGHT, 46.0), 6.6, 2.0)
 
-	# E. Cliff Parapet along X = -50.0 (openings for twin stairs at Z = -18.0 and Z = +18.0)
-	for seg: Vector2 in [Vector2(-48.0, -21.8), Vector2(-14.2, 14.2), Vector2(21.8, 48.0)]:
+	# E. Cliff Parapet along X = -50.0 with single central opening for Grand Recessed Staircase (Z in [-4.2, +4.2])
+	for seg: Vector2 in [Vector2(-48.0, -4.2), Vector2(4.2, 48.0)]:
 		var seg_len: float = seg.y - seg.x
 		var seg_mid: float = (seg.x + seg.y) * 0.5
 		var parapet := MeshInstance3D.new()
@@ -370,6 +395,24 @@ func _setup_grand_citadel_floor1() -> void:
 		p_ledge.position = Vector3(-50.0, FLOOR_HEIGHT + 1.45, seg_mid)
 		p_ledge.material_override = corbel_mat
 		walls_node.add_child(p_ledge)
+
+	# E2. Side Safety Balustrades flanking the recessed stairwell inside Tier 2 (X in [-62.0, -50.0] at Z = +-4.2)
+	for z_side in [-4.2, 4.2]:
+		var side_rail := MeshInstance3D.new()
+		var sr_box := BoxMesh.new()
+		sr_box.size = Vector3(12.0, 1.25, 0.55)
+		side_rail.mesh = sr_box
+		side_rail.position = Vector3(-56.0, FLOOR_HEIGHT + 0.625, z_side)
+		side_rail.material_override = wall_mat
+		walls_node.add_child(side_rail)
+
+		var sr_cap := MeshInstance3D.new()
+		var src_box := BoxMesh.new()
+		src_box.size = Vector3(12.2, 0.22, 0.75)
+		sr_cap.mesh = src_box
+		sr_cap.position = Vector3(-56.0, FLOOR_HEIGHT + 1.35, z_side)
+		sr_cap.material_override = corbel_mat
+		walls_node.add_child(sr_cap)
 
 	# F. 6 Grand Round Bastion Towers with Full Height Coverage, Machicolated Galleries & Conical Spire Roofs
 	# Tower specs:
@@ -464,42 +507,46 @@ func _setup_grand_citadel_floor1() -> void:
 		finial.material_override = finial_mat
 		tower_root.add_child(finial)
 
-	# 5. Twin Solid Stone Staircases connecting Tier 1 (X = -40.0, Y = 0.0) to Tier 2 (X = -50.0, Y = 5.2)
+	# 5. Grand Central Recessed Staircase: 1 single staircase recessed INSIDE Tier 2 (X: -50.0 -> -62.0, Z = 0.0)
+	# Bottom of stairs starts flush at X = -50.0 (Tier 1 ground level Y = 0.0, zero protrusion onto Tier 1 floor)
+	# Ascends westward into the heart of Tier 2, top step arrives at X = -62.0 (Tier 2 floor level Y = 5.2)
 	var old_stairs := arch.get_node_or_null("TwinWallStairs")
 	if old_stairs != null:
 		old_stairs.queue_free()
-	var twin_stairs := Node3D.new()
-	twin_stairs.name = "TwinWallStairs"
-	arch.add_child(twin_stairs)
+	var central_stairs := Node3D.new()
+	central_stairs.name = "TwinWallStairs"
+	arch.add_child(central_stairs)
 
 	var stair_mat := StandardMaterial3D.new()
 	stair_mat.albedo_color = Color(0.44, 0.40, 0.35)
 	stair_mat.roughness = 0.85
 
-	var step_count := 16
-	var stair_span_x := 10.0 # X from -40.0 (bottom on Tier 1) to -50.0 (top at Tier 2 cliff)
+	var step_count := 18
+	var stair_span_x := 12.0 # X from -50.0 (flush at cliff face) to -62.0 (inside Tier 2)
 	var step_depth_x := stair_span_x / float(step_count)
-	for z_stair_center in [-18.0, 18.0]:
-		for s_idx in range(step_count):
-			var t := float(s_idx + 1) / float(step_count)
-			var step_h := lerpf(0.32, FLOOR_HEIGHT, t)
-			var sx := -40.0 - (float(s_idx) + 0.5) * step_depth_x
-			var step_inst := MeshInstance3D.new()
-			var s_box := BoxMesh.new()
-			s_box.size = Vector3(step_depth_x + 0.06, step_h, 5.6)
-			step_inst.mesh = s_box
-			step_inst.position = Vector3(sx, step_h * 0.5, z_stair_center)
-			step_inst.material_override = stair_mat
-			twin_stairs.add_child(step_inst)
+	var stair_width_z := 8.0 # Grand 8m wide staircase (Z in [-4.0, +4.0])
 
-		for z_rail_off in [-3.0, 3.0]:
-			var curb := MeshInstance3D.new()
-			var c_box := BoxMesh.new()
-			c_box.size = Vector3(stair_span_x, FLOOR_HEIGHT + 0.35, 0.42)
-			curb.mesh = c_box
-			curb.position = Vector3(-45.0, (FLOOR_HEIGHT + 0.35) * 0.35, z_stair_center + z_rail_off)
-			curb.material_override = corbel_mat
-			twin_stairs.add_child(curb)
+	for s_idx in range(step_count):
+		var t := float(s_idx + 1) / float(step_count)
+		var step_h := lerpf(0.32, FLOOR_HEIGHT, t)
+		var sx := -50.0 - (float(s_idx) + 0.5) * step_depth_x
+		var step_inst := MeshInstance3D.new()
+		var s_box := BoxMesh.new()
+		s_box.size = Vector3(step_depth_x + 0.05, step_h, stair_width_z)
+		step_inst.mesh = s_box
+		step_inst.position = Vector3(sx, step_h * 0.5, 0.0)
+		step_inst.material_override = stair_mat
+		central_stairs.add_child(step_inst)
+
+	# Stone curb stringers on North and South sides of the staircase
+	for z_curb in [-4.15, 4.15]:
+		var curb := MeshInstance3D.new()
+		var c_box := BoxMesh.new()
+		c_box.size = Vector3(stair_span_x, FLOOR_HEIGHT + 0.35, 0.35)
+		curb.mesh = c_box
+		curb.position = Vector3(-56.0, (FLOOR_HEIGHT + 0.35) * 0.5, z_curb)
+		curb.material_override = corbel_mat
+		central_stairs.add_child(curb)
 
 	# 6. Centerpiece: Tiered Fountain (⛲ Đài Phun Nước - Movable 4x4 Grid Landmark)
 	var bonfire_node := arch.get_node_or_null("CentralBonfire")
@@ -848,10 +895,10 @@ func _is_cell_in_reserved_zone(gx: int, gz: int) -> bool:
 	# 1. Fixed East Gate entrance clearance (X near +48.2, Z near 0.0 -> gx in [45, 49], gz in [21, 28])
 	if gx >= 45 and gx <= 49 and gz >= 21 and gz <= 28:
 		return true
-	# 2. Twin Staircases clearance connecting Tier 1 and Tier 2 (X in [-40, -50] -> gx in [-2, 6], Z around -18 and +18)
-	if gx >= -2 and gx <= 6:
-		if (gz >= 13 and gz <= 18) or (gz >= 31 and gz <= 36):
-			return true
+	# 2. Grand Central Recessed Staircase clearance (X in [-62.0, -50.0] inside Tier 2, plus front portal in Tier 1)
+	# Grid: gx in [-6, 3], gz in [23, 26]
+	if gx >= -6 and gx <= 3 and gz >= 23 and gz <= 26:
+		return true
 	return false
 
 func _is_footprint_valid(gx: int, gz: int, size_cells: Vector2i, ignore_structure_id: String = "") -> bool:
@@ -948,7 +995,7 @@ func _load_or_init_castle_grid_layout() -> void:
 			var raw := f.get_as_text()
 			f.close()
 			var parsed: Variant = JSON.parse_string(raw)
-			if parsed is Dictionary and int(parsed.get("version", 0)) >= 3:
+			if parsed is Dictionary and int(parsed.get("version", 0)) >= 4:
 				var saved_structs: Variant = parsed.get("structures", {})
 				if saved_structs is Dictionary:
 					for k in saved_structs.keys():
@@ -962,8 +1009,8 @@ func _load_or_init_castle_grid_layout() -> void:
 							_grid_roads[str(rk)] = true
 
 func _populate_default_road_network() -> void:
-	# --- TIER 1 (HẠ THÀNH) ROAD NETWORK ---
-	# 1. Grand East Boulevard: From East Gate (gx=46) to Fountain Plaza (gx=28) along gz=24, 25
+	# --- TIER 1 (HẠ THÀNH) ROYAL CENTRAL THOROUGHFARE ---
+	# 1. Grand East Boulevard (East Gate to Fountain Plaza): gz=24, 25 from gx=46 down to gx=28
 	for gx in range(28, 47):
 		_grid_roads["%d,24" % gx] = true
 		_grid_roads["%d,25" % gx] = true
@@ -974,43 +1021,34 @@ func _populate_default_road_network() -> void:
 			if not (gx >= 23 and gx <= 26 and gz >= 23 and gz <= 26):
 				_grid_roads["%d,%d" % [gx, gz]] = true
 
-	# 3. North-South Central Avenue:
-	# - North Avenue: From Fountain Plaza (gz=20) to Barracks entrance (gz=9) along gx=24, 25
+	# 3. Grand West Boulevard (Fountain Plaza straight to Grand Central Staircase):
+	# Direct royal avenue along gz=24, 25 from gx=21 straight to staircase portal at gx=0
+	for gx in range(0, 22):
+		_grid_roads["%d,24" % gx] = true
+		_grid_roads["%d,25" % gx] = true
+
+	# 4. North-South Central Avenue:
+	# - North Avenue to Barracks (gz=9..20 along gx=24, 25)
 	for gz in range(9, 21):
 		_grid_roads["24,%d" % gz] = true
 		_grid_roads["25,%d" % gz] = true
-	# - South Avenue: From Fountain Plaza (gz=29) to Infirmary entrance (gz=39) along gx=24, 25
+	# - South Avenue to Infirmary (gz=29..39 along gx=24, 25)
 	for gz in range(29, 40):
 		_grid_roads["24,%d" % gz] = true
 		_grid_roads["25,%d" % gz] = true
 
-	# 4. Westward Avenues connecting Fountain to Twin Staircases (gx=5..21):
-	# - North-West Avenue to Staircase 1 (Z = -18.0): gz=15, 16
-	for gx in range(5, 22):
-		_grid_roads["%d,15" % gx] = true
-		_grid_roads["%d,16" % gx] = true
-	# - South-West Avenue to Staircase 2 (Z = +18.0): gz=33, 34
-	for gx in range(5, 22):
-		_grid_roads["%d,33" % gx] = true
-		_grid_roads["%d,34" % gx] = true
-	# - West Link Road along gx=21, 22 connecting Fountain Plaza to North & South Avenues
-	for gz in range(15, 35):
-		_grid_roads["21,%d" % gz] = true
-		_grid_roads["22,%d" % gz] = true
+	# --- TIER 2 (THƯỢNG THÀNH) ROYAL HIGH AVENUE ---
+	# 5. Grand Avenue from top of Central Staircase (gx=-6) westward to Summon Altar Plaza (gx=-13):
+	for gx in range(-13, -5):
+		_grid_roads["%d,24" % gx] = true
+		_grid_roads["%d,25" % gx] = true
 
-	# --- TIER 2 (THƯỢNG THÀNH) ROAD NETWORK ---
-	# 5. From Twin Staircase tops (gx=-1..-3) westward to Summon Altar Avenue (gx=-13):
-	for gx in range(-13, 0):
-		_grid_roads["%d,15" % gx] = true
-		_grid_roads["%d,16" % gx] = true
-		_grid_roads["%d,33" % gx] = true
-		_grid_roads["%d,34" % gx] = true
-	# - Tier 2 Connecting Boulevard along gx=-13, -12
+	# 6. Tier 2 Cross Avenue along gx=-13, -12 (gz in [15, 34])
 	for gz in range(15, 35):
 		_grid_roads["-13,%d" % gz] = true
 		_grid_roads["-12,%d" % gz] = true
 
-	# 6. Summon Altar Grand Plaza Ring: Cobblestone belt around Summon Altar (gx in [-17, -14], gz in [23, 26])
+	# 7. Summon Altar Grand Plaza Ring: Cobblestone belt around Summon Altar (gx in [-17, -14], gz in [23, 26])
 	for gx in range(-19, -11):
 		for gz in range(21, 29):
 			if not (gx >= -17 and gx <= -14 and gz >= 23 and gz <= 26):
@@ -1018,7 +1056,7 @@ func _populate_default_road_network() -> void:
 
 func _save_castle_grid_layout() -> void:
 	var payload := {
-		"version": 3,
+		"version": 4,
 		"structures": _grid_structures,
 		"roads": _grid_roads
 	}
