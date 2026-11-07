@@ -580,23 +580,6 @@ func _setup_grand_citadel_floor1() -> void:
 			s_step.material_override = stair_mat
 			twin_stairs.add_child(s_step)
 
-		# Stone balustrade railings along the inner courtyard edges of both staircases
-		var n_rail := MeshInstance3D.new()
-		var r_box := BoxMesh.new()
-		r_box.size = Vector3(0.24, 0.28, 11.8)
-		n_rail.mesh = r_box
-		n_rail.position = Vector3(-20.1, (FLOOR_HEIGHT * 0.5) + 0.55, -10.15)
-		n_rail.rotation = Vector3(atan2(FLOOR_HEIGHT, 10.7), 0.0, 0.0)
-		n_rail.material_override = rail_mat
-		twin_stairs.add_child(n_rail)
-
-		var s_rail := MeshInstance3D.new()
-		s_rail.mesh = r_box
-		s_rail.position = Vector3(-20.1, (FLOOR_HEIGHT * 0.5) + 0.55, 10.15)
-		s_rail.rotation = Vector3(-atan2(FLOOR_HEIGHT, 10.7), 0.0, 0.0)
-		s_rail.material_override = rail_mat
-		twin_stairs.add_child(s_rail)
-
 		# Upper stone landing platforms connecting the top of the stairs directly to Floor 2 terrace
 		for z_side in [-4.4, 4.4]:
 			var landing := MeshInstance3D.new()
@@ -818,23 +801,6 @@ func _build_terrace_step_3d(floor_num: int, terrace_center: Vector3) -> Node3D:
 			s_step.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.6, sy, s_sz)
 			s_step.material_override = stair_mat
 			terrace_root.add_child(s_step)
-
-		# Stone balustrade railings along the inner terrace edges of the staircases
-		var n_rail := MeshInstance3D.new()
-		var r_box := BoxMesh.new()
-		r_box.size = Vector3(0.22, 0.26, 10.4)
-		n_rail.mesh = r_box
-		n_rail.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 2.8, (FLOOR_HEIGHT * 0.5) + 0.55, -8.85)
-		n_rail.rotation = Vector3(atan2(FLOOR_HEIGHT, 9.3), 0.0, 0.0)
-		n_rail.material_override = rail_mat
-		terrace_root.add_child(n_rail)
-
-		var s_rail := MeshInstance3D.new()
-		s_rail.mesh = r_box
-		s_rail.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 2.8, (FLOOR_HEIGHT * 0.5) + 0.55, 8.85)
-		s_rail.rotation = Vector3(-atan2(FLOOR_HEIGHT, 9.3), 0.0, 0.0)
-		s_rail.material_override = rail_mat
-		terrace_root.add_child(s_rail)
 
 		# Upper landing connectors bridging into next terrace
 		for z_side in [-4.4, 4.4]:
