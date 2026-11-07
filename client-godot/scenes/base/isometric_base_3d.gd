@@ -897,7 +897,10 @@ func _setup_grand_citadel_floor1() -> void:
 
 		var bar_lbl: Label3D = barracks_mesh.get_node_or_null("BarracksLabel")
 		if bar_lbl != null:
+			bar_lbl.text = "🛡️ NHÀ CHIẾN LƯỢC (STRATEGIC HOUSE)"
 			bar_lbl.position = Vector3(0.0, 5.2, 0.0)
+	if barracks_btn != null:
+		barracks_btn.text = "🛡️ Nhà Chiến Lược"
 
 	if barracks_body != null and barracks_body.has_node("CollisionShape3D"):
 		var b_shape: CollisionShape3D = barracks_body.get_node("CollisionShape3D")
@@ -1034,6 +1037,7 @@ func _setup_grand_citadel_floor1() -> void:
 
 		var inf_lbl: Label3D = infirmary_mesh.get_node_or_null("InfirmaryLabel")
 		if inf_lbl != null:
+			inf_lbl.text = "✚ RECOVERY CENTER – TRUNG TÂM HỒI PHỤC"
 			inf_lbl.position = Vector3(0.0, 7.2, 0.0)
 
 	if infirmary_body != null and infirmary_body.has_node("CollisionShape3D"):
@@ -1113,9 +1117,9 @@ func _get_structure_display_name(structure_id: String) -> String:
 		"SUMMON_ALTAR":
 			return "✨ Đài Triệu Hồi"
 		"BARRACKS":
-			return "🛡️ Doanh Trại"
+			return "🛡️ Nhà Chiến Lược (Strategic House)"
 		"INFIRMARY":
-			return "✚ Bệnh Xá"
+			return "✚ Recovery Center – Trung Tâm Hồi Phục"
 		_:
 			if structure_id.begins_with("PLOT:"):
 				var p_idx := int(structure_id.trim_prefix("PLOT:"))
@@ -1806,11 +1810,21 @@ func _refresh_3d_plots() -> void:
 
 	_apply_all_grid_transforms()
 
+	var has_medical_plot := false
 	for plot_num in _plot_nodes.keys():
 		var plot_node: BasePlot3D = _plot_nodes[plot_num]
 		var is_unlocked := int(plot_num) <= unlocked_plot_count
 		var b_data := GameState.get_building_on_plot(int(plot_num))
+		if not b_data.is_empty() and str(b_data.get("buildingType", "")) == "MEDICAL":
+			has_medical_plot = true
 		plot_node.setup_plot(int(plot_num), is_unlocked, b_data)
+
+	# Unify all infirmaries into 1 single Recovery Center: if a MEDICAL plot is built, hide the standalone Infirmary mesh
+	if infirmary_mesh != null:
+		infirmary_mesh.visible = not has_medical_plot
+	if infirmary_body != null and infirmary_body.has_node("CollisionShape3D"):
+		var ishape: CollisionShape3D = infirmary_body.get_node("CollisionShape3D")
+		ishape.disabled = has_medical_plot
 
 const MAX_HEROES_PER_FLOOR := 6
 
@@ -2566,16 +2580,19 @@ func _open_movable_structures_picker() -> void:
 	_clear_inspector_actions()
 
 	inspector_title_label.text = "✥ DI DỜI & QUY HOẠCH CÔNG TRÌNH"
-	inspector_subtitle_label.text = "Mọi công trình đều tự do trên lưới (Chỉ Cổng Phía Đông là gắn cố định)"
+	inspector_subtitle_label.text = "Nhóm 1 (Mặc định & Trung tâm) + Nhóm 2 (Công trình tự do trên lưới)"
 
-	_add_inspector_section_header("🏛️ CÔNG TRÌNH TRUNG TÂM & ĐẶC BIỆT", Color(0.65, 0.92, 1.0))
-	var landmarks := [
-		{"key": "FOUNTAIN", "label": "⛲ Đài Phun Nước & Vòng Tròn Năng Lượng (4×4 ô)"},
+	_add_inspector_info(
+		"⛩️ Cổng Thành Đông & Cổng Tháp Thử Thách dính liền là kiến trúc mặc định cố định của Map.",
+		Color(1.0, 0.88, 0.45)
+	)
+
+	_add_inspector_section_header("🏛️ NHÓM 1: CÔNG TRÌNH TRUNG TÂM", Color(0.65, 0.92, 1.0))
+	var group1_landmarks := [
 		{"key": "SUMMON_ALTAR", "label": "✨ Đài Triệu Hồi Anh Hùng (4×4 ô)"},
-		{"key": "BARRACKS", "label": "🛡️ Doanh Trại & Thăng Sao (3×3 ô)"},
-		{"key": "INFIRMARY", "label": "✚ Bệnh Xá & Hậu Cần (3×3 ô)"}
+		{"key": "BARRACKS", "label": "🛡️ Nhà Chiến Lược – Strategic House (3×3 ô)"}
 	]
-	for lm in landmarks:
+	for lm in group1_landmarks:
 		var k := str(lm["key"])
 		var lbl := str(lm["label"])
 		var pos: Dictionary = _grid_structures.get(k, {"gx": 0, "gz": 0, "rot": 0})
@@ -2586,7 +2603,31 @@ func _open_movable_structures_picker() -> void:
 			func(): _start_moving_structure(k)
 		)
 
-	_add_inspector_section_header("🏗️ CÔNG TRÌNH CHỨC NĂNG ĐÃ XÂY (2×2 Ô)", Color(1.0, 0.88, 0.42))
+	_add_inspector_section_header("🏗️ NHÓM 2: CÔNG TRÌNH TỰ DO TRÊN LƯỚI", Color(1.0, 0.88, 0.42))
+	var has_medical_plot := false
+	for p_idx in _plot_nodes.keys():
+		var p_node_chk: BasePlot3D = _plot_nodes[p_idx]
+		if str(p_node_chk.building_data.get("buildingType", "")) == "MEDICAL":
+			has_medical_plot = true
+			break
+
+	var group2_landmarks := [
+		{"key": "FOUNTAIN", "label": "⛲ Đài Phun Nước (4×4 ô)"}
+	]
+	if not has_medical_plot:
+		group2_landmarks.append({"key": "INFIRMARY", "label": "✚ Recovery Center – Trung Tâm Hồi Phục (3×3 ô)"})
+
+	for lm2 in group2_landmarks:
+		var k2 := str(lm2["key"])
+		var lbl2 := str(lm2["label"])
+		var pos2: Dictionary = _grid_structures.get(k2, {"gx": 0, "gz": 0, "rot": 0})
+		var tier_txt2 := "Thượng Thành (T2)" if int(pos2.get("gx", 0)) < 0 else "Hạ Thành (T1)"
+		_add_inspector_info("• %s — Ô (%d, %d) [%s]" % [lbl2, int(pos2.get("gx", 0)), int(pos2.get("gz", 0)), tier_txt2], Color(0.88, 0.94, 1.0))
+		_add_inspector_button(
+			"✥ Di Dời %s" % lbl2,
+			func(): _start_moving_structure(k2)
+		)
+
 	var any_built := false
 	for p_idx in _plot_nodes.keys():
 		var p_node: BasePlot3D = _plot_nodes[p_idx]
@@ -2598,11 +2639,11 @@ func _open_movable_structures_picker() -> void:
 			var pos: Dictionary = _grid_structures.get(skey, {"gx": 0, "gz": 0, "rot": 0})
 			var tier_txt := "Thượng Thành (T2)" if int(pos.get("gx", 0)) < 0 else "Hạ Thành (T1)"
 			_add_inspector_button(
-				"✥ Di Dời %s (Lv.%d) — Ô (%d, %d) [%s]" % [b_name, b_lvl, int(pos.get("gx", 0)), int(pos.get("gz", 0)), tier_txt],
+				"✥ Di Dời %s (Lv.%d/3) — Ô (%d, %d) [%s]" % [b_name, b_lvl, int(pos.get("gx", 0)), int(pos.get("gz", 0)), tier_txt],
 				func(): _start_moving_structure(skey)
 			)
 	if not any_built:
-		_add_inspector_info("Chưa có công trình chức năng nào được xây dựng.", Color(0.75, 0.8, 0.88))
+		_add_inspector_info("Chưa có công trình ô 2×2 nào thêm được xây dựng.", Color(0.75, 0.8, 0.88))
 
 	_add_inspector_section_header("🔄 KHÔI PHỤC QUY HOẠCH HOÀNG GIA", Color(1.0, 0.72, 0.42))
 	_add_inspector_button(
@@ -2843,7 +2884,7 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 	var b_code := str(b.get("buildingType", ""))
 	var b_name := str(b.get("typeName", b_code))
 	var b_lvl := int(b.get("level", 1))
-	var max_lvl := int(b.get("maxLevel", 5))
+	var max_lvl := int(b.get("maxLevel", 3))
 	var b_status := str(b.get("status", "READY"))
 	var stored := float(b.get("stored", 0.0))
 	var cap := int(b.get("capacity", 0))
@@ -2877,7 +2918,7 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 		var req_wood := 10 * maxi(2, target_lvl)
 		var req_stone := 5 * maxi(2, target_lvl)
 		_add_inspector_info(
-			"⬆️ Nâng cấp công trình lên Lv.%d:\n   🪙 %d Bạc | 🪵 %d Gỗ | 🪨 %d Đá" % [target_lvl, upg_silver, req_wood, req_stone],
+			"⬆️ Nâng cấp công trình lên Lv.%d/%d:\n   🪙 %d Bạc | 🪵 %d Gỗ | 🪨 %d Đá" % [target_lvl, max_lvl, upg_silver, req_wood, req_stone],
 			Color(0.68, 0.88, 1.0)
 		)
 		var can_upg := (
@@ -2887,14 +2928,17 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 			and int(GameState.materials.get("STONE", 0)) >= req_stone
 		)
 		_add_inspector_button(
-			"⬆️ Nâng Cấp Lên Lv.%d" % target_lvl,
+			"⬆️ Nâng Cấp Lên Lv.%d/%d" % [target_lvl, max_lvl],
 			func(): _upgrade_building(b_id),
 			not can_upg
 		)
 
 	# Workers management section
 	if max_w > 0:
-		_add_inspector_info("👷 Hero phụ trách (%d/%d) — Mẹo: Kéo-thả Tướng 3D trực tiếp vào ô này!" % [workers.size(), max_w], Color(0.95, 0.85, 0.55))
+		var worker_hint := "👷 Hero phụ trách (%d/%d) — Mẹo: Kéo-thả Tướng 3D trực tiếp vào ô này!" % [workers.size(), max_w]
+		if b_code == "LIBRARY":
+			worker_hint += "\n🔮 Quy tắc Thư Viện: Chỉ Hero hệ MAGE (only MAGE class) mới được phân công & sản xuất Sách EXP!"
+		_add_inspector_info(worker_hint, Color(0.95, 0.85, 0.55))
 		for w in workers:
 			if w is Dictionary:
 				var w_hid := str(w.get("heroInstanceId", ""))
@@ -2914,15 +2958,20 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 					break
 				var hid := str(h.get("id", ""))
 				var hstate := str(h.get("state", "IDLE"))
+				var hclass := str(h.get("classCode", h.get("heroClass", "WARRIOR"))).to_upper()
 				if assigned_map.has(hid) or hstate == "DEAD":
+					continue
+				if b_code == "LIBRARY" and hclass != "MAGE":
 					continue
 				var hname := str(h.get("name", "Hero"))
 				var hlvl := int(h.get("level", 1))
 				shown += 1
 				_add_inspector_button(
-					"➕ Phân công %s (Lv.%d)" % [hname, hlvl],
+					"➕ Phân công %s [%s Lv.%d]" % [hname, hclass, hlvl],
 					func(): _assign_worker_to_building(b_id, hid, hname, b_name)
 				)
+			if b_code == "LIBRARY" and shown == 0:
+				_add_inspector_info("⚠️ Chưa có Hero hệ MAGE nào rảnh rỗi để phân công vào Thư Viện Ma Thuật.", Color(1.0, 0.75, 0.45))
 
 	_add_inspector_button(
 		"🏚️ Phá Dỡ Công Trình (Hoàn 50% Bạc)",
@@ -2933,23 +2982,24 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 func _render_specialized_facility_section(building_id: String, b_code: String, b_lvl: int, b_status: String) -> void:
 	match b_code:
 		"HOUSE":
-			_add_inspector_section_header("🏠 NHÀ NGHỈ & ĐỘT PHÁ BIỆT THỰ TỔ ĐỘI", Color(0.75, 0.92, 1.0))
+			var cap_by_lvl := 5 if b_lvl <= 1 else (7 if b_lvl == 2 else 10)
+			var mult_by_lvl := 1.0 if b_lvl <= 1 else (1.5 if b_lvl == 2 else 2.0)
+			var fat_per_hr := 15.0 * mult_by_lvl
+			_add_inspector_section_header("🏠 DORMITORY – KHU CƯ TRÚ (Lv.%d/3)" % b_lvl, Color(0.75, 0.92, 1.0))
 			_add_inspector_info(
-				"• Nơi các Hero nghỉ ngơi giảm mệt mỏi (Fatigue) và hồi phục thể lực.\n🏰 Đột phá: Khi Master đạt cấp 30, có thể nâng cấp Nhà Nghỉ thành Biệt Thự Tổ Đội (Party Mansion)!",
+				"• Công trình tự do Nhóm 2 (3 Level, 0 Hero làm việc).\n" +
+				"• Sức chứa nghỉ ngơi theo cấp: Lv.1 = 5 người | Lv.2 = 7 người | Lv.3 = 10 người (Hiện tại: %d người).\n" % cap_by_lvl +
+				"• Hệ số hồi phục thể lực & tinh thần: %.1fx (-%.1f Fatigue/giờ)." % [mult_by_lvl, fat_per_hr],
 				Color(0.78, 0.92, 1.0)
-			)
-			var can_promote := b_status == "READY" and GameState.master_level >= 30 and GameState.silver_coins >= 5000
-			_add_inspector_button(
-				"🏰 Nâng Cấp Thành Party Mansion (Biệt Thự Tổ Đội) [Master Lv.30, 🪙 5,000]",
-				func(): _promote_house_to_party_mansion(building_id),
-				not can_promote
 			)
 			_render_dormitory_rest_section(false)
 
 		"PARTY_MANSION":
-			_add_inspector_section_header("🏰 BIỆT THỰ TỔ ĐỘI (PARTY MANSION Lv.%d)" % b_lvl, Color(1.0, 0.88, 0.38))
+			_add_inspector_section_header("🏰 BIỆT THỰ TỔ ĐỘI – PARTY MANSION (Lv.%d/3)" % b_lvl, Color(1.0, 0.88, 0.38))
 			_add_inspector_info(
-				"• Công trình nâng cấp từ Nhà Nghỉ (Master Lv.30+).\n• Tăng mạnh tốc độ hồi phục thể lực, giảm Fatigue và tiếp tế khẩu phần cho toàn bộ các Đội hình!",
+				"• Công trình riêng biệt (độc lập với Dormitory – Khu Cư Trú).\n" +
+				"• Sức chứa tối đa: 5 người nghỉ dưỡng cùng lúc.\n" +
+				"• Hệ số hồi phục thể lực & tinh thần: 4.0x (= x2 của Dormitory Level 3, giảm -60 Fatigue/giờ)!",
 				Color(1.0, 0.9, 0.52)
 			)
 			_render_dormitory_rest_section(true)
@@ -2961,35 +3011,49 @@ func _render_specialized_facility_section(building_id: String, b_code: String, b
 			_render_training_center_facility(b_lvl, b_status)
 
 		"HALL_OF_MAGIC":
-			_render_hall_of_magic_subwings()
+			_render_hall_of_magic_subwings(building_id, b_lvl)
 
 		"LIBRARY":
-			_add_inspector_section_header("📚 PHÂN KHU 1: LIBRARY (THƯ VIỆN MA THUẬT)", Color(0.55, 0.88, 1.0))
-			_render_library_actions()
+			_add_inspector_section_header("📚 1. THƯ VIỆN MA THUẬT (LIBRARY Lv.%d/3)" % b_lvl, Color(0.55, 0.88, 1.0))
+			_render_library_actions(building_id, b_lvl)
 
 		"ALCHEMY_WORKSHOP":
-			_add_inspector_section_header("⚗️ PHÂN KHU 2: ALCHEMY WORKSHOP (XƯỞNG GIẢ KIM)", Color(0.52, 0.95, 0.68))
-			_render_alchemy_workshop_actions()
+			_add_inspector_section_header("⚗️ 2. XƯỞNG GIẢ KIM (ALCHEMY WORKSHOP Lv.%d/3)" % b_lvl, Color(0.52, 0.95, 0.68))
+			_render_alchemy_workshop_actions(b_lvl)
 
 		"MAGIC_RESEARCH_LAB":
-			_add_inspector_section_header("✨ PHÂN KHU 3: MAGIC RESEARCH LAB (NGHIÊN CỨU MA THUẬT)", Color(0.95, 0.62, 0.95))
-			_render_magic_research_actions()
+			_add_inspector_section_header("✨ 3. PHÒNG NGHIÊN CỨU (RESEARCH LAB Lv.%d/3)" % b_lvl, Color(0.95, 0.62, 0.95))
+			_render_magic_research_actions(b_lvl)
 
 		"WAREHOUSE":
 			_render_warehouse_facility(b_lvl)
 
 		"KITCHEN":
-			_add_inspector_section_header("🍖 BẾP QUÂN LƯƠNG (KITCHEN Lv.%d)" % b_lvl, Color(1.0, 0.82, 0.48))
-			_add_inspector_info("• Chế biến lương thực thô thành Khẩu phần ăn (🍖 RATION) cho Hero.\n• Tồn kho hiện tại: 🍖 %d Khẩu phần | 🌾 %d Lương thực thô" % [
-				int(GameState.materials.get("RATION", 0)),
-				int(GameState.materials.get("RAW_FOOD", 0))
-			], Color(1.0, 0.88, 0.62))
+			var worker_cap := clampi(b_lvl, 1, 3)
+			var food_rate := 20 if b_lvl <= 1 else (40 if b_lvl == 2 else 80)
+			_add_inspector_section_header("🍖 BẾP (KITCHEN Lv.%d/3)" % b_lvl, Color(1.0, 0.82, 0.48))
+			_add_inspector_info(
+				"• 3 Level — Mỗi level tăng +1 Hero làm việc (Hiện tại tối đa %d Hero: Lv.1=1, Lv.2=2, Lv.3=3).\n" % worker_cap +
+				"• Tự động nấu Lương thực (FOOD): +%d/giờ (Lv.1: 20/h | Lv.2: 40/h | Lv.3: 80/h).\n" % food_rate +
+				"• Chế biến các món ăn đặc biệt tạo Buff chiến đấu cho Đội hình!\n" +
+				"• Tồn kho hiện tại: 🍖 %d Khẩu phần | 🌾 %d Lương thực thô" % [
+					int(GameState.materials.get("RATION", 0)),
+					int(GameState.materials.get("RAW_FOOD", 0))
+				],
+				Color(1.0, 0.88, 0.62)
+			)
 			_add_inspector_button("🍳 Nấu Ngay 5 Khẩu Phần Quân Lương", func(): _cook_rations(5))
-			_add_inspector_button("🍳 Nấu Ngay 15 Khẩu Phần Quân Lương", func(): _cook_rations(15))
+			_add_inspector_button("🍲 Nấu Tiệc Buff Đặc Biệt (15 Khẩu Phần + Tăng Sĩ Khí)", func(): _cook_rations(15))
 
 		"MEDICAL":
-			_add_inspector_section_header("✚ BỆNH XÁ (MEDICAL SANCTUARY Lv.%d)" % b_lvl, Color(0.55, 0.98, 0.78))
-			_add_inspector_info("• Chữa trị vết thương, hồi phục HP và chăm sóc sinh tồn cho các Hero sau khi chinh phục Tháp.", Color(0.68, 0.98, 0.82))
+			var treat_slots := clampi(b_lvl, 1, 3) * 2
+			_add_inspector_section_header("✚ RECOVERY CENTER – TRUNG TÂM HỒI PHỤC (Lv.%d/3)" % b_lvl, Color(0.55, 0.98, 0.78))
+			_add_inspector_info(
+				"• Hợp nhất toàn bộ Bệnh Xá thành 1 Công trình tự do duy nhất.\n" +
+				"• Nhân sự: 1 Hero phụ trách | Số giường chữa trị theo cấp: %d slot (Lv.1: 2 | Lv.2: 4 | Lv.3: 6).\n" % treat_slots +
+				"• Chữa trị thương tích, hồi phục HP và chăm sóc sinh tồn sau khi chinh phục Tháp.",
+				Color(0.68, 0.98, 0.82)
+			)
 			_render_dormitory_rest_section(false)
 
 func _render_dormitory_rest_section(is_mansion: bool) -> void:
@@ -3013,7 +3077,7 @@ func _render_dormitory_rest_section(is_mansion: bool) -> void:
 	)
 	var is_resting := hstate == "RESTING"
 	_add_inspector_button(
-		"🌅 Kết Thúc Nghỉ Ngơi (%s)" % hname if is_resting else ("🏰 Cho %s Nghỉ Dưỡng Tại Biệt Thự" % hname if is_mansion else "🛏️ Cho %s Vào Nghỉ Ngơi Giảm Mệt Mỏi" % hname),
+		"🌅 Kết Thúc Nghỉ Ngơi (%s)" % hname if is_resting else ("🏰 Cho %s Nghỉ Dưỡng Tại Biệt Thự (4.0x)" % hname if is_mansion else "🛏️ Cho %s Vào Dormitory Nghỉ Ngơi" % hname),
 		func(): _toggle_hero_rest(hid, hname, is_resting)
 	)
 	_add_inspector_button(
@@ -3023,7 +3087,7 @@ func _render_dormitory_rest_section(is_mansion: bool) -> void:
 	)
 
 func _render_forge_facility(b_lvl: int, b_status: String) -> void:
-	_add_inspector_section_header("⚒️ XƯỞNG RÈN TRANG BỊ (FORGE Lv.%d)" % b_lvl, Color(1.0, 0.78, 0.42))
+	_add_inspector_section_header("⚒️ XƯỞNG RÈN TRANG BỊ (FORGE Lv.%d/3)" % b_lvl, Color(1.0, 0.78, 0.42))
 	var iron_qty := int(GameState.materials.get("IRON", 0))
 	var wood_qty := int(GameState.materials.get("WOOD", 0))
 	var stone_qty := int(GameState.materials.get("STONE", 0))
@@ -3138,9 +3202,13 @@ func _render_forge_facility(b_lvl: int, b_status: String) -> void:
 				)
 
 func _render_training_center_facility(b_lvl: int, b_status: String) -> void:
-	_add_inspector_section_header("🥋 KHU HUẤN LUYỆN (TRAINING CENTER Lv.%d)" % b_lvl, Color(0.58, 0.96, 0.72))
+	var cap_heroes := 3 if b_lvl <= 1 else (5 if b_lvl == 2 else 7)
+	var max_tc_count := 2 if GameState.master_level >= 30 else 1
+	_add_inspector_section_header("🥋 KHU HUẤN LUYỆN (TRAINING CENTER Lv.%d/3)" % b_lvl, Color(0.58, 0.96, 0.72))
 	_add_inspector_info(
-		"• Rèn luyện chuyên sâu 4 chỉ số gốc (STR / AGI / INT / STA) và lĩnh hội Kỹ năng chiến đấu cho từng Hero!",
+		"• Sức chứa Hero huấn luyện theo cấp: Lv.1 = 3 Hero | Lv.2 = 5 Hero | Lv.3 = 7 Hero (Hiện tại: %d Hero).\n" % cap_heroes +
+		"• Xây dựng tối đa 2 công trình theo cấp Master (Hiện mở: %d/2 công trình — Mở công trình thứ 2 ở Master Lv.30).\n" % max_tc_count +
+		"• Rèn luyện chuyên sâu 4 chỉ số gốc (STR / AGI / INT / STA) và lĩnh hội Kỹ năng chiến đấu!",
 		Color(0.75, 0.96, 0.82)
 	)
 	var h := _get_or_pick_facility_hero()
@@ -3213,38 +3281,77 @@ func _render_training_center_facility(b_lvl: int, b_status: String) -> void:
 						sk_lvl >= sk_max or b_status != "READY"
 					)
 
-func _render_hall_of_magic_subwings() -> void:
-	_add_inspector_section_header("🔮 ĐẠI SẢNH MA THUẬT (3 PHÂN KHU CHUYÊN SÂU)", Color(0.82, 0.72, 1.0))
-	_add_inspector_tab_bar(["📚 1. Thư Viện", "⚗️ 2. Giả Kim", "✨ 3. Nghiên Cứu"])
+func _render_hall_of_magic_subwings(building_id: String, b_lvl: int) -> void:
+	_add_inspector_section_header("🔮 ĐẠI SẢNH MA THUẬT (Lv.%d/3 • 2 NGƯỜI/PHÂN KHU = TỔNG 6)" % b_lvl, Color(0.82, 0.72, 1.0))
+	_add_inspector_info(
+		"• Mở khóa theo cấp Master, có 3 Level, mỗi phân khu tối đa 2 Hero (tổng cộng 6 Hero cho 3 phân khu).",
+		Color(0.88, 0.80, 1.0)
+	)
+	_add_inspector_tab_bar(["📚 1. Thư Viện", "⚗️ 2. Giả Kim", "✨ 3. Phòng Nghiên Cứu"])
 	var tab_idx := clampi(_facility_subtab, 0, 2)
 	if tab_idx == 0:
-		_render_library_actions()
+		_render_library_actions(building_id, b_lvl)
 	elif tab_idx == 1:
-		_render_alchemy_workshop_actions()
+		_render_alchemy_workshop_actions(b_lvl)
 	else:
-		_render_magic_research_actions()
+		_render_magic_research_actions(b_lvl)
 
-func _render_library_actions() -> void:
-	var exp_books := int(GameState.materials.get("SAMPLE_HERO_EXP_100", 0))
+func _render_library_actions(building_id: String, b_lvl: int) -> void:
+	var exp_100 := int(GameState.materials.get("SAMPLE_HERO_EXP_100", 0))
+	var exp_1000 := int(GameState.materials.get("SAMPLE_HERO_EXP_1000", 0))
+	var exp_10000 := int(GameState.materials.get("SAMPLE_HERO_EXP_10000", 0))
 	var skill_books := int(GameState.materials.get("SAMPLE_HERO_SKILL_BOOK", 0))
+	var prod_desc := "📘 100 Sách EXP Sơ Cấp/giờ" if b_lvl <= 1 else ("📗 50 Sách EXP Trung Cấp/giờ" if b_lvl == 2 else "📙 15 Sách EXP Cao Cấp/giờ")
+	var mage_exp_rate := 25000 if b_lvl <= 1 else (1250000 if b_lvl == 2 else 16500000)
+
 	_add_inspector_info(
-		"📚 [Library - Thư Viện Cổ Thư]:\n• 📘 Sách EXP Hero (+100): %d quyển | 📕 Sách Kỹ Năng: %d quyển" % [exp_books, skill_books],
+		"📚 [1. Thư Viện Ma Thuật – Library Lv.%d/3 (Tối đa 2 Hero hệ MAGE)]:\n" % b_lvl +
+		"• 🔮 Quy tắc: Chỉ Hero class MAGE mới được phân công vào Thư Viện & sản xuất Sách EXP!\n" +
+		"• Tự động sản xuất hiện tại: %s\n" % prod_desc +
+		"  (Lv.1: 100 Sách Sơ Cấp/h | Lv.2: 50 Sách Trung Cấp/h | Lv.3: 15 Sách Cao Cấp/h)\n" +
+		"• Pháp Sư (MAGE) tu luyện tăng cấp trực tiếp: +%s EXP/giờ\n" % _format_num(mage_exp_rate) +
+		"• Kho Sách: 📘 Sơ Cấp ×%d | 📗 Trung Cấp ×%d | 📙 Cao Cấp ×%d | 📕 Kỹ Năng ×%d" % [
+			exp_100, exp_1000, exp_10000, skill_books
+		],
 		Color(0.58, 0.9, 1.0)
 	)
 	var h := _get_or_pick_facility_hero()
 	if h.is_empty():
 		return
-	_render_hero_selector_row("📖 Chọn Hero lĩnh hội tại Thư Viện:")
+	_render_hero_selector_row("📖 Chọn Hero lĩnh hội tại Thư Viện Ma Thuật:")
 	var hid := str(h.get("id", ""))
 	var hname := str(h.get("name", "Hero"))
 	var hlvl := int(h.get("level", 1))
 	var hexp := int(h.get("exp", 0))
-	_add_inspector_info("• [%s] Cấp hiện tại: Lv.%d (EXP: %d)" % [hname, hlvl, hexp], Color(0.86, 0.94, 1.0))
+	var hclass := str(h.get("classCode", h.get("heroClass", "WARRIOR"))).to_upper()
+	_add_inspector_info("• [%s] Hệ: %s | Cấp hiện tại: Lv.%d (EXP: %s)" % [hname, hclass, hlvl, _format_num(hexp)], Color(0.86, 0.94, 1.0))
+
+	if hclass == "MAGE":
+		_add_inspector_button(
+			"🔮 Tu Luyện Ma Pháp Cho %s (+%s EXP / 1 Giờ)" % [hname, _format_num(mage_exp_rate)],
+			func(): _study_mage_in_library(building_id, hid, hname)
+		)
+	else:
+		_add_inspector_info("ℹ️ Chỉ Hero class MAGE mới có thể tu luyện tăng cấp trực tiếp tại Thư Viện Ma Thuật.", Color(1.0, 0.82, 0.48))
+
 	_add_inspector_button(
-		"📘 Đọc Sách EXP (+100 EXP) Cho %s (Còn %d)" % [hname, exp_books],
-		func(): _use_exp_book_on_hero(hid, hname),
-		exp_books <= 0
+		"📘 Đọc Sách EXP Sơ Cấp (+1,000 EXP) Cho %s (Còn %d)" % [hname, exp_100],
+		func(): _use_exp_book_on_hero(hid, hname, "SAMPLE_HERO_EXP_100"),
+		exp_100 <= 0
 	)
+	if exp_1000 > 0 or b_lvl >= 2:
+		_add_inspector_button(
+			"📗 Đọc Sách EXP Trung Cấp (+100,000 EXP) Cho %s (Còn %d)" % [hname, exp_1000],
+			func(): _use_exp_book_on_hero(hid, hname, "SAMPLE_HERO_EXP_1000"),
+			exp_1000 <= 0
+		)
+	if exp_10000 > 0 or b_lvl >= 3:
+		_add_inspector_button(
+			"📙 Đọc Sách EXP Cao Cấp (+10,000,000 EXP) Cho %s (Còn %d)" % [hname, exp_10000],
+			func(): _use_exp_book_on_hero(hid, hname, "SAMPLE_HERO_EXP_10000"),
+			exp_10000 <= 0
+		)
+
 	var skills: Array = h.get("skills", [])
 	for sk in skills:
 		if sk is Dictionary:
@@ -3264,39 +3371,56 @@ func _render_library_actions() -> void:
 					func(): _upgrade_hero_skill(hid, hname, sk_code, sk_name)
 				)
 
-func _render_alchemy_workshop_actions() -> void:
+func _render_alchemy_workshop_actions(b_lvl: int) -> void:
 	var enh_stones := int(GameState.materials.get("ENHANCEMENT_STONE", 0))
 	var rations := int(GameState.materials.get("RATION", 0))
 	var raw_food := int(GameState.materials.get("RAW_FOOD", 0))
+	var stone_rate := 15 if b_lvl <= 1 else (30 if b_lvl == 2 else 60)
 	_add_inspector_info(
-		"⚗️ [Alchemy Workshop - Xưởng Giả Kim]:\n• 💎 Đá Cường Hóa: %d viên | 🍖 Khẩu phần tinh luyện: %d | 🌾 Thảo dược & Lương thô: %d" % [
+		"⚗️ [2. Xưởng Giả Kim – Alchemy Workshop Lv.%d/3 (Tối đa 2 Hero)]:\n" % b_lvl +
+		"• Tự động điều chế Đá Cường Hóa: +%d viên/giờ (Lv.1: 15/h | Lv.2: 30/h | Lv.3: 60/h).\n" % stone_rate +
+		"• Chế tạo bình thuốc & vật phẩm tiêu hao: %s\n" % ("Đã mở khóa (Lv.2+)" if b_lvl >= 2 else "🔒 Mở khóa ở Level 2") +
+		"• Chuyển đổi nguyên liệu theo tỉ lệ: %s (Tính năng cập nhật sau)\n" % ("Sẵn sàng khung Lv.2+" if b_lvl >= 2 else "🔒 Mở khóa ở Level 2") +
+		"• Tồn kho: 💎 Đá Cường Hóa ×%d | 🧪 Khẩu phần/Dược phẩm ×%d | 🌾 Thảo dược ×%d" % [
 			enh_stones, rations, raw_food
 		],
 		Color(0.55, 0.96, 0.72)
 	)
-	_add_inspector_button("⚗️ Chưng Cất 5 Khẩu Phần Dinh Dưỡng Cao Cấp", func(): _cook_rations(5))
+	_add_inspector_button(
+		"⚗️ Điều Chế Bình Thuốc & Vật Phẩm Tiêu Hao (Yêu cầu Lv.2+)",
+		func(): _cook_rations(5),
+		b_lvl < 2
+	)
+	_add_inspector_button(
+		"🔄 Chuyển Đổi Nguyên Liệu Theo Tỉ Lệ (Mở ở Lv.2 — Làm sau)",
+		func(): status_banner_label.text = "ℹ️ Tính năng Chuyển đổi nguyên liệu theo tỉ lệ sẽ được cập nhật ở bản tiếp theo!",
+		true
+	)
 	var h := _get_or_pick_facility_hero()
 	if not h.is_empty():
-		_render_hero_selector_row("🧪 Chọn Hero dùng Dược phẩm / Khẩu phần:")
+		_render_hero_selector_row("🧪 Chọn Hero dùng Bình thuốc / Vật phẩm tiêu hao:")
 		var hid := str(h.get("id", ""))
 		var hname := str(h.get("name", "Hero"))
 		var hp := int(h.get("hp", 100))
 		var mhp := int(h.get("maxHp", 100))
 		_add_inspector_button(
-			"🧪 Tiếp Tế Dược Phẩm Hồi Sức Cho %s (HP %d/%d)" % [hname, hp, mhp],
+			"🧪 Tiếp Tế Bình Thuốc Hồi Sức Cho %s (HP %d/%d)" % [hname, hp, mhp],
 			func(): _feed_hero(hid, hname),
-			rations <= 0
+			rations <= 0 or b_lvl < 2
 		)
 
-func _render_magic_research_actions() -> void:
+func _render_magic_research_actions(b_lvl: int) -> void:
 	_add_inspector_info(
-		"✨ [Magic Research Lab - Phòng Nghiên Cứu Ma Thuật]:\n• Thực hiện Chuyển Chức (Class Change khi đạt Lv.20+) và Thức Tỉnh Huyết Mạch (Awaken) cho Hero!",
+		"✨ [3. Phòng Nghiên Cứu – Research Lab Lv.%d/3 (Tối đa 2 Hero)]:\n" % b_lvl +
+		"• Nghiên cứu các công nghệ ma导 & chiến thuật toàn Căn cứ.\n" +
+		"• Thực hiện Chuyển Chức (Class Change khi đạt Lv.20+).\n" +
+		"• Thức Tỉnh Huyết Mạch (Bloodline Awakening) cho Hero!",
 		Color(0.95, 0.68, 0.98)
 	)
 	var h := _get_or_pick_facility_hero()
 	if h.is_empty():
 		return
-	_render_hero_selector_row("🔮 Chọn Hero nghiên cứu Chuyển Chức & Thức Tỉnh:")
+	_render_hero_selector_row("🔮 Chọn Hero tại Phòng Nghiên Cứu:")
 	var hid := str(h.get("id", ""))
 	var hname := str(h.get("name", "Hero"))
 	var hlvl := int(h.get("level", 1))
@@ -3349,10 +3473,13 @@ func _render_magic_research_actions() -> void:
 	)
 
 func _render_warehouse_facility(b_lvl: int) -> void:
-	_add_inspector_section_header("📦 NHÀ KHO TRUNG TÂM (WAREHOUSE Lv.%d)" % b_lvl, Color(0.95, 0.85, 0.58))
+	var bonus_slots := clampi(b_lvl, 1, 3) * 100
+	_add_inspector_section_header("📦 NHÀ KHO (WAREHOUSE Lv.%d/3)" % b_lvl, Color(0.95, 0.85, 0.58))
 	var equips: Array = GameState.crafting_overview.get("equipment", [])
 	_add_inspector_info(
-		"• Lưu trữ & phân phối Trang bị, Vật phẩm tiêu hao và Nguyên liệu toàn Căn cứ.\n• Tổng số Trang bị: %d món | 📜 Thiên Thư: %d | 🍖 Khẩu phần: %d" % [
+		"• Không cần Hero làm việc (0 Hero).\n" +
+		"• Mỗi level mở thêm +100 slot ô đồ: Hiện mở rộng +%d slot ô đồ (Lv.1: +100 | Lv.2: +200 | Lv.3: +300).\n" % bonus_slots +
+		"• Tổng số Trang bị: %d món | 📜 Thiên Thư: %d | 🍖 Khẩu phần: %d" % [
 			equips.size(), GameState.normal_scrolls, int(GameState.materials.get("RATION", 0))
 		],
 		Color(0.96, 0.9, 0.72)
@@ -3401,12 +3528,14 @@ func _render_warehouse_facility(b_lvl: int) -> void:
 
 	elif tab_idx == 1:
 		var exp_books := int(GameState.materials.get("SAMPLE_HERO_EXP_100", 0))
+		var exp_books_mid := int(GameState.materials.get("SAMPLE_HERO_EXP_1000", 0))
+		var exp_books_high := int(GameState.materials.get("SAMPLE_HERO_EXP_10000", 0))
 		var skill_books := int(GameState.materials.get("SAMPLE_HERO_SKILL_BOOK", 0))
 		var rations := int(GameState.materials.get("RATION", 0))
 		_add_inspector_info(
-			"🎒 Vật Phẩm Tiêu Hao Trong Kho:\n" +
+			"🎒 Vật Phẩm Tiêu Hao Trong Kho (+%d Slot mở rộng):\n" % bonus_slots +
 			"   • 📜 Thiên Thư Triệu Hồi: ×%d\n" % GameState.normal_scrolls +
-			"   • 📘 Sách EXP Hero (+100): ×%d\n" % exp_books +
+			"   • 📘 Sách EXP Sơ Cấp: ×%d | 📗 Trung Cấp: ×%d | 📙 Cao Cấp: ×%d\n" % [exp_books, exp_books_mid, exp_books_high] +
 			"   • 📕 Sách Kỹ Năng Hero: ×%d\n" % skill_books +
 			"   • 🍖 Khẩu Phần Quân Lương: ×%d" % rations,
 			Color(0.86, 0.95, 0.88)
@@ -3417,8 +3546,8 @@ func _render_warehouse_facility(b_lvl: int) -> void:
 			var hid := str(h.get("id", ""))
 			var hname := str(h.get("name", "Hero"))
 			_add_inspector_button(
-				"📘 Dùng 1 Sách EXP (+100) Cho %s" % hname,
-				func(): _use_exp_book_on_hero(hid, hname),
+				"📘 Dùng 1 Sách EXP Sơ Cấp Cho %s" % hname,
+				func(): _use_exp_book_on_hero(hid, hname, "SAMPLE_HERO_EXP_100"),
 				exp_books <= 0
 			)
 			_add_inspector_button(
@@ -3543,9 +3672,9 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 		"DUNGEON_PORTAL":
 			if focus_cam:
 				camera_rig.focus_action_unit(dungeon_portal_mesh.global_position, 12.0, 0.35)
-			inspector_title_label.text = "⛩️ CỔNG THÁP CHINH PHẠT PvE (PHÍA ĐÔNG)"
-			inspector_subtitle_label.text = "Cổng thành phía Đông gắn cố định trên tường thành — Tầng %d (World Level %d)" % [GameState.current_floor, GameState.world_level]
-			_add_inspector_info("📌 Công trình cố định duy nhất tại tường thành phía Đông.", Color(1.0, 0.88, 0.45))
+			inspector_title_label.text = "⛩️ CỔNG THÀNH ĐÔNG & CỔNG THÁP THỬ THÁCH"
+			inspector_subtitle_label.text = "Kiến trúc mặc định của Map (Nhóm 1) — Tầng %d (World Level %d)" % [GameState.current_floor, GameState.world_level]
+			_add_inspector_info("📌 Cổng thành phía Đông & Cổng Tháp Thử Thách dính liền là mặc định của Map.", Color(1.0, 0.88, 0.45))
 			_add_inspector_info("⚔️ Đội hình xuất kích (%d/5 Tướng):\n(Mẹo: Kéo-thả Tướng 3D vào Cổng Tháp hoặc nhấn nút bên dưới)" % GameState.active_party_ids.size(), Color(0.88, 0.72, 1.0))
 
 			for h in GameState.heroes:
@@ -3568,8 +3697,8 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 		"BARRACKS":
 			if focus_cam:
 				camera_rig.focus_action_unit(barracks_mesh.global_position, 11.0, 0.35)
-			inspector_title_label.text = "🛡️ DOANH TRẠI & THĂNG SAO"
-			inspector_subtitle_label.text = "Quản lý đội ngũ Tướng và Ghép Thăng Sao (Công trình tự do 3×3 ô trên lưới)"
+			inspector_title_label.text = "🛡️ NHÀ CHIẾN LƯỢC (STRATEGIC HOUSE)"
+			inspector_subtitle_label.text = "Nhóm 1: Điều phối Tướng, Đội hình & Ghép Thăng Sao (3×3 ô trên lưới)"
 			_add_inspector_grid_placement_controls("BARRACKS")
 			_add_inspector_info("Tổng số Tướng sở hữu: %d Tướng" % GameState.heroes.size())
 			_add_inspector_button("👥 Quản Lý Hero Từng Tầng Sảnh Chờ", func(): _open_floor_hero_manager(_current_lobby_floor))
@@ -3579,14 +3708,13 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 			var f_node := get_node_or_null("BaseArchitecture/CentralBonfire") as Node3D
 			if focus_cam and f_node != null:
 				camera_rig.focus_action_unit(f_node.global_position, 12.0, 0.35)
-			inspector_title_label.text = "⛲ ĐÀI PHUN NƯỚC & VÒNG TRÒN NĂNG LƯỢNG"
-			inspector_subtitle_label.text = "Điểm tụ năng lượng linh hồn, hồi phục thể lực (Công trình tự do 4×4 ô trên lưới)"
+			inspector_title_label.text = "⛲ ĐÀI PHUN NƯỚC (FOUNTAIN)"
+			inspector_subtitle_label.text = "Công trình tự do Nhóm 2 — Điểm tụ năng lượng linh hồn (4×4 ô trên lưới)"
 			_add_inspector_grid_placement_controls("FOUNTAIN")
 			_add_inspector_info("🍖 Khẩu phần dự trữ: %d | 🌾 Lương thực thô: %d" % [
 				int(GameState.materials.get("RATION", 0)),
 				int(GameState.materials.get("RAW_FOOD", 0))
 			])
-			_add_inspector_button("🍳 Nấu 5 Khẩu Phần Quân Lương", func(): _cook_rations(5))
 			_add_inspector_button("🌤️🌅🌙 Đổi Bầu Không Khí: Ngày / Hoàng Hôn / Đêm", _on_lighting_toggle_pressed)
 
 			for h in GameState.heroes:
@@ -3603,14 +3731,18 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 		"INFIRMARY":
 			if focus_cam:
 				camera_rig.focus_action_unit(infirmary_mesh.global_position, 11.0, 0.35)
-			inspector_title_label.text = "✚ BỆNH XÁ & HẬU CẦN"
-			inspector_subtitle_label.text = "Chữa trị thương tích và hồi phục thể lực (Công trình tự do 3×3 ô trên lưới)"
+			inspector_title_label.text = "✚ RECOVERY CENTER – TRUNG TÂM HỒI PHỤC"
+			inspector_subtitle_label.text = "Công trình tự do Nhóm 2 (3 Level • 1 Hero • 2/4/6 Slot chữa trị theo Level)"
 			_add_inspector_grid_placement_controls("INFIRMARY")
-			_add_inspector_info("🍖 Khẩu phần dự trữ: %d | 🌾 Lương thực thô: %d" % [
-				int(GameState.materials.get("RATION", 0)),
-				int(GameState.materials.get("RAW_FOOD", 0))
-			])
-			_add_inspector_button("🍳 Nấu 5 Khẩu Phần Quân Lương", func(): _cook_rations(5))
+			_add_inspector_info(
+				"• Hợp nhất toàn bộ Bệnh Xá thành 1 công trình tự do duy nhất.\n" +
+				"• Cấu hình chuẩn: 3 Level | 1 Hero phụ trách | 2 / 4 / 6 slot chữa trị theo mỗi Level.\n" +
+				"• 🍖 Khẩu phần dự trữ: %d | 🌾 Lương thực thô: %d" % [
+					int(GameState.materials.get("RATION", 0)),
+					int(GameState.materials.get("RAW_FOOD", 0))
+				],
+				Color(0.68, 0.98, 0.82)
+			)
 
 			for h in GameState.heroes:
 				var hid := str(h.get("id", ""))
@@ -3618,7 +3750,7 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 				var hp := int(h.get("hp", 100))
 				var mhp := int(h.get("maxHp", 100))
 				_add_inspector_button(
-					"🍖 Cấp Khẩu Phần cho %s (HP %d/%d)" % [hname, hp, mhp],
+					"✚ Chữa Trị & Cấp Khẩu Phần cho %s (HP %d/%d)" % [hname, hp, mhp],
 					func(): _feed_hero(hid, hname),
 					int(GameState.materials.get("RATION", 0)) <= 0
 				)
@@ -3665,18 +3797,21 @@ func _open_hero_inspector(hero_actor: UnitActor3D, focus_cam: bool = true) -> vo
 		var buildings: Array = GameState.base_overview.get("buildings", [])
 		for b in buildings:
 			if b is Dictionary and str(b.get("status", "")) == "READY":
+				var b_type := str(b.get("buildingType", ""))
+				if b_type == "LIBRARY" and hclass.to_upper() != "MAGE":
+					continue
 				var max_w := int(b.get("maxWorkers", 0))
 				var cur_w: Array = b.get("workers", [])
 				if cur_w.size() < max_w:
 					var b_id := str(b.get("id", ""))
-					var b_name := str(b.get("typeName", b.get("buildingType", "Công trình")))
+					var b_name := str(b.get("typeName", b_type))
 					var p_idx := int(b.get("plotIndex", 0))
 					_add_inspector_button(
 						"👷 Phân công vào %s (Ô #%d)" % [b_name, p_idx],
 						func(): _assign_worker_to_building(b_id, hid, hname, b_name)
 					)
 
-	_add_inspector_button("🛡️ Mở Chi Tiết & Thăng Sao", _on_barracks_pressed)
+	_add_inspector_button("🛡️ Mở Nhà Chiến Lược & Thăng Sao", _on_barracks_pressed)
 
 func _get_blueprint_build_cost(b_code: String) -> int:
 	var b_types: Array = GameState.base_overview.get("buildingTypes", [])
@@ -3789,16 +3924,32 @@ func _upgrade_hero_skill(hero_id: String, hero_name: String, skill_code: String,
 	else:
 		status_banner_label.text = "ℹ️ Chưa thể nâng cấp kỹ năng: " + str(res["error"])
 
-func _use_exp_book_on_hero(hero_id: String, hero_name: String) -> void:
-	var res := await ApiClient.post_req("/api/inventory/items/SAMPLE_HERO_EXP_100/use", {
+func _use_exp_book_on_hero(hero_id: String, hero_name: String, item_code: String = "SAMPLE_HERO_EXP_100") -> void:
+	var res := await ApiClient.post_req("/api/inventory/items/%s/use" % item_code, {
 		"quantity": 1,
 		"targetHeroId": hero_id
 	})
 	if res["ok"]:
-		status_banner_label.text = "📘 [%s] đã lĩnh hội Sách EXP tại Thư Viện Ma Thuật!" % hero_name
+		status_banner_label.text = "📘 [%s] đã lĩnh hội Sách EXP (%s) tại Thư Viện Ma Thuật!" % [hero_name, item_code]
 		await _sync_all_from_backend()
 	else:
 		status_banner_label.text = "❌ Không thể dùng Sách EXP: " + str(res["error"])
+
+func _study_mage_in_library(building_id: String, hero_id: String, hero_name: String) -> void:
+	var res := await ApiClient.post_req("/api/base/buildings/%s/mage-study" % building_id, {
+		"heroId": hero_id,
+		"hours": 1
+	})
+	if res["ok"] and res["data"] is Dictionary:
+		var exp_gained := int(res["data"].get("expGained", 0))
+		var new_lvl := int(res["data"].get("newLevel", 1))
+		camera_rig.shake(0.16, 0.18)
+		status_banner_label.text = "🔮 [%s] đã tu luyện Ma Pháp tại Thư Viện (+%s EXP → Lv.%d)!" % [
+			hero_name, _format_num(exp_gained), new_lvl
+		]
+		await _sync_all_from_backend()
+	else:
+		status_banner_label.text = "❌ Không thể tu luyện tại Thư Viện: " + str(res["error"])
 
 func _perform_class_change(hero_id: String, hero_name: String, target_class: String) -> void:
 	var res := await ApiClient.post_req("/api/heroes/%s/class-change" % hero_id, {
@@ -3806,7 +3957,7 @@ func _perform_class_change(hero_id: String, hero_name: String, target_class: Str
 	})
 	if res["ok"]:
 		camera_rig.shake(0.18, 0.2)
-		status_banner_label.text = "🔮 [%s] đã chuyển chức thành công sang [%s] tại Phòng Nghiên Cứu Ma Thuật!" % [hero_name, target_class]
+		status_banner_label.text = "🔮 [%s] đã chuyển chức thành công sang [%s] tại Phòng Nghiên Cứu!" % [hero_name, target_class]
 		await _sync_all_from_backend()
 	else:
 		status_banner_label.text = "ℹ️ Chưa đủ điều kiện Chuyển Chức: " + str(res["error"])
@@ -3815,7 +3966,7 @@ func _awaken_hero(hero_id: String, hero_name: String) -> void:
 	var res := await ApiClient.post_req("/api/heroes/%s/awaken" % hero_id, {})
 	if res["ok"]:
 		camera_rig.shake(0.2, 0.22)
-		status_banner_label.text = "🌟 [%s] đã Thức Tỉnh Huyết Mạch tại Phòng Nghiên Cứu Ma Thuật!" % hero_name
+		status_banner_label.text = "🌟 [%s] đã Thức Tỉnh Huyết Mạch tại Phòng Nghiên Cứu!" % hero_name
 		await _sync_all_from_backend()
 	else:
 		status_banner_label.text = "ℹ️ Chưa đủ nguyên liệu Thức Tỉnh: " + str(res["error"])

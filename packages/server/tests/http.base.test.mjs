@@ -52,7 +52,9 @@ test('HTTP base, construction and production', { skip: skipReason }, async t => 
     const building = overview.body.buildings.find(row => row.id === kitchenId);
     assert.equal(building.status, 'READY');
     assert.equal(building.resourceType, 'FOOD');
-    assert.equal(building.ratePerHour, 40);
+    assert.equal(building.ratePerHour, 20);
+    assert.equal(building.maxLevel, 3);
+    assert.equal(building.maxWorkers, 1);
 
     const nodes = await sql('select id from base_production_nodes where building_id = $1', [kitchenId]);
     assert.equal(nodes.rowCount, 1);
@@ -64,7 +66,7 @@ test('HTTP base, construction and production', { skip: skipReason }, async t => 
     const collected = await harness.request(`/api/base/buildings/${kitchenId}/collect`, { method: 'POST', token: master.token });
     assert.equal(collected.status, 200);
     assert.equal(collected.body.resourceType, 'FOOD');
-    assert.ok(collected.body.collected >= 75, `expected ~80 food, got ${collected.body.collected}`);
+    assert.ok(collected.body.collected >= 38, `expected ~40 food, got ${collected.body.collected}`);
 
     const inventory = await harness.request('/api/inventory', { token: master.token });
     assert.equal(inventory.status, 200);
@@ -96,7 +98,7 @@ test('HTTP base, construction and production', { skip: skipReason }, async t => 
     const expanded = await harness.request('/api/base/expand', { method: 'POST', token: master.token });
     assert.equal(expanded.status, 200);
     assert.equal(expanded.body.zones, 2);
-    assert.equal(expanded.body.plots, 6);
+    assert.equal(expanded.body.plots, 16);
 
     const blocked = await harness.request('/api/base/expand', { method: 'POST', token: master.token });
     assert.equal(blocked.status, 409);

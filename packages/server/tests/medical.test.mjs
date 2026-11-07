@@ -31,9 +31,10 @@ test('DM-04 Medical - injury classification', async (t) => {
 });
 
 test('DM-04 Medical - facility and treatment', async (t) => {
-  await t.test('scenario 5.1: a level 1 facility has two beds', () => {
+  await t.test('scenario 5.1: Recovery Center has 2/4/6 treatment slots for levels 1/2/3', () => {
     assert.equal(bedCapacityForLevel(1), 2);
-    assert.equal(bedCapacityForLevel(3), 4);
+    assert.equal(bedCapacityForLevel(2), 4);
+    assert.equal(bedCapacityForLevel(3), 6);
   });
 
   await t.test('higher facility levels shorten treatment but never below 20%', () => {

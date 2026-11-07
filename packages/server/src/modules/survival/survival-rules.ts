@@ -89,11 +89,12 @@ export interface DriftResult {
  * Apply the pass of time to one Hero. Food availability doubles hunger gain,
  * resting drains fatigue instead of adding it, and resting stops at 0.
  */
-export function applyDrift(state: SurvivalSnapshot, now: Date, foodAvailable: boolean): DriftResult {
+export function applyDrift(state: SurvivalSnapshot, now: Date, foodAvailable: boolean, recoveryMultiplier = 1): DriftResult {
   const hoursElapsed = Math.max(0, (now.getTime() - state.lastTickAt.getTime()) / 3_600_000);
   const hungerGain = (foodAvailable ? HUNGER_PER_HOUR : HUNGER_PER_HOUR_WITHOUT_FOOD) * hoursElapsed;
+  const mult = Math.max(1, Number.isFinite(recoveryMultiplier) ? recoveryMultiplier : 1);
   const fatigueDelta = state.isResting
-    ? -REST_RECOVERY_PER_HOUR * hoursElapsed
+    ? -(REST_RECOVERY_PER_HOUR * mult) * hoursElapsed
     : FATIGUE_PER_HOUR * hoursElapsed;
 
   const hungerScore = clampScore(state.hungerScore + hungerGain);

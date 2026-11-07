@@ -186,7 +186,7 @@ func _refresh_visuals(force_rebuild: bool) -> void:
 		return
 
 	var type_name := str(building_data.get("typeName", b_type))
-	var max_lvl := int(building_data.get("maxLevel", 5))
+	var max_lvl := int(building_data.get("maxLevel", 3))
 	title_label.text = "%s %s (Lv.%d/%d)" % [_icon_for_type(b_type), type_name, b_lvl, max_lvl]
 	title_label.modulate = Color(1.0, 0.92, 0.58)
 
@@ -207,7 +207,7 @@ func _refresh_visuals(force_rebuild: bool) -> void:
 		harvest_badge.visible = false
 	else:
 		var parts: Array[String] = []
-		parts.append(_role_subtitle_for_type(b_type))
+		parts.append(_role_subtitle_for_type(b_type, b_lvl))
 		if cap > 0 and res_type != "":
 			parts.append("%s %d/%d (+%.1f/h)" % [_icon_for_resource(res_type), int(floor(stored)), cap, rate])
 		if max_w > 0:
@@ -221,30 +221,36 @@ func _refresh_visuals(force_rebuild: bool) -> void:
 		else:
 			harvest_badge.visible = false
 
-func _role_subtitle_for_type(b_type: String) -> String:
+func _role_subtitle_for_type(b_type: String, b_lvl: int = 1) -> String:
+	var lvl := clampi(b_lvl, 1, 3)
 	match b_type:
 		"FORGE":
 			return "⚒️ Rèn & Cường Hóa Trang Bị"
 		"TRAINING_CENTER":
-			return "🥋 Huấn Luyện Chỉ Số & Kỹ Năng"
+			var w_cap := 3 if lvl == 1 else (5 if lvl == 2 else 7)
+			return "🥋 Huấn Luyện (Tối đa %d Hero)" % w_cap
 		"HALL_OF_MAGIC":
-			return "🔮 3 Phân Khu: Thư Viện • Giả Kim • Nghiên Cứu"
+			return "🔮 3 Phân Khu (Tổng 6 Hero)"
 		"LIBRARY":
-			return "📚 Biên Soạn Sách EXP & Kỹ Năng"
+			return "📚 Thư Viện Ma Thuật (Chỉ MAGE • 2 người)"
 		"ALCHEMY_WORKSHOP":
-			return "⚗️ Điều Chế Đá Cường Hóa & Dược Phẩm"
+			var s_rate := 15 if lvl == 1 else (30 if lvl == 2 else 60)
+			return "⚗️ Xưởng Giả Kim (%d Đá/h)" % s_rate
 		"MAGIC_RESEARCH_LAB":
-			return "✨ Nghiên Cứu Ma Pháp & Chuyển Chức"
+			return "✨ Phòng Nghiên Cứu (Công Nghệ • Chuyển Chức • Thức Tỉnh)"
 		"WAREHOUSE":
-			return "📦 Lưu Trữ Vật Phẩm & Trang Bị"
+			return "📦 Nhà Kho (+%d Slot Ô Đồ)" % (lvl * 100)
 		"HOUSE":
-			return "🏠 Nhà Nghỉ (Lv.30 -> Party Mansion)"
+			var r_cap := 5 if lvl == 1 else (7 if lvl == 2 else 10)
+			var r_mult := "1.0x" if lvl == 1 else ("1.5x" if lvl == 2 else "2.0x")
+			return "🏠 Dormitory (%d người • Hồi %s)" % [r_cap, r_mult]
 		"PARTY_MANSION":
-			return "🏰 Biệt Thự Tổ Đội Cao Cấp"
+			return "🏰 Biệt Thự Tổ Đội (5 người • Hồi 4.0x = x2 Lv.3)"
 		"KITCHEN":
-			return "🍖 Chế Biến Quân Lương"
+			var f_rate := 20 if lvl == 1 else (40 if lvl == 2 else 80)
+			return "🍖 Bếp (%d FOOD/h & Món Buff)" % f_rate
 		"MEDICAL":
-			return "✚ Trị Thương & Hồi Sức"
+			return "✚ Recovery Center (%d Slot Chữa Trị)" % (lvl * 2)
 		_:
 			return "Sẵn sàng hoạt động"
 
@@ -702,7 +708,11 @@ func _icon_for_resource(res_type: String) -> String:
 		"FOOD_RAW", "RAW_FOOD":
 			return "🌾"
 		"SAMPLE_HERO_EXP_100":
-			return "📘"
+			return "📘 Sách Sơ Cấp"
+		"SAMPLE_HERO_EXP_1000":
+			return "📗 Sách Trung Cấp"
+		"SAMPLE_HERO_EXP_10000":
+			return "📙 Sách Cao Cấp"
 		"ENHANCEMENT_STONE":
 			return "💎"
 		"WOOD":

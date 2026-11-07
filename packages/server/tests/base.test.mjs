@@ -3,15 +3,23 @@ import assert from 'node:assert/strict';
 import {
   MAX_BASE_ZONES,
   accruedStored,
+  buildingProductionForLevel,
   capacityForLevel,
   demolishRefundSilver,
+  dormitoryRecoveryMultiplier,
+  dormitoryResidentCapacity,
   expansionCostSilver,
   expansionRequiredWorldLevel,
   levelRateMultiplier,
+  libraryMageExpPerHour,
+  maxConstructibleCountForType,
+  maxWorkersForBuildingLevel,
   plotsForZones,
   productionRatePerHour,
+  recoveryCenterTreatmentSlots,
   upgradeCostSilver,
   upgradeMaterials,
+  warehouseBonusSlotsForLevel,
   worldLevelForFloor,
 } from '../dist/modules/base/base-rules.js';
 import { workerBoostForLevel } from '../dist/modules/base/building.service.js';
@@ -94,5 +102,45 @@ test('DM-08 Base - building economy', async (t) => {
     assert.equal(workerBoostForLevel(1), 1.05);
     assert.equal(workerBoostForLevel(4), 1.2);
     assert.equal(workerBoostForLevel(20), 1.25);
+  });
+
+  await t.test('standardized 3-level building rules match specification', () => {
+    // Recovery Center: 1 hero, 2/4/6 slots
+    assert.equal(maxWorkersForBuildingLevel('MEDICAL', 1), 1);
+    assert.deepEqual([1, 2, 3].map(recoveryCenterTreatmentSlots), [2, 4, 6]);
+
+    // Training Center: 3/5/7 heroes, max 2 buildings
+    assert.deepEqual([1, 2, 3].map(lvl => maxWorkersForBuildingLevel('TRAINING_CENTER', lvl)), [3, 5, 7]);
+    assert.equal(maxConstructibleCountForType('TRAINING_CENTER', 1), 1);
+    assert.equal(maxConstructibleCountForType('TRAINING_CENTER', 30), 2);
+
+    // Hall of Magic & 3 sub-wings: 6 total (2 per sub-wing)
+    assert.equal(maxWorkersForBuildingLevel('HALL_OF_MAGIC', 1), 6);
+    assert.equal(maxWorkersForBuildingLevel('LIBRARY', 1), 2);
+    assert.equal(maxWorkersForBuildingLevel('ALCHEMY_WORKSHOP', 1), 2);
+    assert.equal(maxWorkersForBuildingLevel('MAGIC_RESEARCH_LAB', 1), 2);
+
+    // Library EXP books & Mage direct EXP/hr (25k / 1.25M / 16.5M)
+    assert.deepEqual(buildingProductionForLevel('LIBRARY', 1), { resourceType: 'SAMPLE_HERO_EXP_100', ratePerHour: 100, capacity: 1000 });
+    assert.deepEqual(buildingProductionForLevel('LIBRARY', 2), { resourceType: 'SAMPLE_HERO_EXP_1000', ratePerHour: 50, capacity: 500 });
+    assert.deepEqual(buildingProductionForLevel('LIBRARY', 3), { resourceType: 'SAMPLE_HERO_EXP_10000', ratePerHour: 15, capacity: 150 });
+    assert.deepEqual([1, 2, 3].map(libraryMageExpPerHour), [25_000, 1_250_000, 16_500_000]);
+
+    // Alchemy Workshop: 15/30/60 enhancement stones/hr
+    assert.deepEqual([1, 2, 3].map(lvl => buildingProductionForLevel('ALCHEMY_WORKSHOP', lvl)?.ratePerHour), [15, 30, 60]);
+
+    // Kitchen: 1/2/3 workers, 20/40/80 food/hr
+    assert.deepEqual([1, 2, 3].map(lvl => maxWorkersForBuildingLevel('KITCHEN', lvl)), [1, 2, 3]);
+    assert.deepEqual([1, 2, 3].map(lvl => buildingProductionForLevel('KITCHEN', lvl)?.ratePerHour), [20, 40, 80]);
+
+    // Warehouse: 0 workers, +100/+200/+300 slots
+    assert.equal(maxWorkersForBuildingLevel('WAREHOUSE', 1), 0);
+    assert.deepEqual([1, 2, 3].map(warehouseBonusSlotsForLevel), [100, 200, 300]);
+
+    // Dormitory (HOUSE: 5/7/10 residents, 1.0x/1.5x/2.0x) & Party Mansion (5 residents, 4.0x = x2 of House Lv.3)
+    assert.deepEqual([1, 2, 3].map(lvl => dormitoryResidentCapacity('HOUSE', lvl)), [5, 7, 10]);
+    assert.deepEqual([1, 2, 3].map(lvl => dormitoryRecoveryMultiplier('HOUSE', lvl)), [1.0, 1.5, 2.0]);
+    assert.equal(dormitoryResidentCapacity('PARTY_MANSION', 1), 5);
+    assert.equal(dormitoryRecoveryMultiplier('PARTY_MANSION', 1), 4.0);
   });
 });

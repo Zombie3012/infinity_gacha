@@ -109,3 +109,125 @@ export function constructionSeconds(level = 1): number {
 export function upgradeSeconds(targetLevel: number): number {
   return Math.max(2, Math.floor(targetLevel)) * UPGRADE_SECONDS_PER_LEVEL;
 }
+
+/**
+ * Building-specific max workers by level (3-level standardized design):
+ * - RECOVERY_CENTER (MEDICAL): 1 hero (opens 2/4/6 treatment slots)
+ * - TRAINING_CENTER: Lv.1 = 3, Lv.2 = 5, Lv.3 = 7
+ * - HALL_OF_MAGIC: 6 heroes total (2 per sub-wing)
+ * - LIBRARY: 2 heroes (MAGE class only)
+ * - ALCHEMY_WORKSHOP: 2 heroes
+ * - MAGIC_RESEARCH_LAB: 2 heroes
+ * - KITCHEN: Lv.1 = 1, Lv.2 = 2, Lv.3 = 3
+ * - WAREHOUSE / HOUSE / PARTY_MANSION: 0 workers
+ */
+export function maxWorkersForBuildingLevel(code: string, level: number, defaultMaxWorkers = 0): number {
+  const lvl = Math.min(3, Math.max(1, Math.floor(level)));
+  switch (code) {
+    case 'WAREHOUSE':
+    case 'HOUSE':
+    case 'PARTY_MANSION':
+      return 0;
+    case 'MEDICAL':
+      return 1;
+    case 'TRAINING_CENTER':
+      return lvl === 1 ? 3 : lvl === 2 ? 5 : 7;
+    case 'HALL_OF_MAGIC':
+      return 6;
+    case 'LIBRARY':
+    case 'ALCHEMY_WORKSHOP':
+    case 'MAGIC_RESEARCH_LAB':
+      return 2;
+    case 'KITCHEN':
+    case 'FORGE':
+      return lvl;
+    default:
+      return defaultMaxWorkers;
+  }
+}
+
+/**
+ * Standardized 3-level production profile for Library, Alchemy Workshop, and Kitchen:
+ * - LIBRARY (requires MAGE worker):
+ *   Lv.1 -> 100 Basic EXP Books/hr (SAMPLE_HERO_EXP_100)
+ *   Lv.2 -> 50 Intermediate EXP Books/hr (SAMPLE_HERO_EXP_1000)
+ *   Lv.3 -> 15 Advanced EXP Books/hr (SAMPLE_HERO_EXP_10000)
+ * - ALCHEMY_WORKSHOP:
+ *   Lv.1 -> 15 ENHANCEMENT_STONE/hr
+ *   Lv.2 -> 30 ENHANCEMENT_STONE/hr
+ *   Lv.3 -> 60 ENHANCEMENT_STONE/hr
+ * - KITCHEN:
+ *   Lv.1 -> 20 FOOD/hr
+ *   Lv.2 -> 40 FOOD/hr
+ *   Lv.3 -> 80 FOOD/hr
+ */
+export function buildingProductionForLevel(
+  code: string,
+  level: number,
+): { resourceType: string; ratePerHour: number; capacity: number } | null {
+  const lvl = Math.min(3, Math.max(1, Math.floor(level)));
+  if (code === 'LIBRARY') {
+    if (lvl === 1) return { resourceType: 'SAMPLE_HERO_EXP_100', ratePerHour: 100, capacity: 1000 };
+    if (lvl === 2) return { resourceType: 'SAMPLE_HERO_EXP_1000', ratePerHour: 50, capacity: 500 };
+    return { resourceType: 'SAMPLE_HERO_EXP_10000', ratePerHour: 15, capacity: 150 };
+  }
+  if (code === 'ALCHEMY_WORKSHOP') {
+    const rate = lvl === 1 ? 15 : lvl === 2 ? 30 : 60;
+    return { resourceType: 'ENHANCEMENT_STONE', ratePerHour: rate, capacity: rate * 10 };
+  }
+  if (code === 'KITCHEN') {
+    const rate = lvl === 1 ? 20 : lvl === 2 ? 40 : 80;
+    return { resourceType: 'FOOD', ratePerHour: rate, capacity: rate * 10 };
+  }
+  return null;
+}
+
+/** Direct EXP per hour granted to MAGE class heroes stationed/studying in the Library. */
+export function libraryMageExpPerHour(level: number): number {
+  const lvl = Math.min(3, Math.max(1, Math.floor(level)));
+  if (lvl === 1) return 25_000;
+  if (lvl === 2) return 1_250_000;
+  return 16_500_000;
+}
+
+/** Treatment slots unlocked at Recovery Center (MEDICAL) per level (2 / 4 / 6). */
+export function recoveryCenterTreatmentSlots(level: number): number {
+  const lvl = Math.min(3, Math.max(1, Math.floor(level)));
+  return lvl * 2;
+}
+
+/** Resident resting capacity for Dormitory (HOUSE: 5/7/10) and Party Mansion (5). */
+export function dormitoryResidentCapacity(code: string, level: number): number {
+  const lvl = Math.min(3, Math.max(1, Math.floor(level)));
+  if (code === 'PARTY_MANSION') return 5;
+  if (code === 'HOUSE') return lvl === 1 ? 5 : lvl === 2 ? 7 : 10;
+  if (code === 'MEDICAL') return recoveryCenterTreatmentSlots(lvl);
+  return 0;
+}
+
+/**
+ * Stamina & Morale recovery multiplier:
+ * - HOUSE (Dormitory): Lv.1 = 1.0x, Lv.2 = 1.5x, Lv.3 = 2.0x
+ * - PARTY_MANSION (Independent building): x2 of House Lv.3 = 4.0x
+ */
+export function dormitoryRecoveryMultiplier(code: string, level: number): number {
+  const lvl = Math.min(3, Math.max(1, Math.floor(level)));
+  if (code === 'PARTY_MANSION') return 4.0;
+  if (code === 'HOUSE') return lvl === 1 ? 1.0 : lvl === 2 ? 1.5 : 2.0;
+  return 1.0;
+}
+
+/** Warehouse inventory slot expansion (+100 slots per level: +100 / +200 / +300). */
+export function warehouseBonusSlotsForLevel(level: number): number {
+  const lvl = Math.min(3, Math.max(1, Math.floor(level)));
+  return lvl * 100;
+}
+
+/** Maximum constructible instances for limited buildings (e.g. Training Center max 2 unlocked by Master level). */
+export function maxConstructibleCountForType(code: string, masterLevel: number): number | null {
+  const mLvl = Math.max(1, Math.floor(masterLevel));
+  if (code === 'TRAINING_CENTER') {
+    return mLvl >= 30 ? 2 : 1;
+  }
+  return null;
+}

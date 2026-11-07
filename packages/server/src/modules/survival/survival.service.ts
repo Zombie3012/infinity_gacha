@@ -68,13 +68,32 @@ export class SurvivalService {
     const states = await this.ensureStates(masterId, now);
     if (states.length === 0) return;
     const hasFood = (await this.foodStock(masterId)) > 0;
+    const restFacilities = await db.select({
+      buildingType: baseBuildings.buildingType,
+      level: baseBuildings.level,
+      status: baseBuildings.status,
+    }).from(baseBuildings).where(and(
+      eq(baseBuildings.masterId, masterId),
+      inArray(baseBuildings.buildingType, ['HOUSE', 'PARTY_MANSION']),
+    ));
+    let recoveryMult = 1.0;
+    for (const fac of restFacilities) {
+      if (fac.status !== 'READY') continue;
+      if (fac.buildingType === 'PARTY_MANSION') {
+        recoveryMult = Math.max(recoveryMult, 4.0);
+      } else if (fac.buildingType === 'HOUSE') {
+        const lvl = Math.min(3, Math.max(1, fac.level));
+        const houseMult = lvl === 1 ? 1.0 : lvl === 2 ? 1.5 : 2.0;
+        recoveryMult = Math.max(recoveryMult, houseMult);
+      }
+    }
     for (const state of states) {
       const drift = applyDrift({
         hungerScore: state.hungerScore,
         fatigueScore: state.fatigueScore,
         isResting: state.isResting,
         lastTickAt: state.lastTickAt,
-      }, now, hasFood);
+      }, now, hasFood, recoveryMult);
       await db.update(heroSurvivalStates).set({
         hungerScore: drift.hungerScore,
         fatigueScore: drift.fatigueScore,

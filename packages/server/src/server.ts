@@ -2121,6 +2121,17 @@ export function createApp() {
     }
   }));
 
+  app.post('/api/base/buildings/:buildingId/mage-study', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await buildingService.studyMageInLibrary(master.id, String(req.params.buildingId), req.body?.heroId, req.body?.hours));
+    } catch (error) {
+      if (baseError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
   // --- DM-14: configuration versioning, audit, monitoring and security ---
 
   app.get('/api/admin/configs', requireAdminApiKey, asyncRoute(async (req, res) => {

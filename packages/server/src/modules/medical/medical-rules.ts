@@ -37,7 +37,7 @@ export function classifyInjury(hpPercent: number): InjuryProfile | null {
 }
 
 export function bedCapacityForLevel(level: number): number {
-  return Math.max(1, Math.floor(level)) + 1;
+  return Math.max(1, Math.floor(level)) * 2;
 }
 
 /** Facility care shortens the natural timer, but never below 20% of it. */
