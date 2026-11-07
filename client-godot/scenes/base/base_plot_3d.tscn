@@ -3,13 +3,13 @@
 [ext_resource type="Script" path="res://scripts/base/base_plot_3d.gd" id="1_plotscript"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_border"]
-size = Vector3(3.15, 0.14, 3.15)
+size = Vector3(3.92, 0.14, 3.92)
 
 [sub_resource type="BoxMesh" id="BoxMesh_pad"]
-size = Vector3(2.85, 0.22, 2.85)
+size = Vector3(3.72, 0.22, 3.72)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_click"]
-size = Vector3(3.1, 2.6, 3.1)
+size = Vector3(3.9, 2.6, 3.9)
 
 [node name="BasePlot3D" type="Node3D"]
 script = ExtResource("1_plotscript")

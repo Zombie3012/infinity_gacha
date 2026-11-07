@@ -34,7 +34,7 @@ const TIER2_GX_MIN := -29
 const TIER2_GX_MAX := -1
 const GRID_GZ_MIN := 1
 const GRID_GZ_MAX := 49
-const CASTLE_LAYOUT_SAVE_PATH := "user://castle_grid_layout_v2.json"
+const CASTLE_LAYOUT_SAVE_PATH := "user://castle_grid_layout_v3.json"
 
 enum GridEditMode {
 	NONE = 0,
@@ -786,39 +786,51 @@ func _is_footprint_valid(gx: int, gz: int, size_cells: Vector2i, ignore_structur
 	return true
 
 func _get_default_plot_grid_coord(plot_num: int) -> Vector2i:
-	# Distribute default plot positions cleanly along the avenues of Tier 1 and Tier 2
+	# Clean Master-Plan distribution for all 48 2x2 Plots along the Castle Avenues (no road overlap)
 	var idx := plot_num - 1
-	if idx < 32:
-		var col := idx % 8
-		var row_group := int(idx / 8)
-		var gx := 8 + col * 4
-		var gz_table := [17, 31, 8, 40]
-		var gz: int = gz_table[row_group % 4]
-		return Vector2i(gx, gz)
-	else:
-		var t2_idx := idx - 32
-		var col := t2_idx % 4
-		var row_group := int(t2_idx / 4)
-		var gx := -26 + col * 5
-		var gz_table := [17, 31, 8, 40]
-		var gz: int = gz_table[row_group % 4]
-		return Vector2i(gx, gz)
+	var coords_table := [
+		# Tier 1 - West-North Quarter (Plots 1..4): Along Avenue North (gz=18, facing South)
+		Vector2i(6, 18), Vector2i(10, 18), Vector2i(14, 18), Vector2i(17, 18),
+		# Tier 1 - West-South Quarter (Plots 5..8): Along Avenue South (gz=30, facing North)
+		Vector2i(6, 30), Vector2i(10, 30), Vector2i(14, 30), Vector2i(17, 30),
+		# Tier 1 - West-North Secondary (Plots 9..12): North flank (gz=12)
+		Vector2i(6, 12), Vector2i(10, 12), Vector2i(14, 12), Vector2i(17, 12),
+		# Tier 1 - West-South Secondary (Plots 13..16): South flank (gz=36)
+		Vector2i(6, 36), Vector2i(10, 36), Vector2i(14, 36), Vector2i(17, 36),
+		# Tier 1 - East Gate North Boulevard (Plots 17..20): North of East Gate (gz=20)
+		Vector2i(31, 20), Vector2i(35, 20), Vector2i(39, 20), Vector2i(43, 20),
+		# Tier 1 - East Gate South Boulevard (Plots 21..24): South of East Gate (gz=28)
+		Vector2i(31, 28), Vector2i(35, 28), Vector2i(39, 28), Vector2i(43, 28),
+		# Tier 1 - Barracks & Infirmary Wings (Plots 25..32)
+		Vector2i(19, 7), Vector2i(27, 7), Vector2i(19, 10), Vector2i(27, 10),
+		Vector2i(19, 39), Vector2i(27, 39), Vector2i(19, 36), Vector2i(27, 36),
+		# Tier 2 - Upper Citadel North Terrace (Plots 33..40)
+		Vector2i(-6, 18), Vector2i(-10, 18), Vector2i(-22, 18), Vector2i(-26, 18),
+		Vector2i(-6, 12), Vector2i(-10, 12), Vector2i(-22, 12), Vector2i(-26, 12),
+		# Tier 2 - Upper Citadel South Terrace (Plots 41..48)
+		Vector2i(-6, 30), Vector2i(-10, 30), Vector2i(-22, 30), Vector2i(-26, 30),
+		Vector2i(-6, 36), Vector2i(-10, 36), Vector2i(-22, 36), Vector2i(-26, 36)
+	]
+	if idx >= 0 and idx < coords_table.size():
+		return coords_table[idx]
+	return Vector2i(6 + (idx % 6) * 4, 18)
 
 func _load_or_init_castle_grid_layout() -> void:
 	_grid_structures.clear()
 	_grid_roads.clear()
 
-	# Default landmark placements
-	_grid_structures["FOUNTAIN"] = { "gx": 23, "gz": 23, "rot": 0 }      # Center of Tier 1 (X=0, Z=0)
-	_grid_structures["SUMMON_ALTAR"] = { "gx": -17, "gz": 23, "rot": 0 } # Center of Tier 2 (X=-80, Z=0)
-	_grid_structures["BARRACKS"] = { "gx": 23, "gz": 11, "rot": 0 }      # North Courtyard Tier 1 (X=-1, Z=-25)
-	_grid_structures["INFIRMARY"] = { "gx": 23, "gz": 36, "rot": 0 }     # South Courtyard Tier 1 (X=-1, Z=+25)
+	# 1. Default Landmark Placements (Aligned with Royal Master Plan Grid)
+	_grid_structures["FOUNTAIN"] = { "gx": 23, "gz": 23, "rot": 0 }      # Center of Tier 1 (4x4, World X=0.0, Z=0.0)
+	_grid_structures["SUMMON_ALTAR"] = { "gx": -17, "gz": 23, "rot": 0 } # Center of Tier 2 (4x4, World X=-80.0, Z=0.0)
+	_grid_structures["BARRACKS"] = { "gx": 23, "gz": 6, "rot": 0 }       # North Courtyard Tier 1 (3x3, gx=23..25, gz=6..8, aligned with N-S Avenue)
+	_grid_structures["INFIRMARY"] = { "gx": 23, "gz": 40, "rot": 0 }     # South Courtyard Tier 1 (3x3, gx=23..25, gz=40..42, aligned with N-S Avenue)
 
+	# 2. Default Plot Positions (Plots 1..48)
 	for p_num in range(1, MAX_TOTAL_PLOTS + 1):
 		var def_cell := _get_default_plot_grid_coord(p_num)
 		_grid_structures["PLOT:%d" % p_num] = { "gx": def_cell.x, "gz": def_cell.y, "rot": 0 }
 
-	# Default Grand Cobblestone Road Network connecting East Gate -> Fountain -> Stairs -> Summon Altar
+	# 3. Default Grand Cobblestone Road Network connecting All Landmarks & Avenues
 	_populate_default_road_network()
 
 	if FileAccess.file_exists(CASTLE_LAYOUT_SAVE_PATH):
@@ -827,7 +839,7 @@ func _load_or_init_castle_grid_layout() -> void:
 			var raw := f.get_as_text()
 			f.close()
 			var parsed: Variant = JSON.parse_string(raw)
-			if parsed is Dictionary:
+			if parsed is Dictionary and int(parsed.get("version", 0)) >= 3:
 				var saved_structs: Variant = parsed.get("structures", {})
 				if saved_structs is Dictionary:
 					for k in saved_structs.keys():
@@ -841,43 +853,63 @@ func _load_or_init_castle_grid_layout() -> void:
 							_grid_roads[str(rk)] = true
 
 func _populate_default_road_network() -> void:
-	# 1. East Gate (gx=46) to Fountain (gx=27) along Z=0 (gz=24, 25)
-	for gx in range(27, 47):
+	# --- TIER 1 (HẠ THÀNH) ROAD NETWORK ---
+	# 1. Grand East Boulevard: From East Gate (gx=46) to Fountain Plaza (gx=28) along gz=24, 25
+	for gx in range(28, 47):
 		_grid_roads["%d,24" % gx] = true
 		_grid_roads["%d,25" % gx] = true
-	# 2. Ring road around Fountain (gx in [21, 28], gz in [21, 28] perimeter)
+
+	# 2. Fountain Grand Plaza Ring: 2-cell wide cobblestone belt around Fountain (gx in [23, 26], gz in [23, 26])
 	for gx in range(21, 29):
 		for gz in range(21, 29):
-			if gx == 21 or gx == 22 or gx == 27 or gx == 28 or gz == 21 or gz == 22 or gz == 27 or gz == 28:
-				if not (gx >= 23 and gx <= 26 and gz >= 23 and gz <= 26):
-					_grid_roads["%d,%d" % [gx, gz]] = true
-	# 3. North-South Avenue from Fountain to Barracks (gz=14..20) and Infirmary (gz=29..35)
-	for gz in range(14, 21):
+			if not (gx >= 23 and gx <= 26 and gz >= 23 and gz <= 26):
+				_grid_roads["%d,%d" % [gx, gz]] = true
+
+	# 3. North-South Central Avenue:
+	# - North Avenue: From Fountain Plaza (gz=20) to Barracks entrance (gz=9) along gx=24, 25
+	for gz in range(9, 21):
 		_grid_roads["24,%d" % gz] = true
 		_grid_roads["25,%d" % gz] = true
-	for gz in range(29, 36):
+	# - South Avenue: From Fountain Plaza (gz=29) to Infirmary entrance (gz=39) along gx=24, 25
+	for gz in range(29, 40):
 		_grid_roads["24,%d" % gz] = true
 		_grid_roads["25,%d" % gz] = true
-	# 4. Westward Avenues from Fountain to Twin Staircases (gx=5..20 at gz=15,16 and gz=33,34)
+
+	# 4. Westward Avenues connecting Fountain to Twin Staircases (gx=5..21):
+	# - North-West Avenue to Staircase 1 (Z = -18.0): gz=15, 16
+	for gx in range(5, 22):
+		_grid_roads["%d,15" % gx] = true
+		_grid_roads["%d,16" % gx] = true
+	# - South-West Avenue to Staircase 2 (Z = +18.0): gz=33, 34
+	for gx in range(5, 22):
+		_grid_roads["%d,33" % gx] = true
+		_grid_roads["%d,34" % gx] = true
+	# - West Link Road along gx=21, 22 connecting Fountain Plaza to North & South Avenues
 	for gz in range(15, 35):
-		_grid_roads["20,%d" % gz] = true
-	for gx in range(5, 21):
+		_grid_roads["21,%d" % gz] = true
+		_grid_roads["22,%d" % gz] = true
+
+	# --- TIER 2 (THƯỢNG THÀNH) ROAD NETWORK ---
+	# 5. From Twin Staircase tops (gx=-1..-3) westward to Summon Altar Avenue (gx=-13):
+	for gx in range(-13, 0):
 		_grid_roads["%d,15" % gx] = true
 		_grid_roads["%d,16" % gx] = true
 		_grid_roads["%d,33" % gx] = true
 		_grid_roads["%d,34" % gx] = true
-	# 5. Tier 2 Upper Citadel Roads from Staircase tops (gx=-2..-13) to Summon Altar (gx=-17, gz=23)
-	for gx in range(-13, -1):
-		_grid_roads["%d,15" % gx] = true
-		_grid_roads["%d,16" % gx] = true
-		_grid_roads["%d,33" % gx] = true
-		_grid_roads["%d,34" % gx] = true
+	# - Tier 2 Connecting Boulevard along gx=-13, -12
 	for gz in range(15, 35):
 		_grid_roads["-13,%d" % gz] = true
+		_grid_roads["-12,%d" % gz] = true
+
+	# 6. Summon Altar Grand Plaza Ring: Cobblestone belt around Summon Altar (gx in [-17, -14], gz in [23, 26])
+	for gx in range(-19, -11):
+		for gz in range(21, 29):
+			if not (gx >= -17 and gx <= -14 and gz >= 23 and gz <= 26):
+				_grid_roads["%d,%d" % [gx, gz]] = true
 
 func _save_castle_grid_layout() -> void:
 	var payload := {
-		"version": 2,
+		"version": 3,
 		"structures": _grid_structures,
 		"roads": _grid_roads
 	}
@@ -2179,6 +2211,20 @@ func _open_movable_structures_picker() -> void:
 			)
 	if not any_built:
 		_add_inspector_info("Chưa có công trình chức năng nào được xây dựng.", Color(0.75, 0.8, 0.88))
+
+	_add_inspector_section_header("🔄 KHÔI PHỤC QUY HOẠCH HOÀNG GIA", Color(1.0, 0.72, 0.42))
+	_add_inspector_button(
+		"🔄 Đặt Lại Toàn Bộ Bố Cục & Đường Đá Mặc Định",
+		func():
+			if FileAccess.file_exists(CASTLE_LAYOUT_SAVE_PATH):
+				DirAccess.remove_absolute(CASTLE_LAYOUT_SAVE_PATH)
+			_load_or_init_castle_grid_layout()
+			_setup_grid_overlay_and_roads()
+			_apply_all_grid_transforms()
+			_save_castle_grid_layout()
+			status_banner_label.text = "🏛️ Đã khôi phục toàn bộ Bố Cục Hoàng Gia & Đường Đá chuẩn lưới 2m×2m!"
+			_re_render_inspector_if_open()
+	)
 
 func _open_floor_hero_manager(target_floor: int) -> void:
 	if _selected_plot != null and is_instance_valid(_selected_plot):
