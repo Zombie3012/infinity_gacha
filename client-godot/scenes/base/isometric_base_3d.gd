@@ -560,33 +560,35 @@ func _setup_grand_citadel_floor1() -> void:
 		var step_count := 14
 		for s_idx in range(step_count):
 			var t := float(s_idx + 1) / float(step_count + 1)
-			var sy := lerpf(0.20, FLOOR_HEIGHT, t)
+			var top_y := lerpf(0.35, FLOOR_HEIGHT, t)
+			var step_h := top_y
+			var sy := step_h * 0.5
 
-			# North Staircase (flush against West wall X = -21.4, ascending from Z = -15.5 towards center Z = -4.8)
+			# North Staircase (solid stone steps flush against West wall X = -21.4, ascending Z: -15.5 -> -4.8)
 			var n_step := MeshInstance3D.new()
-			var step_box := BoxMesh.new()
-			step_box.size = Vector3(2.4, 0.38, 0.88)
-			n_step.mesh = step_box
+			var n_box := BoxMesh.new()
+			n_box.size = Vector3(2.4, step_h, 0.88)
+			n_step.mesh = n_box
 			var n_sz := lerpf(-15.5, -4.8, t)
 			n_step.position = Vector3(-21.4, sy, n_sz)
 			n_step.material_override = stair_mat
 			twin_stairs.add_child(n_step)
 
-			# South Staircase (flush against West wall X = -21.4, ascending from Z = +15.5 towards center Z = +4.8)
+			# South Staircase (solid stone steps flush against West wall X = -21.4, ascending Z: +15.5 -> +4.8)
 			var s_step := MeshInstance3D.new()
-			s_step.mesh = step_box
+			s_step.mesh = n_box
 			var s_sz := lerpf(15.5, 4.8, t)
 			s_step.position = Vector3(-21.4, sy, s_sz)
 			s_step.material_override = stair_mat
 			twin_stairs.add_child(s_step)
 
-		# Upper stone landing platforms connecting the top of the stairs directly to Floor 2 terrace
+		# Upper solid stone landing platforms connecting the top of the stairs directly to Floor 2 terrace
 		for z_side in [-4.4, 4.4]:
 			var landing := MeshInstance3D.new()
 			var l_box := BoxMesh.new()
-			l_box.size = Vector3(2.6, 0.42, 1.8)
+			l_box.size = Vector3(2.4, FLOOR_HEIGHT, 1.8)
 			landing.mesh = l_box
-			landing.position = Vector3(-21.4, FLOOR_HEIGHT - 0.21, z_side)
+			landing.position = Vector3(-21.4, FLOOR_HEIGHT * 0.5, z_side)
 			landing.material_override = stair_mat
 			twin_stairs.add_child(landing)
 
@@ -757,9 +759,9 @@ func _build_terrace_step_3d(floor_num: int, terrace_center: Vector3) -> Node3D:
 
 	var pw_west := MeshInstance3D.new()
 	var pww_box := BoxMesh.new()
-	pww_box.size = Vector3(1.2, 4.2, 36.0)
+	pww_box.size = Vector3(1.2, 5.6, 36.0)
 	pw_west.mesh = pww_box
-	pw_west.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 0.6, 2.1, 0.0)
+	pw_west.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 0.6, 2.8, 0.0)
 	pw_west.material_override = wall_mat
 	terrace_root.add_child(pw_west)
 
@@ -777,38 +779,40 @@ func _build_terrace_step_3d(floor_num: int, terrace_center: Vector3) -> Node3D:
 		f_rail.material_override = rail_mat
 		terrace_root.add_child(f_rail)
 
-	# 4. Two Symmetrical Staircases flush against the West Wall leading up to the next tier (Kiểu A)
+	# 4. Two Symmetrical Solid Stone Staircases flush against the West Wall leading up to the next tier
 	if floor_num < MAX_LOBBY_FLOORS:
-		var step_count := 12
+		var step_count := 14
 		for s_idx in range(step_count):
 			var t := float(s_idx + 1) / float(step_count + 1)
-			var sy := lerpf(0.20, FLOOR_HEIGHT, t)
+			var top_y := lerpf(0.35, FLOOR_HEIGHT, t)
+			var step_h := top_y
+			var sy := step_h * 0.5
 
-			# North Staircase (flush against West wall X = -12.4, ascending from Z = -13.5 to -4.2)
+			# North Staircase (solid stone steps flush against West wall, ascending Z: -15.5 -> -4.8)
 			var n_step := MeshInstance3D.new()
 			var step_box := BoxMesh.new()
-			step_box.size = Vector3(2.2, 0.38, 0.85)
+			step_box.size = Vector3(2.4, step_h, 0.88)
 			n_step.mesh = step_box
-			var n_sz := lerpf(-13.5, -4.2, t)
-			n_step.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.6, sy, n_sz)
+			var n_sz := lerpf(-15.5, -4.8, t)
+			n_step.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.2, sy, n_sz)
 			n_step.material_override = stair_mat
 			terrace_root.add_child(n_step)
 
-			# South Staircase (flush against West wall X = -12.4, ascending from Z = +13.5 to +4.2)
+			# South Staircase (solid stone steps flush against West wall, ascending Z: +15.5 -> +4.8)
 			var s_step := MeshInstance3D.new()
 			s_step.mesh = step_box
-			var s_sz := lerpf(13.5, 4.2, t)
-			s_step.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.6, sy, s_sz)
+			var s_sz := lerpf(15.5, 4.8, t)
+			s_step.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.2, sy, s_sz)
 			s_step.material_override = stair_mat
 			terrace_root.add_child(s_step)
 
-		# Upper landing connectors bridging into next terrace
+		# Upper solid stone landing platforms connecting the top of the stairs directly to next terrace
 		for z_side in [-4.4, 4.4]:
 			var landing := MeshInstance3D.new()
 			var l_box := BoxMesh.new()
-			l_box.size = Vector3(2.4, 0.42, 1.8)
+			l_box.size = Vector3(2.4, FLOOR_HEIGHT, 1.8)
 			landing.mesh = l_box
-			landing.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 0.5, FLOOR_HEIGHT - 0.21, z_side)
+			landing.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.2, FLOOR_HEIGHT * 0.5, z_side)
 			landing.material_override = stair_mat
 			terrace_root.add_child(landing)
 
