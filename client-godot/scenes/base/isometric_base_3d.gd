@@ -236,8 +236,8 @@ func _setup_grand_citadel_floor1() -> void:
 	tier2_deck.mesh = t2_box
 	tier2_deck.position = Vector3(-80.0, (FLOOR_HEIGHT - 0.6) * 0.5, 0.0)
 	var t2_mat := StandardMaterial3D.new()
-	t2_mat.albedo_color = Color(0.18, 0.22, 0.28)
-	t2_mat.roughness = 0.86
+	t2_mat.albedo_color = Color(0.42, 0.38, 0.33) # Medieval cliff retaining stone
+	t2_mat.roughness = 0.88
 	tier2_deck.material_override = t2_mat
 
 	# Remove legacy CrossAvenues if present (replaced by interactive Road Building System)
@@ -258,7 +258,7 @@ func _setup_grand_citadel_floor1() -> void:
 		plaza_mat.roughness = 0.72
 		plaza.material_override = plaza_mat
 
-	# 4. Seamless 2-Tier Castle Perimeter Walls, Retaining Cliff & Bastion Towers
+	# 4. Authentic Medieval Machicolated Fortress Walls, Crenellations & Spired Bastion Towers
 	var old_walls := arch.get_node_or_null("PerimeterFortressWalls")
 	if old_walls != null:
 		old_walls.queue_free()
@@ -266,94 +266,203 @@ func _setup_grand_citadel_floor1() -> void:
 	walls_node.name = "PerimeterFortressWalls"
 	arch.add_child(walls_node)
 
+	# Medieval warm sandstone & dark slate spire materials (matching authentic castle photo)
 	var wall_mat := StandardMaterial3D.new()
-	wall_mat.albedo_color = Color(0.20, 0.24, 0.31)
-	wall_mat.roughness = 0.85
+	wall_mat.albedo_color = Color(0.48, 0.44, 0.38) # Warm golden-grey medieval limestone/sandstone
+	wall_mat.roughness = 0.88
 
-	var trim_mat := StandardMaterial3D.new()
-	trim_mat.albedo_color = Color(0.35, 0.42, 0.52)
-	trim_mat.roughness = 0.65
+	var corbel_mat := StandardMaterial3D.new()
+	corbel_mat.albedo_color = Color(0.38, 0.34, 0.29) # Shadowed machicolation stone brackets
+	corbel_mat.roughness = 0.82
 
-	# Tier 1 North & South Walls (X in [-50, +50], Z = -49.3 / +49.3)
+	var plinth_mat := StandardMaterial3D.new()
+	plinth_mat.albedo_color = Color(0.32, 0.30, 0.27) # Darker battered base plinth
+	plinth_mat.roughness = 0.90
+
+	var spire_mat := StandardMaterial3D.new()
+	spire_mat.albedo_color = Color(0.22, 0.25, 0.30) # Dark slate conical roof tiles
+	spire_mat.roughness = 0.58
+	spire_mat.metallic = 0.12
+
+	var finial_mat := StandardMaterial3D.new()
+	finial_mat.albedo_color = Color(0.85, 0.75, 0.45) # Gilded finial needle spire tip
+	finial_mat.metallic = 0.75
+	finial_mat.roughness = 0.32
+
+	# Helper to build a machicolated curtain wall section with battlements (crenellations)
+	var build_crenellated_wall = func(start_p: Vector3, end_p: Vector3, wall_h: float, wall_w: float) -> void:
+		var dir := end_p - start_p
+		var length := dir.length()
+		var center := (start_p + end_p) * 0.5
+		var is_x_aligned := absf(dir.x) > absf(dir.z)
+
+		# 1. Main Curtain Wall Body
+		var w_inst := MeshInstance3D.new()
+		var w_box := BoxMesh.new()
+		w_box.size = Vector3(length, wall_h, wall_w) if is_x_aligned else Vector3(wall_w, wall_h, length)
+		w_inst.mesh = w_box
+		w_inst.position = center + Vector3(0.0, wall_h * 0.5, 0.0)
+		w_inst.material_override = wall_mat
+		walls_node.add_child(w_inst)
+
+		# 2. Machicolation Corbel Overhang Ledge (Gờ đá nhô ra dưới lỗ châu mai)
+		var ledge := MeshInstance3D.new()
+		var l_box := BoxMesh.new()
+		l_box.size = Vector3(length + 0.1, 0.55, wall_w + 0.55) if is_x_aligned else Vector3(wall_w + 0.55, 0.55, length + 0.1)
+		ledge.mesh = l_box
+		ledge.position = center + Vector3(0.0, wall_h - 0.25, 0.0)
+		ledge.material_override = corbel_mat
+		walls_node.add_child(ledge)
+
+		# 3. Crenellations / Merlons (Hàng răng cưa lỗ châu mai dọc đỉnh thành)
+		var merlon_len := 1.35
+		var gap_len := 0.85
+		var step := merlon_len + gap_len
+		var count := int(floor((length - 1.0) / step))
+		var start_offset := -(float(count - 1) * step) * 0.5
+
+		for m_i in range(count):
+			var m_off := start_offset + float(m_i) * step
+			var merlon := MeshInstance3D.new()
+			var m_box := BoxMesh.new()
+			m_box.size = Vector3(merlon_len, 0.95, wall_w + 0.35) if is_x_aligned else Vector3(wall_w + 0.35, 0.95, merlon_len)
+			merlon.mesh = m_box
+			var m_pos := center + Vector3(0.0, wall_h + 0.45, 0.0)
+			if is_x_aligned:
+				m_pos.x += m_off
+			else:
+				m_pos.z += m_off
+			merlon.position = m_pos
+			merlon.material_override = wall_mat
+			walls_node.add_child(merlon)
+
+	# A. Tier 1 North & South Curtain Walls (X in [-46, +46], Z = -49.3 / +49.3, Y = 0.0)
 	for z_sign in [-1.0, 1.0]:
-		var t1_wall := MeshInstance3D.new()
-		var t1_wb := BoxMesh.new()
-		t1_wb.size = Vector3(100.0, 4.8, 1.4)
-		t1_wall.mesh = t1_wb
-		t1_wall.position = Vector3(0.0, 2.4, z_sign * 49.3)
-		t1_wall.material_override = wall_mat
-		walls_node.add_child(t1_wall)
+		build_crenellated_wall.call(Vector3(-46.0, 0.0, z_sign * 49.3), Vector3(46.0, 0.0, z_sign * 49.3), 6.2, 1.8)
 
-	# Tier 1 East Wall (X = +49.3) with central opening for the fixed East Gate (Z in [-5.5, +5.5])
-	for z_center in [-27.4, 27.4]:
-		var ew_seg := MeshInstance3D.new()
-		var ew_box := BoxMesh.new()
-		ew_box.size = Vector3(1.4, 4.8, 43.8)
-		ew_seg.mesh = ew_box
-		ew_seg.position = Vector3(49.3, 2.4, z_center)
-		ew_seg.material_override = wall_mat
-		walls_node.add_child(ew_seg)
+	# B. Tier 1 East Curtain Wall (X = +49.3) with opening for East Gate (Z in [-6.0, +6.0])
+	build_crenellated_wall.call(Vector3(49.3, 0.0, -46.0), Vector3(49.3, 0.0, -6.5), 6.2, 1.8)
+	build_crenellated_wall.call(Vector3(49.3, 0.0, 6.5), Vector3(49.3, 0.0, 46.0), 6.2, 1.8)
 
-	# Tier 2 North & South Walls (X in [-110, -50], Z = -49.3 / +49.3, sitting on Y = 5.2)
+	# C. Tier 2 North & South Curtain Walls (X in [-106, -53], Z = -49.3 / +49.3, sitting at Y = 5.2)
 	for z_sign in [-1.0, 1.0]:
-		var t2_wall := MeshInstance3D.new()
-		var t2_wb := BoxMesh.new()
-		t2_wb.size = Vector3(60.0, 4.8, 1.4)
-		t2_wall.mesh = t2_wb
-		t2_wall.position = Vector3(-80.0, FLOOR_HEIGHT + 2.4, z_sign * 49.3)
-		t2_wall.material_override = wall_mat
-		walls_node.add_child(t2_wall)
+		build_crenellated_wall.call(Vector3(-106.0, FLOOR_HEIGHT, z_sign * 49.3), Vector3(-53.0, FLOOR_HEIGHT, z_sign * 49.3), 6.2, 1.8)
 
-	# Tier 2 West Back Wall (X = -109.3, Z in [-50, +50], sitting on Y = 5.2)
-	var west_back_w := MeshInstance3D.new()
-	var wbw_box := BoxMesh.new()
-	wbw_box.size = Vector3(1.4, 5.6, 100.0)
-	west_back_w.mesh = wbw_box
-	west_back_w.position = Vector3(-109.3, FLOOR_HEIGHT + 2.8, 0.0)
-	west_back_w.material_override = wall_mat
-	walls_node.add_child(west_back_w)
+	# D. Tier 2 West Back Wall (X = -109.3, Z in [-46, +46], sitting at Y = 5.2)
+	build_crenellated_wall.call(Vector3(-109.3, FLOOR_HEIGHT, -46.0), Vector3(-109.3, FLOOR_HEIGHT, 46.0), 6.6, 2.0)
 
-	# Cliff Parapet / Balustrade along X = -50.0 (with openings at Z = -18.0 and Z = +18.0 for Twin Staircases)
-	for seg: Vector2 in [Vector2(-49.0, -21.5), Vector2(-14.5, 14.5), Vector2(21.5, 49.0)]:
+	# E. Cliff Parapet along X = -50.0 (openings for twin stairs at Z = -18.0 and Z = +18.0)
+	for seg: Vector2 in [Vector2(-48.0, -21.8), Vector2(-14.2, 14.2), Vector2(21.8, 48.0)]:
 		var seg_len: float = seg.y - seg.x
 		var seg_mid: float = (seg.x + seg.y) * 0.5
 		var parapet := MeshInstance3D.new()
 		var p_box := BoxMesh.new()
-		p_box.size = Vector3(1.0, 1.25, seg_len)
+		p_box.size = Vector3(1.2, 1.35, seg_len)
 		parapet.mesh = p_box
-		parapet.position = Vector3(-50.0, FLOOR_HEIGHT + 0.625, seg_mid)
-		parapet.material_override = trim_mat
+		parapet.position = Vector3(-50.0, FLOOR_HEIGHT + 0.675, seg_mid)
+		parapet.material_override = wall_mat
 		walls_node.add_child(parapet)
 
-	# 6 Grand Bastion Towers (4 outer corners + 2 cliff transition corners)
-	var bastion_positions := [
-		Vector3(49.3, 0.0, -49.3),
-		Vector3(49.3, 0.0, 49.3),
-		Vector3(-50.0, FLOOR_HEIGHT, -49.3),
-		Vector3(-50.0, FLOOR_HEIGHT, 49.3),
-		Vector3(-109.3, FLOOR_HEIGHT, -49.3),
-		Vector3(-109.3, FLOOR_HEIGHT, 49.3)
-	]
-	for c_pos in bastion_positions:
-		var tower := MeshInstance3D.new()
-		var t_cyl := CylinderMesh.new()
-		t_cyl.top_radius = 2.8
-		t_cyl.bottom_radius = 3.1
-		t_cyl.height = 6.8
-		tower.mesh = t_cyl
-		tower.position = c_pos + Vector3(0.0, 3.4, 0.0)
-		tower.material_override = wall_mat
-		walls_node.add_child(tower)
+		var p_ledge := MeshInstance3D.new()
+		var pl_box := BoxMesh.new()
+		pl_box.size = Vector3(1.5, 0.25, seg_len)
+		p_ledge.mesh = pl_box
+		p_ledge.position = Vector3(-50.0, FLOOR_HEIGHT + 1.45, seg_mid)
+		p_ledge.material_override = corbel_mat
+		walls_node.add_child(p_ledge)
 
-		var cap := MeshInstance3D.new()
-		var cap_mesh := CylinderMesh.new()
-		cap_mesh.top_radius = 3.2
-		cap_mesh.bottom_radius = 2.9
-		cap_mesh.height = 0.55
-		cap.mesh = cap_mesh
-		cap.position = c_pos + Vector3(0.0, 7.05, 0.0)
-		cap.material_override = trim_mat
-		walls_node.add_child(cap)
+	# F. 6 Grand Round Bastion Towers with Full Height Coverage, Machicolated Galleries & Conical Spire Roofs
+	# Tower specs:
+	# - East Towers (X = +49.3, Z = +-49.3): base_y = 0.0, shaft_top = 8.8 (above wall 6.2m), spire_h = 5.8m
+	# - Mid Transition Cliff Towers (X = -50.0, Z = +-49.3): base_y = 0.0 (full ground coverage!), shaft_top = 14.2m (above T2 wall), spire_h = 6.2m
+	# - West Towers (X = -109.3, Z = +-49.3): base_y = 0.0 (full ground plinth!), shaft_top = 14.2m (above T2 wall), spire_h = 6.2m
+	var tower_defs := [
+		{ "x": 49.3, "z": -49.3, "base_y": 0.0, "shaft_top": 8.8, "spire_h": 5.8, "r": 3.4 },
+		{ "x": 49.3, "z": 49.3, "base_y": 0.0, "shaft_top": 8.8, "spire_h": 5.8, "r": 3.4 },
+		{ "x": -50.0, "z": -49.3, "base_y": 0.0, "shaft_top": FLOOR_HEIGHT + 9.0, "spire_h": 6.4, "r": 3.6 },
+		{ "x": -50.0, "z": 49.3, "base_y": 0.0, "shaft_top": FLOOR_HEIGHT + 9.0, "spire_h": 6.4, "r": 3.6 },
+		{ "x": -109.3, "z": -49.3, "base_y": 0.0, "shaft_top": FLOOR_HEIGHT + 9.0, "spire_h": 6.4, "r": 3.6 },
+		{ "x": -109.3, "z": 49.3, "base_y": 0.0, "shaft_top": FLOOR_HEIGHT + 9.0, "spire_h": 6.4, "r": 3.6 }
+	]
+
+	for tdef: Dictionary in tower_defs:
+		var tx: float = float(tdef["x"])
+		var tz: float = float(tdef["z"])
+		var base_y: float = float(tdef["base_y"])
+		var shaft_top: float = float(tdef["shaft_top"])
+		var spire_h: float = float(tdef["spire_h"])
+		var radius: float = float(tdef["r"])
+		var total_shaft_h := shaft_top - base_y
+
+		var tower_root := Node3D.new()
+		tower_root.position = Vector3(tx, 0.0, tz)
+		walls_node.add_child(tower_root)
+
+		# 1. Battered Base Plinth (Chân tháp phình to loe ra dốc như ảnh trung cổ)
+		var plinth := MeshInstance3D.new()
+		var p_cyl := CylinderMesh.new()
+		p_cyl.top_radius = radius + 0.1
+		p_cyl.bottom_radius = radius + 1.2
+		p_cyl.height = 2.4
+		plinth.mesh = p_cyl
+		plinth.position = Vector3(0.0, base_y + 1.2, 0.0)
+		plinth.material_override = plinth_mat
+		tower_root.add_child(plinth)
+
+		# 2. Main Tower Shaft Cylinder (Bao phủ đủ toàn bộ chiều cao từ chân lên đỉnh)
+		var shaft := MeshInstance3D.new()
+		var s_cyl := CylinderMesh.new()
+		s_cyl.top_radius = radius
+		s_cyl.bottom_radius = radius + 0.1
+		s_cyl.height = total_shaft_h - 2.0
+		shaft.mesh = s_cyl
+		shaft.position = Vector3(0.0, base_y + 2.0 + (total_shaft_h - 2.0) * 0.5, 0.0)
+		shaft.material_override = wall_mat
+		tower_root.add_child(shaft)
+
+		# 3. Machicolated Gallery Overhang (Vành ban công chiến đấu nhô ra ngoài)
+		var gallery_bottom := MeshInstance3D.new()
+		var gb_cyl := CylinderMesh.new()
+		gb_cyl.top_radius = radius + 0.95
+		gb_cyl.bottom_radius = radius
+		gb_cyl.height = 0.95
+		gallery_bottom.mesh = gb_cyl
+		gallery_bottom.position = Vector3(0.0, shaft_top + 0.475, 0.0)
+		gallery_bottom.material_override = corbel_mat
+		tower_root.add_child(gallery_bottom)
+
+		# 4. Circular Tower Battlement Ring (Thành tròn với lỗ châu mai quanh đỉnh tháp)
+		var battlement_ring := MeshInstance3D.new()
+		var br_cyl := CylinderMesh.new()
+		br_cyl.top_radius = radius + 0.92
+		br_cyl.bottom_radius = radius + 0.95
+		br_cyl.height = 0.95
+		battlement_ring.mesh = br_cyl
+		battlement_ring.position = Vector3(0.0, shaft_top + 0.95 + 0.475, 0.0)
+		battlement_ring.material_override = wall_mat
+		tower_root.add_child(battlement_ring)
+
+		# 5. Conical Slate Spire Roof (Mái nón chóp nhọn cao vút lợp ngói đá phiến trung cổ)
+		var roof := MeshInstance3D.new()
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.08
+		cone.bottom_radius = radius + 1.05
+		cone.height = spire_h
+		roof.mesh = cone
+		roof.position = Vector3(0.0, shaft_top + 1.9 + spire_h * 0.5, 0.0)
+		roof.material_override = spire_mat
+		tower_root.add_child(roof)
+
+		# 6. Golden Finial Needle Spire Tip (Kim nhọn đỉnh tháp)
+		var finial := MeshInstance3D.new()
+		var f_mesh := CylinderMesh.new()
+		f_mesh.top_radius = 0.02
+		f_mesh.bottom_radius = 0.12
+		f_mesh.height = 1.2
+		finial.mesh = f_mesh
+		finial.position = Vector3(0.0, shaft_top + 1.9 + spire_h + 0.55, 0.0)
+		finial.material_override = finial_mat
+		tower_root.add_child(finial)
 
 	# 5. Twin Solid Stone Staircases connecting Tier 1 (X = -40.0, Y = 0.0) to Tier 2 (X = -50.0, Y = 5.2)
 	var old_stairs := arch.get_node_or_null("TwinWallStairs")
@@ -364,8 +473,8 @@ func _setup_grand_citadel_floor1() -> void:
 	arch.add_child(twin_stairs)
 
 	var stair_mat := StandardMaterial3D.new()
-	stair_mat.albedo_color = Color(0.35, 0.40, 0.50)
-	stair_mat.roughness = 0.70
+	stair_mat.albedo_color = Color(0.44, 0.40, 0.35)
+	stair_mat.roughness = 0.85
 
 	var step_count := 16
 	var stair_span_x := 10.0 # X from -40.0 (bottom on Tier 1) to -50.0 (top at Tier 2 cliff)
@@ -389,7 +498,7 @@ func _setup_grand_citadel_floor1() -> void:
 			c_box.size = Vector3(stair_span_x, FLOOR_HEIGHT + 0.35, 0.42)
 			curb.mesh = c_box
 			curb.position = Vector3(-45.0, (FLOOR_HEIGHT + 0.35) * 0.35, z_stair_center + z_rail_off)
-			curb.material_override = trim_mat
+			curb.material_override = corbel_mat
 			twin_stairs.add_child(curb)
 
 	# 6. Centerpiece: Tiered Fountain (⛲ Đài Phun Nước - Movable 4x4 Grid Landmark)
@@ -484,12 +593,12 @@ func _setup_grand_citadel_floor1() -> void:
 			spire_cyl.height = 1.55
 			spire.mesh = spire_cyl
 			spire.position = Vector3(0.0, 2.45, 0.0)
-			var spire_mat := StandardMaterial3D.new()
-			spire_mat.albedo_color = Color(0.45, 0.92, 1.0)
-			spire_mat.emission_enabled = true
-			spire_mat.emission = Color(0.35, 0.85, 1.0)
-			spire_mat.emission_energy_multiplier = 1.8
-			spire.material_override = spire_mat
+			var fountain_spire_mat := StandardMaterial3D.new()
+			fountain_spire_mat.albedo_color = Color(0.45, 0.92, 1.0)
+			fountain_spire_mat.emission_enabled = true
+			fountain_spire_mat.emission = Color(0.35, 0.85, 1.0)
+			fountain_spire_mat.emission_energy_multiplier = 1.8
+			spire.material_override = fountain_spire_mat
 			fountain_visuals.add_child(spire)
 
 			# Compact Glowing Halo Ring tightly wrapping the Fountain (radius ~3.95m)
@@ -543,8 +652,8 @@ func _setup_grand_citadel_floor1() -> void:
 	arch.add_child(gatehouse_visuals)
 
 	var gh_mat := StandardMaterial3D.new()
-	gh_mat.albedo_color = Color(0.26, 0.30, 0.40)
-	gh_mat.roughness = 0.70
+	gh_mat.albedo_color = Color(0.48, 0.44, 0.38) # Authentic medieval gatehouse stone
+	gh_mat.roughness = 0.85
 
 	for z_pillar in [-4.5, 4.5]:
 		var gp := MeshInstance3D.new()
