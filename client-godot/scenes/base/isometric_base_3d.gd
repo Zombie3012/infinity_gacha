@@ -18,31 +18,36 @@ const FLOOR_HEIGHT := 5.2
 const MASTER_LEVELS_PER_FLOOR := 15
 const PLOTS_PER_FLOOR := 8
 
-## 3D Stepped Fortress Terrace Vector ("Thành Trì Bậc Thang Đông -> Tây"):
-## Ground Floor 1 is the lower East courtyard (Gate at East +X, Fountain in center, Altar at West -X).
-## Upper floors (Floors 2..6) step up and toward the West along the fortress axis.
-const TERRACE_STEP := Vector3(-12.0, FLOOR_HEIGHT, 0.0)
+## 3D Stepped Fortress Citadel ("Thành Trì Bậc Thang Đông -> Tây"):
+## Floor 1 is the lower East grand courtyard (Gate at East +X, Fountain in center, Altar at West -X).
+## Each upper floor terrace (Floors 2..6) sits flush at the West retaining wall of the previous floor,
+## stepping backward and upward toward the West with zero overhead overlap (100% open-air ziggurat).
+const FLOOR1_WEST_WALL_X := -23.5
+const UPPER_TERRACE_WIDTH := 28.0
+const UPPER_TERRACE_HALF_WIDTH := 14.0 # UPPER_TERRACE_WIDTH * 0.5
 
 ## 8 Building plot offsets on each stepped terrace floor:
-## Placed symmetrically with wide clearance for staircases, fountain, and central avenues
+## Placed symmetrically with wide clearance for staircases, avenues, and retaining walls
 const FLOOR_PLOT_OFFSETS: Array[Vector3] = [
-	# 2 North-East plots
-	Vector3(6.5, 0.0, -8.0),
-	Vector3(12.5, 0.0, -8.0),
-	# 2 South-East plots
-	Vector3(6.5, 0.0, 8.0),
-	Vector3(12.5, 0.0, 8.0),
-	# 2 North-West plots
-	Vector3(-12.5, 0.0, -6.5),
-	Vector3(-6.5, 0.0, -6.5),
-	# 2 South-West plots
-	Vector3(-12.5, 0.0, 6.5),
-	Vector3(-6.5, 0.0, 6.5)
+	# 4 North plots (Z = -8.0)
+	Vector3(7.5, 0.0, -8.0),
+	Vector3(2.5, 0.0, -8.0),
+	Vector3(-2.5, 0.0, -8.0),
+	Vector3(-7.5, 0.0, -8.0),
+	# 4 South plots (Z = 8.0)
+	Vector3(7.5, 0.0, 8.0),
+	Vector3(2.5, 0.0, 8.0),
+	Vector3(-2.5, 0.0, 8.0),
+	Vector3(-7.5, 0.0, 8.0)
 ]
 
 func get_floor_terrace_center(floor_num: int) -> Vector3:
-	var idx := clampi(floor_num, 1, MAX_LOBBY_FLOORS) - 1
-	return TERRACE_STEP * float(idx)
+	if floor_num <= 1:
+		return Vector3.ZERO
+	var idx := clampi(floor_num, 1, MAX_LOBBY_FLOORS) - 2 # 0 for floor 2, 1 for floor 3, ...
+	var cx := FLOOR1_WEST_WALL_X - UPPER_TERRACE_HALF_WIDTH - (float(idx) * UPPER_TERRACE_WIDTH)
+	var cy := float(floor_num - 1) * FLOOR_HEIGHT
+	return Vector3(cx, cy, 0.0)
 
 @onready var world_env: WorldEnvironment = $WorldEnvironment
 @onready var dir_light: DirectionalLight3D = $DirectionalLight3D
@@ -732,48 +737,62 @@ func _build_terrace_step_3d(floor_num: int, terrace_center: Vector3) -> Node3D:
 	stair_mat.albedo_color = Color(0.35, 0.40, 0.50)
 	stair_mat.roughness = 0.70
 
-	# 1. Solid rectangular stone terrace deck (38m x 34m)
+	# 1. Solid rectangular stone terrace deck (28m x 36m)
 	var deck := MeshInstance3D.new()
 	var deck_box := BoxMesh.new()
-	deck_box.size = Vector3(38.0, 0.45, 34.0)
+	deck_box.size = Vector3(UPPER_TERRACE_WIDTH, 0.45, 36.0)
 	deck.mesh = deck_box
 	deck.position = Vector3(0.0, -0.225, 0.0)
 	deck.material_override = floor_mat
 	terrace_root.add_child(deck)
 
-	# 2. Fortified retaining wall dropping down to the lower tier along the East edge
+	# 2. Fortified retaining wall dropping down to the lower tier along the East front edge
 	var retaining_w := MeshInstance3D.new()
 	var rw_box := BoxMesh.new()
-	rw_box.size = Vector3(1.4, FLOOR_HEIGHT, 34.0)
+	rw_box.size = Vector3(1.2, FLOOR_HEIGHT, 36.0)
 	retaining_w.mesh = rw_box
-	retaining_w.position = Vector3(18.5, -(FLOOR_HEIGHT * 0.5), 0.0)
+	retaining_w.position = Vector3(UPPER_TERRACE_HALF_WIDTH - 0.6, -(FLOOR_HEIGHT * 0.5), 0.0)
 	retaining_w.material_override = wall_mat
 	terrace_root.add_child(retaining_w)
 
 	# 3. Perimeter walls for this terrace
 	var pw_north := MeshInstance3D.new()
 	var pwn_box := BoxMesh.new()
-	pwn_box.size = Vector3(38.0, 4.2, 1.2)
+	pwn_box.size = Vector3(UPPER_TERRACE_WIDTH, 4.2, 1.2)
 	pw_north.mesh = pwn_box
-	pw_north.position = Vector3(0.0, 2.1, -17.0)
+	pw_north.position = Vector3(0.0, 2.1, -18.0)
 	pw_north.material_override = wall_mat
 	terrace_root.add_child(pw_north)
 
 	var pw_south := MeshInstance3D.new()
 	var pws_box := BoxMesh.new()
-	pws_box.size = Vector3(38.0, 4.2, 1.2)
+	pws_box.size = Vector3(UPPER_TERRACE_WIDTH, 4.2, 1.2)
 	pw_south.mesh = pws_box
-	pw_south.position = Vector3(0.0, 2.1, 17.0)
+	pw_south.position = Vector3(0.0, 2.1, 18.0)
 	pw_south.material_override = wall_mat
 	terrace_root.add_child(pw_south)
 
 	var pw_west := MeshInstance3D.new()
 	var pww_box := BoxMesh.new()
-	pww_box.size = Vector3(1.2, 4.2, 34.0)
+	pww_box.size = Vector3(1.2, 4.2, 36.0)
 	pw_west.mesh = pww_box
-	pw_west.position = Vector3(-18.5, 2.1, 0.0)
+	pw_west.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 0.6, 2.1, 0.0)
 	pw_west.material_override = wall_mat
 	terrace_root.add_child(pw_west)
+
+	# Front stone balustrade overlooking lower floor with center opening
+	var rail_mat := StandardMaterial3D.new()
+	rail_mat.albedo_color = Color(0.45, 0.52, 0.65)
+	rail_mat.roughness = 0.55
+
+	for z_side in [-11.5, 11.5]:
+		var f_rail := MeshInstance3D.new()
+		var fb_box := BoxMesh.new()
+		fb_box.size = Vector3(0.32, 0.95, 11.0)
+		f_rail.mesh = fb_box
+		f_rail.position = Vector3(UPPER_TERRACE_HALF_WIDTH - 0.25, 0.48, z_side)
+		f_rail.material_override = rail_mat
+		terrace_root.add_child(f_rail)
 
 	# 4. Two Symmetrical Staircases flush against the West Wall leading up to the next tier (Kiểu A)
 	if floor_num < MAX_LOBBY_FLOORS:
@@ -782,44 +801,50 @@ func _build_terrace_step_3d(floor_num: int, terrace_center: Vector3) -> Node3D:
 			var t := float(s_idx + 1) / float(step_count + 1)
 			var sy := lerpf(0.20, FLOOR_HEIGHT, t)
 
-			# North Staircase (flush against West wall X = -16.8, ascending from Z = -13.5 to -4.2)
+			# North Staircase (flush against West wall X = -12.4, ascending from Z = -13.5 to -4.2)
 			var n_step := MeshInstance3D.new()
 			var step_box := BoxMesh.new()
 			step_box.size = Vector3(2.2, 0.38, 0.85)
 			n_step.mesh = step_box
 			var n_sz := lerpf(-13.5, -4.2, t)
-			n_step.position = Vector3(-16.8, sy, n_sz)
+			n_step.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.6, sy, n_sz)
 			n_step.material_override = stair_mat
 			terrace_root.add_child(n_step)
 
-			# South Staircase (flush against West wall X = -16.8, ascending from Z = +13.5 to +4.2)
+			# South Staircase (flush against West wall X = -12.4, ascending from Z = +13.5 to +4.2)
 			var s_step := MeshInstance3D.new()
 			s_step.mesh = step_box
 			var s_sz := lerpf(13.5, 4.2, t)
-			s_step.position = Vector3(-16.8, sy, s_sz)
+			s_step.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.6, sy, s_sz)
 			s_step.material_override = stair_mat
 			terrace_root.add_child(s_step)
 
 		# Stone balustrade railings along the inner terrace edges of the staircases
-		var rail_mat := StandardMaterial3D.new()
-		rail_mat.albedo_color = Color(0.45, 0.52, 0.65)
-		rail_mat.roughness = 0.55
-
 		var n_rail := MeshInstance3D.new()
 		var r_box := BoxMesh.new()
 		r_box.size = Vector3(0.22, 0.26, 10.4)
 		n_rail.mesh = r_box
-		n_rail.position = Vector3(-15.6, (FLOOR_HEIGHT * 0.5) + 0.55, -8.85)
+		n_rail.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 2.8, (FLOOR_HEIGHT * 0.5) + 0.55, -8.85)
 		n_rail.rotation = Vector3(atan2(FLOOR_HEIGHT, 9.3), 0.0, 0.0)
 		n_rail.material_override = rail_mat
 		terrace_root.add_child(n_rail)
 
 		var s_rail := MeshInstance3D.new()
 		s_rail.mesh = r_box
-		s_rail.position = Vector3(-15.6, (FLOOR_HEIGHT * 0.5) + 0.55, 8.85)
+		s_rail.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 2.8, (FLOOR_HEIGHT * 0.5) + 0.55, 8.85)
 		s_rail.rotation = Vector3(-atan2(FLOOR_HEIGHT, 9.3), 0.0, 0.0)
 		s_rail.material_override = rail_mat
 		terrace_root.add_child(s_rail)
+
+		# Upper landing connectors bridging into next terrace
+		for z_side in [-4.4, 4.4]:
+			var landing := MeshInstance3D.new()
+			var l_box := BoxMesh.new()
+			l_box.size = Vector3(2.4, 0.42, 1.8)
+			landing.mesh = l_box
+			landing.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 0.5, FLOOR_HEIGHT - 0.21, z_side)
+			landing.material_override = stair_mat
+			terrace_root.add_child(landing)
 
 	# 5. Central stone terrace pavilion / mosaic plaza ring
 	var plaza_disc := MeshInstance3D.new()
@@ -873,7 +898,7 @@ func _show_all_floors_panorama() -> void:
 	_close_inspector()
 	_panorama_mode = true
 	var mid_center := get_floor_terrace_center(1).lerp(get_floor_terrace_center(MAX_LOBBY_FLOORS), 0.5)
-	camera_rig.focus_base_overview(mid_center + Vector3(0.0, 2.0, 0.0), 52.0, 0.65)
+	camera_rig.focus_base_overview(mid_center + Vector3(0.0, 2.0, 0.0), 98.0, 0.65)
 	_apply_floor_focus_isolation(0, false, 0)
 	status_banner_label.text = "🌐 Đang xem toàn cảnh tất cả 6 tầng Thành Trì Bậc Thang (Stepped Citadel Terraces Đông -> Tây)."
 	_refresh_hud()
