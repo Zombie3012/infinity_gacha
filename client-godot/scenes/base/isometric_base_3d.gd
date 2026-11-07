@@ -171,7 +171,7 @@ func _ready() -> void:
 ## - Center: Tiered Central Fountain (⛲ Đài Phun Nước Trung Tâm)
 ## - North side: Barracks (🛡️ Doanh Trại & Thăng Sao)
 ## - South side: Infirmary (✚ Bệnh Xá & Hậu Cần)
-## - Twin Symmetrical Fortress Stairs along North and South perimeter walls leading up to Floor 2
+## - Twin Symmetrical Grand Stairs flush against the West Wall flanking the Summon Altar leading up to Floor 2
 func _setup_grand_citadel_floor1() -> void:
 	var arch := $BaseArchitecture
 	if arch == null:
@@ -537,7 +537,7 @@ func _setup_grand_citadel_floor1() -> void:
 			ob.material_override = ob_mat
 			altar_dais.add_child(ob)
 
-	# 8. HAI CẦU THANG ĐỐI XỨNG NẰM CẠNH TƯỜNG THÀNH DẪN LÊN TẦNG TRÊN (NORTH & SOUTH)
+	# 8. HAI CẦU THANG ĐỐI XỨNG ÁP SÁT TƯỜNG TÂY (KIỂU A - FLANKING SUMMON ALTAR LEADING TO FLOOR 2)
 	var twin_stairs := arch.get_node_or_null("TwinWallStairs")
 	if twin_stairs == null:
 		twin_stairs = Node3D.new()
@@ -552,44 +552,55 @@ func _setup_grand_citadel_floor1() -> void:
 		rail_mat.albedo_color = Color(0.45, 0.52, 0.65)
 		rail_mat.roughness = 0.55
 
-		var step_count := 12
+		var step_count := 14
 		for s_idx in range(step_count):
 			var t := float(s_idx + 1) / float(step_count + 1)
-			var sx := lerpf(5.0, -7.0, t)
-			var sy := lerpf(0.18, FLOOR_HEIGHT, t)
+			var sy := lerpf(0.20, FLOOR_HEIGHT, t)
 
-			# North Staircase (against North wall Z = -16.8)
+			# North Staircase (flush against West wall X = -21.4, ascending from Z = -15.5 towards center Z = -4.8)
 			var n_step := MeshInstance3D.new()
-			var n_box := BoxMesh.new()
-			n_box.size = Vector3(1.1, 0.42, 2.4)
-			n_step.mesh = n_box
-			n_step.position = Vector3(sx, sy, -16.8)
+			var step_box := BoxMesh.new()
+			step_box.size = Vector3(2.4, 0.38, 0.88)
+			n_step.mesh = step_box
+			var n_sz := lerpf(-15.5, -4.8, t)
+			n_step.position = Vector3(-21.4, sy, n_sz)
 			n_step.material_override = stair_mat
 			twin_stairs.add_child(n_step)
 
-			# South Staircase (against South wall Z = +16.8, perfectly symmetrical)
+			# South Staircase (flush against West wall X = -21.4, ascending from Z = +15.5 towards center Z = +4.8)
 			var s_step := MeshInstance3D.new()
-			s_step.mesh = n_box
-			s_step.position = Vector3(sx, sy, 16.8)
+			s_step.mesh = step_box
+			var s_sz := lerpf(15.5, 4.8, t)
+			s_step.position = Vector3(-21.4, sy, s_sz)
 			s_step.material_override = stair_mat
 			twin_stairs.add_child(s_step)
 
-		# Balustrade railing on inner open edges
+		# Stone balustrade railings along the inner courtyard edges of both staircases
 		var n_rail := MeshInstance3D.new()
 		var r_box := BoxMesh.new()
-		r_box.size = Vector3(13.0, 0.25, 0.22)
+		r_box.size = Vector3(0.24, 0.28, 11.8)
 		n_rail.mesh = r_box
-		n_rail.position = Vector3(-1.0, FLOOR_HEIGHT * 0.5 + 0.5, -15.5)
-		n_rail.rotation = Vector3(0.0, 0.0, atan2(FLOOR_HEIGHT, 12.0))
+		n_rail.position = Vector3(-20.1, (FLOOR_HEIGHT * 0.5) + 0.55, -10.15)
+		n_rail.rotation = Vector3(atan2(FLOOR_HEIGHT, 10.7), 0.0, 0.0)
 		n_rail.material_override = rail_mat
 		twin_stairs.add_child(n_rail)
 
 		var s_rail := MeshInstance3D.new()
 		s_rail.mesh = r_box
-		s_rail.position = Vector3(-1.0, FLOOR_HEIGHT * 0.5 + 0.5, 15.5)
-		s_rail.rotation = Vector3(0.0, 0.0, atan2(FLOOR_HEIGHT, 12.0))
+		s_rail.position = Vector3(-20.1, (FLOOR_HEIGHT * 0.5) + 0.55, 10.15)
+		s_rail.rotation = Vector3(-atan2(FLOOR_HEIGHT, 10.7), 0.0, 0.0)
 		s_rail.material_override = rail_mat
 		twin_stairs.add_child(s_rail)
+
+		# Upper stone landing platforms connecting the top of the stairs directly to Floor 2 terrace
+		for z_side in [-4.4, 4.4]:
+			var landing := MeshInstance3D.new()
+			var l_box := BoxMesh.new()
+			l_box.size = Vector3(2.6, 0.42, 1.8)
+			landing.mesh = l_box
+			landing.position = Vector3(-21.4, FLOOR_HEIGHT - 0.21, z_side)
+			landing.material_override = stair_mat
+			twin_stairs.add_child(landing)
 
 	# 9. Doanh Trại & Bệnh Xá (North & South courtyard wings)
 	if barracks_mesh != null:
@@ -764,27 +775,51 @@ func _build_terrace_step_3d(floor_num: int, terrace_center: Vector3) -> Node3D:
 	pw_west.material_override = wall_mat
 	terrace_root.add_child(pw_west)
 
-	# 4. Two Symmetrical Staircases along North & South perimeter walls leading up to the next tier
+	# 4. Two Symmetrical Staircases flush against the West Wall leading up to the next tier (Kiểu A)
 	if floor_num < MAX_LOBBY_FLOORS:
 		var step_count := 12
 		for s_idx in range(step_count):
 			var t := float(s_idx + 1) / float(step_count + 1)
-			var sx := lerpf(5.0, -7.0, t)
-			var sy := lerpf(0.18, FLOOR_HEIGHT, t)
+			var sy := lerpf(0.20, FLOOR_HEIGHT, t)
 
+			# North Staircase (flush against West wall X = -16.8, ascending from Z = -13.5 to -4.2)
 			var n_step := MeshInstance3D.new()
 			var step_box := BoxMesh.new()
-			step_box.size = Vector3(1.1, 0.42, 2.2)
+			step_box.size = Vector3(2.2, 0.38, 0.85)
 			n_step.mesh = step_box
-			n_step.position = Vector3(sx, sy, -15.8)
+			var n_sz := lerpf(-13.5, -4.2, t)
+			n_step.position = Vector3(-16.8, sy, n_sz)
 			n_step.material_override = stair_mat
 			terrace_root.add_child(n_step)
 
+			# South Staircase (flush against West wall X = -16.8, ascending from Z = +13.5 to +4.2)
 			var s_step := MeshInstance3D.new()
 			s_step.mesh = step_box
-			s_step.position = Vector3(sx, sy, 15.8)
+			var s_sz := lerpf(13.5, 4.2, t)
+			s_step.position = Vector3(-16.8, sy, s_sz)
 			s_step.material_override = stair_mat
 			terrace_root.add_child(s_step)
+
+		# Stone balustrade railings along the inner terrace edges of the staircases
+		var rail_mat := StandardMaterial3D.new()
+		rail_mat.albedo_color = Color(0.45, 0.52, 0.65)
+		rail_mat.roughness = 0.55
+
+		var n_rail := MeshInstance3D.new()
+		var r_box := BoxMesh.new()
+		r_box.size = Vector3(0.22, 0.26, 10.4)
+		n_rail.mesh = r_box
+		n_rail.position = Vector3(-15.6, (FLOOR_HEIGHT * 0.5) + 0.55, -8.85)
+		n_rail.rotation = Vector3(atan2(FLOOR_HEIGHT, 9.3), 0.0, 0.0)
+		n_rail.material_override = rail_mat
+		terrace_root.add_child(n_rail)
+
+		var s_rail := MeshInstance3D.new()
+		s_rail.mesh = r_box
+		s_rail.position = Vector3(-15.6, (FLOOR_HEIGHT * 0.5) + 0.55, 8.85)
+		s_rail.rotation = Vector3(-atan2(FLOOR_HEIGHT, 9.3), 0.0, 0.0)
+		s_rail.material_override = rail_mat
+		terrace_root.add_child(s_rail)
 
 	# 5. Central stone terrace pavilion / mosaic plaza ring
 	var plaza_disc := MeshInstance3D.new()
