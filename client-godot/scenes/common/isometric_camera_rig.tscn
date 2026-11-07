@@ -9,9 +9,9 @@ script = ExtResource("1_camrig")
 transform = Transform3D(0.707107, -0.408248, 0.57735, 0, 0.816497, 0.57735, -0.707107, -0.408248, 0.57735, 0, 0, 0)
 
 [node name="Camera3D" type="Camera3D" parent="RotationArm"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 28)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 250)
 projection = 1
 current = true
 size = 14.0
 near = 0.05
-far = 200.0
+far = 800.0

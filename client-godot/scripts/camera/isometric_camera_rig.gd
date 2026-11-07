@@ -34,6 +34,9 @@ func _ready() -> void:
 	rotation_arm.rotation_degrees = Vector3(default_iso_pitch_deg, default_iso_yaw_deg, 0.0)
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = default_ortho_size
+	camera.position.z = 250.0
+	camera.far = 800.0
+	camera.near = 0.1
 
 func get_camera_3d() -> Camera3D:
 	return camera
