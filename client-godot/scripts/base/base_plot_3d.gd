@@ -102,26 +102,25 @@ func set_selected(selected: bool) -> void:
 	is_selected = selected
 	_apply_pad_material()
 
-## Isolates the currently observed floor by heavily fading/ghosting plots on all other floors
-## Isolates building plots on the active floor and completely hides/disables them on other floors to eliminate lag
-func set_floor_focus_state(active_floor: bool, is_above_active: bool, animate: bool = true, travel_dir: int = 0) -> void:
-	is_on_active_floor = active_floor
+func set_grid_rotation_deg(rot_deg: int) -> void:
+	if structure_root != null:
+		structure_root.rotation_degrees.y = float(rot_deg)
+
+## Seamless 2-Tier Castle: All constructed buildings remain 100% visible at all times (no split rendering).
+## Empty plot slots are hidden in the 3D world and only appear when a building is constructed on the grid.
+func set_floor_focus_state(_active_floor: bool, _is_above_active: bool, _animate: bool = true, _travel_dir: int = 0) -> void:
+	is_on_active_floor = true
+	var has_b := not building_data.is_empty()
 	if click_body != null and click_body.has_node("CollisionShape3D"):
 		var shape: CollisionShape3D = click_body.get_node("CollisionShape3D")
-		shape.disabled = not active_floor
+		shape.disabled = not has_b
 
 	if _focus_tween and _focus_tween.is_valid():
 		_focus_tween.kill()
 
-	if not active_floor:
-		visible = false
-		process_mode = Node.PROCESS_MODE_DISABLED
-		title_label.visible = false
-		sub_label.visible = false
-		harvest_badge.visible = false
-	else:
-		visible = true
-		process_mode = Node.PROCESS_MODE_INHERIT
+	visible = has_b
+	process_mode = Node.PROCESS_MODE_INHERIT if has_b else Node.PROCESS_MODE_DISABLED
+	if has_b:
 		_apply_mesh_transparency(0.0)
 		scale = Vector3.ONE
 		title_label.visible = true
@@ -181,21 +180,8 @@ func _refresh_visuals(force_rebuild: bool) -> void:
 		_rebuild_structure_mesh(b_type, b_lvl, b_status)
 		_apply_mesh_transparency(_current_mesh_transparency)
 
-	var req_master_lvl := 1 if zone_index <= 1 else (zone_index - 1) * 15
-
-	if not is_unlocked:
-		title_label.text = "🔒 Ô #%d (Tầng %d)" % [plot_index, zone_index]
-		title_label.modulate = Color(0.68, 0.72, 0.78)
-		sub_label.text = "[Mở ở Master Lv.%d]" % req_master_lvl
-		sub_label.modulate = Color(0.55, 0.58, 0.65)
-		harvest_badge.visible = false
-		return
-
+	set_floor_focus_state(true, false, false, 0)
 	if building_data.is_empty():
-		title_label.text = "🟩 Ô Công Trình #%d (Tầng %d)" % [plot_index, zone_index]
-		title_label.modulate = Color(0.62, 0.95, 0.68)
-		sub_label.text = "[Nhấn để Xây Công Trình]"
-		sub_label.modulate = Color(0.82, 0.92, 0.85)
 		harvest_badge.visible = false
 		return
 

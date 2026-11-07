@@ -1,53 +1,53 @@
 extends Node3D
 
-## Isometric 3D Grand Citadel Multi-Floor Lobby (Pick Me Up: Infinite Gacha Architecture)
-## - 5x Grand Fortress Area: 44m x 36m Rectangular Perimeter + Central Circular Plaza & Cross Avenues
-## - Tiered Central Fountain (⛲ Đài Phun Nước Trung Tâm) replacing the central bonfire
-## - South Wall (+Z): Tower Dungeon Gate (⛩️ Cổng Tháp / Cổng Thành) integrated into perimeter wall
-## - North Wall (-Z): Summon Altar (✨ Đài Triệu Hồi) on stone terrace
-## - West Wall (-X): Barracks (Doanh Trại Tướng & Thăng Sao)
-## - East Wall (+X): Infirmary (Bệnh Xá & Hậu Cần)
-## - Multi-Floor Grand Atrium / Mezzanine Citadel: Vertically stacked at X=0, Z=0 (Y = (floor-1) * 5.2m)
-## - 8 Building Plots per Floor (Total 48 plots across 6 floors: 2 North, 2 South, 2 West, 2 East)
+## Isometric 3D Seamless 2-Tier Castle Lobby (Pick Me Up: Infinite Gacha Architecture)
+## - Seamless 2-Tier Castle (No Split Rendering - 100% Visible at all times):
+##   * Tier 1 (Hạ Thành - East): 100m x 100m (X in [-50.0, +50.0], Z in [-50.0, +50.0], Y = 0.0)
+##   * Tier 2 (Thượng Thành - West): 60m x 100m (X in [-110.0, -50.0], Z in [-50.0, +50.0], Y = 5.2)
+## - Compact Fountain Ring (radius ~4.2m) tightly wrapping the Fountain base and moving together with it
+## - Fixed Structure: ONLY the East Gate (DUNGEON_PORTAL at X = +48.5, Z = 0.0)
+## - Grid-Based Free Placement & Road Building System (2m x 2m cells):
+##   * All other structures (Fountain, Summon Altar, Barracks, Infirmary, and all constructed Plot buildings)
+##     can be freely placed, moved, and rotated 90° on the 2-Tier Castle grid.
+##   * Cobblestone Road Paint & Erase tool with auto-connecting borders and persistent JSON save.
+##   * Master Level / unlocked_plots building cap is strictly preserved.
 
 const UNIT_ACTOR_SCENE := preload("res://scenes/common/unit_actor_3d.tscn")
 const BASE_PLOT_SCENE := preload("res://scenes/base/base_plot_3d.tscn")
 
-const MAX_LOBBY_FLOORS := 6
+const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
 const MASTER_LEVELS_PER_FLOOR := 15
 const PLOTS_PER_FLOOR := 8
+const MAX_TOTAL_PLOTS := 48
 
-## 3D Stepped Fortress Citadel ("Thành Trì Bậc Thang Đông -> Tây"):
-## Floor 1 is the lower East grand courtyard (Gate at East +X, Fountain in center, Altar at West -X).
-## Each upper floor terrace (Floors 2..6) sits flush at the West retaining wall of the previous floor,
-## stepping backward and upward toward the West with zero overhead overlap (100% open-air ziggurat).
-const FLOOR1_WEST_WALL_X := -23.5
-const UPPER_TERRACE_WIDTH := 28.0
-const UPPER_TERRACE_HALF_WIDTH := 14.0 # UPPER_TERRACE_WIDTH * 0.5
+## Unified 2m x 2m Castle Grid Constants:
+## World X = -50.0 + gx * 2.0, World Z = -50.0 + gz * 2.0
+## - Tier 1 (100m x 100m, Y = 0.0): gx in [0, 49], gz in [0, 49]
+## - Tier 2 (60m x 100m, Y = 5.2): gx in [-30, -1], gz in [0, 49]
+const GRID_CELL_SIZE := 2.0
+const GRID_ORIGIN_X := -50.0
+const GRID_ORIGIN_Z := -50.0
+const TIER1_GX_MIN := 1
+const TIER1_GX_MAX := 49
+const TIER2_GX_MIN := -29
+const TIER2_GX_MAX := -1
+const GRID_GZ_MIN := 1
+const GRID_GZ_MAX := 49
+const CASTLE_LAYOUT_SAVE_PATH := "user://castle_grid_layout_v2.json"
 
-## 8 Building plot offsets on each stepped terrace floor:
-## Placed symmetrically with wide clearance for staircases, avenues, and retaining walls
-const FLOOR_PLOT_OFFSETS: Array[Vector3] = [
-	# 4 North plots (Z = -8.0)
-	Vector3(7.5, 0.0, -8.0),
-	Vector3(2.5, 0.0, -8.0),
-	Vector3(-2.5, 0.0, -8.0),
-	Vector3(-7.5, 0.0, -8.0),
-	# 4 South plots (Z = 8.0)
-	Vector3(7.5, 0.0, 8.0),
-	Vector3(2.5, 0.0, 8.0),
-	Vector3(-2.5, 0.0, 8.0),
-	Vector3(-7.5, 0.0, 8.0)
-]
+enum GridEditMode {
+	NONE = 0,
+	PLACE_NEW_BUILDING = 1,
+	MOVE_STRUCTURE = 2,
+	ROAD_PAINT = 3,
+	ROAD_ERASE = 4
+}
 
 func get_floor_terrace_center(floor_num: int) -> Vector3:
 	if floor_num <= 1:
-		return Vector3.ZERO
-	var idx := clampi(floor_num, 1, MAX_LOBBY_FLOORS) - 2 # 0 for floor 2, 1 for floor 3, ...
-	var cx := FLOOR1_WEST_WALL_X - UPPER_TERRACE_HALF_WIDTH - (float(idx) * UPPER_TERRACE_WIDTH)
-	var cy := float(floor_num - 1) * FLOOR_HEIGHT
-	return Vector3(cx, cy, 0.0)
+		return Vector3(0.0, 0.0, 0.0)
+	return Vector3(-80.0, FLOOR_HEIGHT, 0.0)
 
 @onready var world_env: WorldEnvironment = $WorldEnvironment
 @onready var dir_light: DirectionalLight3D = $DirectionalLight3D
@@ -93,21 +93,47 @@ func get_floor_terrace_center(floor_num: int) -> Vector3:
 @onready var inspector_action_container: VBoxContainer = %InspectorActionContainer
 
 var _current_lobby_floor: int = 1
-var _plot_nodes: Dictionary = {} # plot_index (1..18) -> BasePlot3D
-var _floor_platforms: Dictionary = {} # floor_num (2..6) -> Node3D (Terrace Deck + Retaining Wall + 10h->4h Stairs)
-var _floor_banners: Dictionary = {} # floor_num (1..6) -> Label3D
-var _floor_buttons: Dictionary = {} # floor_num (1..6) -> Button
+var _plot_nodes: Dictionary = {} # plot_index (1..48) -> BasePlot3D
+var _floor_platforms: Dictionary = {}
+var _floor_banners: Dictionary = {} # floor_num (1..2) -> Label3D
+var _floor_buttons: Dictionary = {} # floor_num (1..2) -> Button
 var _panorama_btn: Button = null
 var _manage_floor_heroes_btn: Button = null
+var _build_menu_btn: Button = null
+var _move_mode_btn: Button = null
+var _road_paint_btn: Button = null
+var _road_erase_btn: Button = null
+var _cancel_grid_btn: Button = null
+
 var _editing_floor_hero_selection: Dictionary = {} # floor_num (int) -> Array[String]
 var _hero_actors: Dictionary = {} # hero_id -> UnitActor3D
 var _active_banners: Array = []
 var _active_floor_ring: MeshInstance3D = null
 var _active_floor_light: OmniLight3D = null
 var _floor1_current_trans: float = 0.0
-var _floor_trans_map: Dictionary = {} # floor_num -> float
+var _floor_trans_map: Dictionary = {}
 var _floor_isolation_tween: Tween = null
 var _panorama_mode: bool = false
+
+# Grid-Based Free Placement & Road System state
+var _grid_edit_mode: int = GridEditMode.NONE
+var _grid_structures: Dictionary = {} # id ("FOUNTAIN", "SUMMON_ALTAR", "BARRACKS", "INFIRMARY", "PLOT:1", ...) -> { "gx": int, "gz": int, "rot": int }
+var _grid_roads: Dictionary = {} # "gx,gz" -> true
+var _roads_container: Node3D = null
+var _road_mesh_nodes: Dictionary = {} # "gx,gz" -> Node3D
+var _grid_overlay_root: Node3D = null
+var _grid_ghost_root: Node3D = null
+var _grid_ghost_mesh: MeshInstance3D = null
+var _grid_ghost_border: MeshInstance3D = null
+var _grid_ghost_label: Label3D = null
+var _pending_build_code: String = ""
+var _pending_build_name: String = ""
+var _moving_structure_id: String = ""
+var _placement_rot_deg: int = 0
+var _hover_gx: int = 23
+var _hover_gz: int = 23
+var _hover_valid: bool = false
+var _is_painting_road_drag: bool = false
 
 # Selection & Hover state
 var _hovered_plot: BasePlot3D = null
@@ -128,12 +154,24 @@ var _bonfire_time: float = 0.0
 var _auto_poll_timer: float = 0.0
 
 func _ready() -> void:
+	if camera_rig != null:
+		camera_rig.use_castle_world_bounds = true
+		camera_rig.castle_world_min = Vector2(-115.0, -54.0)
+		camera_rig.castle_world_max = Vector2(54.0, 54.0)
+		camera_rig.castle_tier2_x_threshold = -50.0
+		camera_rig.castle_tier2_height = FLOOR_HEIGHT
+		camera_rig.default_ortho_size = 38.0
+		if camera_rig.camera != null:
+			camera_rig.camera.size = 38.0
+
+	_load_or_init_castle_grid_layout()
 	_setup_grand_citadel_floor1()
 	_setup_landmark_metadata()
 	_spawn_stacked_3d_floors_and_plots()
+	_setup_grid_overlay_and_roads()
+	_apply_all_grid_transforms()
 	_build_floor_elevator_buttons()
 
-	# Temporarily hide 2D Hub / Login navigation button for direct demo testing
 	back_hub_btn.visible = false
 	collect_all_btn.visible = false
 
@@ -144,7 +182,9 @@ func _ready() -> void:
 	close_inspector_btn.pressed.connect(_close_inspector)
 
 	summon_altar_btn.pressed.connect(func():
-		_switch_to_lobby_floor(1)
+		_exit_grid_edit_mode()
+		var altar_pos := summon_altar_mesh.global_position if summon_altar_mesh != null else Vector3(-80.0, FLOOR_HEIGHT, 0.0)
+		_current_lobby_floor = 2 if altar_pos.x < -50.0 else 1
 		_open_landmark_inspector("SUMMON_ALTAR", true)
 	)
 	barracks_btn.pressed.connect(_on_barracks_pressed)
@@ -158,169 +198,201 @@ func _ready() -> void:
 	_spawn_resident_heroes()
 	_apply_floor_focus_isolation(_current_lobby_floor, false, 0)
 
-	# Auto-authenticate default `demo` account so F5 enters straight into the 3D Waiting Room
 	var demo_ok := await GameState.ensure_demo_session()
 	if demo_ok:
 		await _sync_all_from_backend()
-		status_banner_label.text = "🏰 Đại Sảnh Thành Trì Thông Tầng — Tài khoản mặc định [%s (Lv.%d)] đã sẵn sàng!" % [
-			GameState.master_name,
-			GameState.master_level
-		]
+		status_banner_label.text = "🏰 Lâu Đài 2 Tầng Liền Khối (100×100 Hạ Thành + 60×100 Thượng Thành) — Tự do đặt Công trình & Lát Đường trên lưới!"
 	else:
 		status_banner_label.text = "⚠️ KHÔNG THỂ KẾT NỐI SERVER BACKEND (PORT 3000)! Vui lòng kiểm tra lại server."
 
-## Configures the Grand Stepped Citadel Floor 1 Ground Courtyard (Thành Trì Bậc Thang):
-## - Perimeter fortress walls: North, South, West, and East (embedded Gate facing inward)
-## - East Wall (+X): Grand Tower Dungeon Gate (⛩️ Cổng Tháp Chinh Phạt PvE)
-## - West Wall (-X): Raised Summon Altar (✨ Đài Triệu Hồi) with twin obelisks
-## - Center: Tiered Central Fountain (⛲ Đài Phun Nước Trung Tâm)
-## - North side: Barracks (🛡️ Doanh Trại & Thăng Sao)
-## - South side: Infirmary (✚ Bệnh Xá & Hậu Cần)
-## - Twin Symmetrical Grand Stairs flush against the West Wall flanking the Summon Altar leading up to Floor 2
+## Configures the Seamless 2-Tier Castle Architecture (160m x 100m Total):
+## - Tier 1 (Hạ Thành - East): 100m x 100m (X in [-50, +50], Z in [-50, +50], Y = 0.0)
+## - Tier 2 (Thượng Thành - West): 60m x 100m (X in [-110, -50], Z in [-50, +50], Y = 5.2)
+## - Continuous perimeter fortress walls + 6 Bastion Towers + Retaining Cliff at X = -50.0
+## - Twin Solid Stone Staircases ascending East -> West (X: -40.0 -> -50.0) at Z = -18.0 and Z = +18.0
+## - Fixed East Gate (DUNGEON_PORTAL) at X = +48.2, Z = 0.0
+## - Compact Fountain Ring (radius = 4.25m) synced with the Fountain node so they move together
 func _setup_grand_citadel_floor1() -> void:
 	var arch := $BaseArchitecture
 	if arch == null:
 		return
 
-	# 1. Fortress Ground Courtyard: 48m (X) x 40m (Z)
+	# 1. Tier 1 Ground Courtyard: 100m (X: -50..+50) x 100m (Z: -50..+50) at Y = 0.0
 	var ground: MeshInstance3D = arch.get_node_or_null("Ground")
 	if ground != null:
 		var ground_box := BoxMesh.new()
-		ground_box.size = Vector3(48.0, 0.5, 40.0)
+		ground_box.size = Vector3(100.0, 0.6, 100.0)
 		ground.mesh = ground_box
-		ground.position = Vector3(0.0, -0.25, 0.0)
+		ground.position = Vector3(0.0, -0.3, 0.0)
 
-	# 2. Central Cobblestone Plaza Disc (radius 11.5m)
+	# 2. Tier 2 Upper Citadel Deck: 60m (X: -110..-50) x 100m (Z: -50..+50) at Y = 5.2
+	var tier2_deck := arch.get_node_or_null("Tier2GroundDeck") as MeshInstance3D
+	if tier2_deck == null:
+		tier2_deck = MeshInstance3D.new()
+		tier2_deck.name = "Tier2GroundDeck"
+		arch.add_child(tier2_deck)
+	var t2_box := BoxMesh.new()
+	t2_box.size = Vector3(60.0, FLOOR_HEIGHT + 0.6, 100.0)
+	tier2_deck.mesh = t2_box
+	tier2_deck.position = Vector3(-80.0, (FLOOR_HEIGHT - 0.6) * 0.5, 0.0)
+	var t2_mat := StandardMaterial3D.new()
+	t2_mat.albedo_color = Color(0.18, 0.22, 0.28)
+	t2_mat.roughness = 0.86
+	tier2_deck.material_override = t2_mat
+
+	# Remove legacy CrossAvenues if present (replaced by interactive Road Building System)
+	var old_avenues := arch.get_node_or_null("CrossAvenues")
+	if old_avenues != null:
+		old_avenues.queue_free()
+
+	# 3. Compact Fountain Base Ring (vòng tròn quanh đài phun nước thu bé lại đủ bao quanh đài)
 	var plaza: MeshInstance3D = arch.get_node_or_null("CentralPlazaDisc")
 	if plaza != null:
 		var plaza_cyl := CylinderMesh.new()
-		plaza_cyl.top_radius = 11.5
-		plaza_cyl.bottom_radius = 11.8
-		plaza_cyl.height = 0.22
+		plaza_cyl.top_radius = 4.25
+		plaza_cyl.bottom_radius = 4.45
+		plaza_cyl.height = 0.16
 		plaza.mesh = plaza_cyl
-		plaza.position = Vector3(0.0, 0.05, 0.0)
 		var plaza_mat := StandardMaterial3D.new()
-		plaza_mat.albedo_color = Color(0.24, 0.28, 0.35)
-		plaza_mat.roughness = 0.78
+		plaza_mat.albedo_color = Color(0.26, 0.32, 0.42)
+		plaza_mat.roughness = 0.72
 		plaza.material_override = plaza_mat
 
-	# 3. Cross Avenues (+) connecting the Central Plaza to the 4 Citadel Gates/Wings
-	var avenues_node := arch.get_node_or_null("CrossAvenues")
-	if avenues_node == null:
-		avenues_node = Node3D.new()
-		avenues_node.name = "CrossAvenues"
-		arch.add_child(avenues_node)
+	# 4. Seamless 2-Tier Castle Perimeter Walls, Retaining Cliff & Bastion Towers
+	var old_walls := arch.get_node_or_null("PerimeterFortressWalls")
+	if old_walls != null:
+		old_walls.queue_free()
+	var walls_node := Node3D.new()
+	walls_node.name = "PerimeterFortressWalls"
+	arch.add_child(walls_node)
 
-		var ave_mat := StandardMaterial3D.new()
-		ave_mat.albedo_color = Color(0.28, 0.32, 0.40)
-		ave_mat.roughness = 0.72
+	var wall_mat := StandardMaterial3D.new()
+	wall_mat.albedo_color = Color(0.20, 0.24, 0.31)
+	wall_mat.roughness = 0.85
 
-		# East-West Avenue (Z = 0, connecting Gate on East to Altar on West)
-		var ew_ave := MeshInstance3D.new()
+	var trim_mat := StandardMaterial3D.new()
+	trim_mat.albedo_color = Color(0.35, 0.42, 0.52)
+	trim_mat.roughness = 0.65
+
+	# Tier 1 North & South Walls (X in [-50, +50], Z = -49.3 / +49.3)
+	for z_sign in [-1.0, 1.0]:
+		var t1_wall := MeshInstance3D.new()
+		var t1_wb := BoxMesh.new()
+		t1_wb.size = Vector3(100.0, 4.8, 1.4)
+		t1_wall.mesh = t1_wb
+		t1_wall.position = Vector3(0.0, 2.4, z_sign * 49.3)
+		t1_wall.material_override = wall_mat
+		walls_node.add_child(t1_wall)
+
+	# Tier 1 East Wall (X = +49.3) with central opening for the fixed East Gate (Z in [-5.5, +5.5])
+	for z_center in [-27.4, 27.4]:
+		var ew_seg := MeshInstance3D.new()
 		var ew_box := BoxMesh.new()
-		ew_box.size = Vector3(44.0, 0.12, 5.6)
-		ew_ave.mesh = ew_box
-		ew_ave.position = Vector3(0.0, 0.06, 0.0)
-		ew_ave.material_override = ave_mat
-		avenues_node.add_child(ew_ave)
+		ew_box.size = Vector3(1.4, 4.8, 43.8)
+		ew_seg.mesh = ew_box
+		ew_seg.position = Vector3(49.3, 2.4, z_center)
+		ew_seg.material_override = wall_mat
+		walls_node.add_child(ew_seg)
 
-		# North-South Avenue (X = 0, connecting Barracks to Infirmary)
-		var ns_ave := MeshInstance3D.new()
-		var ns_box := BoxMesh.new()
-		ns_box.size = Vector3(5.6, 0.12, 36.0)
-		ns_ave.mesh = ns_box
-		ns_ave.position = Vector3(0.0, 0.06, 0.0)
-		ns_ave.material_override = ave_mat
-		avenues_node.add_child(ns_ave)
+	# Tier 2 North & South Walls (X in [-110, -50], Z = -49.3 / +49.3, sitting on Y = 5.2)
+	for z_sign in [-1.0, 1.0]:
+		var t2_wall := MeshInstance3D.new()
+		var t2_wb := BoxMesh.new()
+		t2_wb.size = Vector3(60.0, 4.8, 1.4)
+		t2_wall.mesh = t2_wb
+		t2_wall.position = Vector3(-80.0, FLOOR_HEIGHT + 2.4, z_sign * 49.3)
+		t2_wall.material_override = wall_mat
+		walls_node.add_child(t2_wall)
 
-	# 4. Perimeter Fortress Walls & 4 Corner Bastion Towers
-	var walls_node := arch.get_node_or_null("PerimeterFortressWalls")
-	if walls_node == null:
-		walls_node = Node3D.new()
-		walls_node.name = "PerimeterFortressWalls"
-		arch.add_child(walls_node)
+	# Tier 2 West Back Wall (X = -109.3, Z in [-50, +50], sitting on Y = 5.2)
+	var west_back_w := MeshInstance3D.new()
+	var wbw_box := BoxMesh.new()
+	wbw_box.size = Vector3(1.4, 5.6, 100.0)
+	west_back_w.mesh = wbw_box
+	west_back_w.position = Vector3(-109.3, FLOOR_HEIGHT + 2.8, 0.0)
+	west_back_w.material_override = wall_mat
+	walls_node.add_child(west_back_w)
 
-		var wall_mat := StandardMaterial3D.new()
-		wall_mat.albedo_color = Color(0.20, 0.24, 0.31)
-		wall_mat.roughness = 0.85
+	# Cliff Parapet / Balustrade along X = -50.0 (with openings at Z = -18.0 and Z = +18.0 for Twin Staircases)
+	for seg: Vector2 in [Vector2(-49.0, -21.5), Vector2(-14.5, 14.5), Vector2(21.5, 49.0)]:
+		var seg_len: float = seg.y - seg.x
+		var seg_mid: float = (seg.x + seg.y) * 0.5
+		var parapet := MeshInstance3D.new()
+		var p_box := BoxMesh.new()
+		p_box.size = Vector3(1.0, 1.25, seg_len)
+		parapet.mesh = p_box
+		parapet.position = Vector3(-50.0, FLOOR_HEIGHT + 0.625, seg_mid)
+		parapet.material_override = trim_mat
+		walls_node.add_child(parapet)
 
-		var trim_mat := StandardMaterial3D.new()
-		trim_mat.albedo_color = Color(0.35, 0.42, 0.52)
-		trim_mat.roughness = 0.65
+	# 6 Grand Bastion Towers (4 outer corners + 2 cliff transition corners)
+	var bastion_positions := [
+		Vector3(49.3, 0.0, -49.3),
+		Vector3(49.3, 0.0, 49.3),
+		Vector3(-50.0, FLOOR_HEIGHT, -49.3),
+		Vector3(-50.0, FLOOR_HEIGHT, 49.3),
+		Vector3(-109.3, FLOOR_HEIGHT, -49.3),
+		Vector3(-109.3, FLOOR_HEIGHT, 49.3)
+	]
+	for c_pos in bastion_positions:
+		var tower := MeshInstance3D.new()
+		var t_cyl := CylinderMesh.new()
+		t_cyl.top_radius = 2.8
+		t_cyl.bottom_radius = 3.1
+		t_cyl.height = 6.8
+		tower.mesh = t_cyl
+		tower.position = c_pos + Vector3(0.0, 3.4, 0.0)
+		tower.material_override = wall_mat
+		walls_node.add_child(tower)
 
-		# North Wall (Z = -18.5)
-		var north_w := MeshInstance3D.new()
-		var nb := BoxMesh.new()
-		nb.size = Vector3(47.0, 4.5, 1.4)
-		north_w.mesh = nb
-		north_w.position = Vector3(0.0, 2.25, -18.5)
-		north_w.material_override = wall_mat
-		walls_node.add_child(north_w)
+		var cap := MeshInstance3D.new()
+		var cap_mesh := CylinderMesh.new()
+		cap_mesh.top_radius = 3.2
+		cap_mesh.bottom_radius = 2.9
+		cap_mesh.height = 0.55
+		cap.mesh = cap_mesh
+		cap.position = c_pos + Vector3(0.0, 7.05, 0.0)
+		cap.material_override = trim_mat
+		walls_node.add_child(cap)
 
-		# South Wall (Z = 18.5)
-		var south_w := MeshInstance3D.new()
-		var sb := BoxMesh.new()
-		sb.size = Vector3(47.0, 4.5, 1.4)
-		south_w.mesh = sb
-		south_w.position = Vector3(0.0, 2.25, 18.5)
-		south_w.material_override = wall_mat
-		walls_node.add_child(south_w)
+	# 5. Twin Solid Stone Staircases connecting Tier 1 (X = -40.0, Y = 0.0) to Tier 2 (X = -50.0, Y = 5.2)
+	var old_stairs := arch.get_node_or_null("TwinWallStairs")
+	if old_stairs != null:
+		old_stairs.queue_free()
+	var twin_stairs := Node3D.new()
+	twin_stairs.name = "TwinWallStairs"
+	arch.add_child(twin_stairs)
 
-		# West Wall (X = -23.5)
-		var west_w := MeshInstance3D.new()
-		var wb := BoxMesh.new()
-		wb.size = Vector3(1.4, 4.5, 37.0)
-		west_w.mesh = wb
-		west_w.position = Vector3(-23.5, 2.25, 0.0)
-		west_w.material_override = wall_mat
-		walls_node.add_child(west_w)
+	var stair_mat := StandardMaterial3D.new()
+	stair_mat.albedo_color = Color(0.35, 0.40, 0.50)
+	stair_mat.roughness = 0.70
 
-		# East Wall (X = 23.5) with open center gateway (Z = [-4.0, 4.0])
-		var east_w_north := MeshInstance3D.new()
-		var ewn_box := BoxMesh.new()
-		ewn_box.size = Vector3(1.4, 4.5, 14.5)
-		east_w_north.mesh = ewn_box
-		east_w_north.position = Vector3(23.5, 2.25, -11.25)
-		east_w_north.material_override = wall_mat
-		walls_node.add_child(east_w_north)
+	var step_count := 16
+	var stair_span_x := 10.0 # X from -40.0 (bottom on Tier 1) to -50.0 (top at Tier 2 cliff)
+	var step_depth_x := stair_span_x / float(step_count)
+	for z_stair_center in [-18.0, 18.0]:
+		for s_idx in range(step_count):
+			var t := float(s_idx + 1) / float(step_count)
+			var step_h := lerpf(0.32, FLOOR_HEIGHT, t)
+			var sx := -40.0 - (float(s_idx) + 0.5) * step_depth_x
+			var step_inst := MeshInstance3D.new()
+			var s_box := BoxMesh.new()
+			s_box.size = Vector3(step_depth_x + 0.06, step_h, 5.6)
+			step_inst.mesh = s_box
+			step_inst.position = Vector3(sx, step_h * 0.5, z_stair_center)
+			step_inst.material_override = stair_mat
+			twin_stairs.add_child(step_inst)
 
-		var east_w_south := MeshInstance3D.new()
-		var ews_box := BoxMesh.new()
-		ews_box.size = Vector3(1.4, 4.5, 14.5)
-		east_w_south.mesh = ews_box
-		east_w_south.position = Vector3(23.5, 2.25, 11.25)
-		east_w_south.material_override = wall_mat
-		walls_node.add_child(east_w_south)
+		for z_rail_off in [-3.0, 3.0]:
+			var curb := MeshInstance3D.new()
+			var c_box := BoxMesh.new()
+			c_box.size = Vector3(stair_span_x, FLOOR_HEIGHT + 0.35, 0.42)
+			curb.mesh = c_box
+			curb.position = Vector3(-45.0, (FLOOR_HEIGHT + 0.35) * 0.35, z_stair_center + z_rail_off)
+			curb.material_override = trim_mat
+			twin_stairs.add_child(curb)
 
-		# 4 Corner Bastion Towers
-		var tower_corners := [
-			Vector3(-23.5, 0.0, -18.5),
-			Vector3(23.5, 0.0, -18.5),
-			Vector3(-23.5, 0.0, 18.5),
-			Vector3(23.5, 0.0, 18.5)
-		]
-		for c_pos in tower_corners:
-			var tower := MeshInstance3D.new()
-			var t_cyl := CylinderMesh.new()
-			t_cyl.top_radius = 2.6
-			t_cyl.bottom_radius = 2.8
-			t_cyl.height = 6.2
-			tower.mesh = t_cyl
-			tower.position = c_pos + Vector3(0.0, 3.1, 0.0)
-			tower.material_override = wall_mat
-			walls_node.add_child(tower)
-
-			var cap := MeshInstance3D.new()
-			var cap_mesh := CylinderMesh.new()
-			cap_mesh.top_radius = 2.9
-			cap_mesh.bottom_radius = 2.6
-			cap_mesh.height = 0.5
-			cap.mesh = cap_mesh
-			cap.position = c_pos + Vector3(0.0, 6.35, 0.0)
-			cap.material_override = trim_mat
-			walls_node.add_child(cap)
-
-	# 5. Centerpiece: Tiered Central Fountain (⛲ Đài Phun Nước Trung Tâm)
+	# 6. Centerpiece: Tiered Fountain (⛲ Đài Phun Nước - Movable 4x4 Grid Landmark)
 	var bonfire_node := arch.get_node_or_null("CentralBonfire")
 	if bonfire_node != null:
 		var firepit: MeshInstance3D = bonfire_node.get_node_or_null("FirepitMesh")
@@ -332,7 +404,7 @@ func _setup_grand_citadel_floor1() -> void:
 
 		var b_lbl: Label3D = bonfire_node.get_node_or_null("BonfireLabel")
 		if b_lbl != null:
-			b_lbl.text = "⛲ ĐÀI PHUN NƯỚC TRUNG TÂM"
+			b_lbl.text = "⛲ ĐÀI PHUN NƯỚC"
 			b_lbl.position = Vector3(0.0, 3.8, 0.0)
 			b_lbl.modulate = Color(0.45, 0.88, 1.0)
 			b_lbl.font_size = 23
@@ -355,62 +427,56 @@ func _setup_grand_citadel_floor1() -> void:
 			water_mat.emission = Color(0.12, 0.52, 0.78)
 			water_mat.emission_energy_multiplier = 0.6
 
-			# Lower stone basin
 			var lower_basin := MeshInstance3D.new()
 			var lb_cyl := CylinderMesh.new()
-			lb_cyl.top_radius = 3.6
-			lb_cyl.bottom_radius = 3.8
+			lb_cyl.top_radius = 3.4
+			lb_cyl.bottom_radius = 3.6
 			lb_cyl.height = 0.65
 			lower_basin.mesh = lb_cyl
 			lower_basin.position = Vector3(0.0, 0.32, 0.0)
 			lower_basin.material_override = stone_mat
 			fountain_visuals.add_child(lower_basin)
 
-			# Lower water pool
 			var water_pool := MeshInstance3D.new()
 			var wp_cyl := CylinderMesh.new()
-			wp_cyl.top_radius = 3.35
-			wp_cyl.bottom_radius = 3.35
+			wp_cyl.top_radius = 3.15
+			wp_cyl.bottom_radius = 3.15
 			wp_cyl.height = 0.06
 			water_pool.mesh = wp_cyl
 			water_pool.position = Vector3(0.0, 0.60, 0.0)
 			water_pool.material_override = water_mat
 			fountain_visuals.add_child(water_pool)
 
-			# Central pedestal
 			var pedestal := MeshInstance3D.new()
 			var ped_cyl := CylinderMesh.new()
-			ped_cyl.top_radius = 1.15
-			ped_cyl.bottom_radius = 1.35
+			ped_cyl.top_radius = 1.1
+			ped_cyl.bottom_radius = 1.3
 			ped_cyl.height = 1.1
 			pedestal.mesh = ped_cyl
 			pedestal.position = Vector3(0.0, 1.05, 0.0)
 			pedestal.material_override = stone_mat
 			fountain_visuals.add_child(pedestal)
 
-			# Upper stone basin
 			var upper_basin := MeshInstance3D.new()
 			var ub_cyl := CylinderMesh.new()
-			ub_cyl.top_radius = 2.1
-			ub_cyl.bottom_radius = 1.7
+			ub_cyl.top_radius = 2.0
+			ub_cyl.bottom_radius = 1.65
 			ub_cyl.height = 0.38
 			upper_basin.mesh = ub_cyl
 			upper_basin.position = Vector3(0.0, 1.62, 0.0)
 			upper_basin.material_override = stone_mat
 			fountain_visuals.add_child(upper_basin)
 
-			# Upper water layer
 			var upper_water := MeshInstance3D.new()
 			var uw_cyl := CylinderMesh.new()
-			uw_cyl.top_radius = 1.95
-			uw_cyl.bottom_radius = 1.95
+			uw_cyl.top_radius = 1.85
+			uw_cyl.bottom_radius = 1.85
 			uw_cyl.height = 0.05
 			upper_water.mesh = uw_cyl
 			upper_water.position = Vector3(0.0, 1.78, 0.0)
 			upper_water.material_override = water_mat
 			fountain_visuals.add_child(upper_water)
 
-			# Spire / Crystal fountain obelisk
 			var spire := MeshInstance3D.new()
 			var spire_cyl := CylinderMesh.new()
 			spire_cyl.top_radius = 0.08
@@ -426,6 +492,21 @@ func _setup_grand_citadel_floor1() -> void:
 			spire.material_override = spire_mat
 			fountain_visuals.add_child(spire)
 
+			# Compact Glowing Halo Ring tightly wrapping the Fountain (radius ~3.95m)
+			var compact_ring := MeshInstance3D.new()
+			var cr_torus := TorusMesh.new()
+			cr_torus.inner_radius = 3.82
+			cr_torus.outer_radius = 4.08
+			compact_ring.mesh = cr_torus
+			compact_ring.position = Vector3(0.0, 0.10, 0.0)
+			var cr_mat := StandardMaterial3D.new()
+			cr_mat.albedo_color = Color(0.32, 0.88, 1.0)
+			cr_mat.emission_enabled = true
+			cr_mat.emission = Color(0.22, 0.74, 1.0)
+			cr_mat.emission_energy_multiplier = 1.6
+			compact_ring.material_override = cr_mat
+			fountain_visuals.add_child(compact_ring)
+
 		if bonfire_light != null:
 			bonfire_light.light_color = Color(0.42, 0.86, 1.0)
 			bonfire_light.position = Vector3(0.0, 2.8, 0.0)
@@ -440,182 +521,122 @@ func _setup_grand_citadel_floor1() -> void:
 			bshape.shape = cs
 			bshape.position = Vector3(0.0, 1.3, 0.0)
 
-	# 6. CỔNG PHÍA ĐÔNG (+X): Tower Dungeon Gate (⛩️ Cổng Tháp / Cổng Thành)
+	# 7. CỔNG PHÍA ĐÔNG (+X = 48.2): ONLY Permanently Fixed Structure in the Castle
 	if dungeon_portal_mesh != null:
-		dungeon_portal_mesh.position = Vector3(21.8, 2.8, 0.0)
+		dungeon_portal_mesh.position = Vector3(48.2, 2.8, 0.0)
 		dungeon_portal_mesh.rotation = Vector3(0.0, deg_to_rad(90.0), 0.0)
 	if portal_body != null:
-		portal_body.position = Vector3(21.8, 0.0, 0.0)
+		portal_body.position = Vector3(48.2, 0.0, 0.0)
 
 	var portal_lbl: Label3D = arch.get_node_or_null("PortalLabel")
 	if portal_lbl != null:
-		portal_lbl.text = "⛩️ CỔNG THÁP CHINH PHẠT PvE (CỔNG ĐÔNG)"
-		portal_lbl.position = Vector3(21.8, 6.5, 0.0)
+		portal_lbl.text = "⛩️ CỔNG THÁP CHINH PHẠT PvE (CỔNG ĐÔNG - CỐ ĐỊNH)"
+		portal_lbl.position = Vector3(48.2, 6.8, 0.0)
 	if portal_sub_label != null:
-		portal_sub_label.position = Vector3(21.8, 5.9, 0.0)
+		portal_sub_label.position = Vector3(48.2, 6.1, 0.0)
 
-	var gatehouse_visuals := arch.get_node_or_null("GatehouseVisuals")
-	if gatehouse_visuals == null:
-		gatehouse_visuals = Node3D.new()
-		gatehouse_visuals.name = "GatehouseVisuals"
-		arch.add_child(gatehouse_visuals)
+	var old_gh := arch.get_node_or_null("GatehouseVisuals")
+	if old_gh != null:
+		old_gh.queue_free()
+	var gatehouse_visuals := Node3D.new()
+	gatehouse_visuals.name = "GatehouseVisuals"
+	arch.add_child(gatehouse_visuals)
 
-		var gh_mat := StandardMaterial3D.new()
-		gh_mat.albedo_color = Color(0.26, 0.30, 0.40)
-		gh_mat.roughness = 0.70
+	var gh_mat := StandardMaterial3D.new()
+	gh_mat.albedo_color = Color(0.26, 0.30, 0.40)
+	gh_mat.roughness = 0.70
 
-		# Left gate pillar (North side of East gate)
-		var lp := MeshInstance3D.new()
-		var lpb := BoxMesh.new()
-		lpb.size = Vector3(2.4, 5.8, 1.8)
-		lp.mesh = lpb
-		lp.position = Vector3(21.8, 2.9, -3.8)
-		lp.material_override = gh_mat
-		gatehouse_visuals.add_child(lp)
+	for z_pillar in [-4.5, 4.5]:
+		var gp := MeshInstance3D.new()
+		var gpb := BoxMesh.new()
+		gpb.size = Vector3(2.8, 6.2, 2.2)
+		gp.mesh = gpb
+		gp.position = Vector3(48.2, 3.1, z_pillar)
+		gp.material_override = gh_mat
+		gatehouse_visuals.add_child(gp)
 
-		# Right gate pillar (South side of East gate)
-		var rp := MeshInstance3D.new()
-		var rpb := BoxMesh.new()
-		rpb.size = Vector3(2.4, 5.8, 1.8)
-		rp.mesh = rpb
-		rp.position = Vector3(21.8, 2.9, 3.8)
-		rp.material_override = gh_mat
-		gatehouse_visuals.add_child(rp)
+	var arch_beam := MeshInstance3D.new()
+	var abb := BoxMesh.new()
+	abb.size = Vector3(3.0, 1.5, 11.2)
+	arch_beam.mesh = abb
+	arch_beam.position = Vector3(48.2, 5.8, 0.0)
+	arch_beam.material_override = gh_mat
+	gatehouse_visuals.add_child(arch_beam)
 
-		# Top gate arch / lintel spanning East gate
-		var arch_beam := MeshInstance3D.new()
-		var abb := BoxMesh.new()
-		abb.size = Vector3(2.6, 1.4, 8.4)
-		arch_beam.mesh = abb
-		arch_beam.position = Vector3(21.8, 5.5, 0.0)
-		arch_beam.material_override = gh_mat
-		gatehouse_visuals.add_child(arch_beam)
-
-	# 7. ĐÀI TRIỆU HỒI PHÍA TÂY (-X): Summon Altar (✨ Đài Triệu Hồi)
+	# 8. ĐÀI TRIỆU HỒI (✨ Summon Altar - Movable 4x4 Grid Landmark, Dais & Obelisks attached as children)
+	var old_dais := arch.get_node_or_null("AltarDaisVisuals")
+	if old_dais != null:
+		old_dais.queue_free()
 	if summon_altar_mesh != null:
-		summon_altar_mesh.position = Vector3(-18.5, 0.75, 0.0)
-	if altar_body != null:
-		altar_body.position = Vector3(-18.5, 0.0, 0.0)
-	var altar_lbl: Label3D = summon_altar_mesh.get_node_or_null("AltarLabel")
-	if altar_lbl != null:
-		altar_lbl.text = "✨ ĐÀI TRIỆU HỒI (TÂY)"
-		altar_lbl.position = Vector3(0.0, 2.7, 0.0)
-	var altar_sub: Label3D = summon_altar_mesh.get_node_or_null("AltarSubLabel")
-	if altar_sub != null:
-		altar_sub.position = Vector3(0.0, 2.15, 0.0)
+		if altar_body != null and altar_body.get_parent() == summon_altar_mesh:
+			altar_body.position = Vector3.ZERO
+		var altar_lbl: Label3D = summon_altar_mesh.get_node_or_null("AltarLabel")
+		if altar_lbl != null:
+			altar_lbl.text = "✨ ĐÀI TRIỆU HỒI"
+			altar_lbl.position = Vector3(0.0, 3.1, 0.0)
+		var altar_sub: Label3D = summon_altar_mesh.get_node_or_null("AltarSubLabel")
+		if altar_sub != null:
+			altar_sub.position = Vector3(0.0, 2.5, 0.0)
 
-	var altar_dais := arch.get_node_or_null("AltarDaisVisuals")
-	if altar_dais == null:
-		altar_dais = Node3D.new()
-		altar_dais.name = "AltarDaisVisuals"
-		arch.add_child(altar_dais)
+		var altar_dais := summon_altar_mesh.get_node_or_null("AltarDaisChild")
+		if altar_dais == null:
+			altar_dais = Node3D.new()
+			altar_dais.name = "AltarDaisChild"
+			summon_altar_mesh.add_child(altar_dais)
 
-		var dais_mat := StandardMaterial3D.new()
-		dais_mat.albedo_color = Color(0.32, 0.38, 0.48)
-		dais_mat.roughness = 0.60
+			var dais_mat := StandardMaterial3D.new()
+			dais_mat.albedo_color = Color(0.32, 0.38, 0.48)
+			dais_mat.roughness = 0.60
 
-		var dais_base := MeshInstance3D.new()
-		var db_cyl := CylinderMesh.new()
-		db_cyl.top_radius = 3.6
-		db_cyl.bottom_radius = 4.0
-		db_cyl.height = 0.6
-		dais_base.mesh = db_cyl
-		dais_base.position = Vector3(-18.5, 0.3, 0.0)
-		dais_base.material_override = dais_mat
-		altar_dais.add_child(dais_base)
+			var dais_base := MeshInstance3D.new()
+			var db_cyl := CylinderMesh.new()
+			db_cyl.top_radius = 3.5
+			db_cyl.bottom_radius = 3.8
+			db_cyl.height = 0.5
+			dais_base.mesh = db_cyl
+			dais_base.position = Vector3(0.0, -0.45, 0.0)
+			dais_base.material_override = dais_mat
+			altar_dais.add_child(dais_base)
 
-		# Twin arcane obelisks flanking the West Altar
-		var ob_mat := StandardMaterial3D.new()
-		ob_mat.albedo_color = Color(0.25, 0.45, 0.65)
-		ob_mat.emission_enabled = true
-		ob_mat.emission = Color(0.2, 0.6, 0.95)
-		ob_mat.emission_energy_multiplier = 1.2
+			var ob_mat := StandardMaterial3D.new()
+			ob_mat.albedo_color = Color(0.25, 0.45, 0.65)
+			ob_mat.emission_enabled = true
+			ob_mat.emission = Color(0.2, 0.6, 0.95)
+			ob_mat.emission_energy_multiplier = 1.2
 
-		for z_sign in [-1.0, 1.0]:
-			var ob := MeshInstance3D.new()
-			var ob_mesh := CylinderMesh.new()
-			ob_mesh.top_radius = 0.12
-			ob_mesh.bottom_radius = 0.45
-			ob_mesh.height = 3.4
-			ob.mesh = ob_mesh
-			ob.position = Vector3(-18.5, 1.7, z_sign * 3.6)
-			ob.material_override = ob_mat
-			altar_dais.add_child(ob)
+			for z_sign in [-1.0, 1.0]:
+				var ob := MeshInstance3D.new()
+				var ob_mesh := CylinderMesh.new()
+				ob_mesh.top_radius = 0.12
+				ob_mesh.bottom_radius = 0.42
+				ob_mesh.height = 3.2
+				ob.mesh = ob_mesh
+				ob.position = Vector3(0.0, 0.95, z_sign * 3.1)
+				ob.material_override = ob_mat
+				altar_dais.add_child(ob)
 
-	# 8. HAI CẦU THANG ĐỐI XỨNG ÁP SÁT TƯỜNG TÂY (KIỂU A - FLANKING SUMMON ALTAR LEADING TO FLOOR 2)
-	var twin_stairs := arch.get_node_or_null("TwinWallStairs")
-	if twin_stairs == null:
-		twin_stairs = Node3D.new()
-		twin_stairs.name = "TwinWallStairs"
-		arch.add_child(twin_stairs)
-
-		var stair_mat := StandardMaterial3D.new()
-		stair_mat.albedo_color = Color(0.35, 0.40, 0.50)
-		stair_mat.roughness = 0.70
-
-		var rail_mat := StandardMaterial3D.new()
-		rail_mat.albedo_color = Color(0.45, 0.52, 0.65)
-		rail_mat.roughness = 0.55
-
-		var step_count := 14
-		for s_idx in range(step_count):
-			var t := float(s_idx + 1) / float(step_count + 1)
-			var top_y := lerpf(0.35, FLOOR_HEIGHT, t)
-			var step_h := top_y
-			var sy := step_h * 0.5
-
-			# North Staircase (solid stone steps flush against West wall X = -21.4, ascending Z: -15.5 -> -4.8)
-			var n_step := MeshInstance3D.new()
-			var n_box := BoxMesh.new()
-			n_box.size = Vector3(2.4, step_h, 0.88)
-			n_step.mesh = n_box
-			var n_sz := lerpf(-15.5, -4.8, t)
-			n_step.position = Vector3(-21.4, sy, n_sz)
-			n_step.material_override = stair_mat
-			twin_stairs.add_child(n_step)
-
-			# South Staircase (solid stone steps flush against West wall X = -21.4, ascending Z: +15.5 -> +4.8)
-			var s_step := MeshInstance3D.new()
-			s_step.mesh = n_box
-			var s_sz := lerpf(15.5, 4.8, t)
-			s_step.position = Vector3(-21.4, sy, s_sz)
-			s_step.material_override = stair_mat
-			twin_stairs.add_child(s_step)
-
-		# Upper solid stone landing platforms connecting the top of the stairs directly to Floor 2 terrace
-		for z_side in [-4.4, 4.4]:
-			var landing := MeshInstance3D.new()
-			var l_box := BoxMesh.new()
-			l_box.size = Vector3(2.4, FLOOR_HEIGHT, 1.8)
-			landing.mesh = l_box
-			landing.position = Vector3(-21.4, FLOOR_HEIGHT * 0.5, z_side)
-			landing.material_override = stair_mat
-			twin_stairs.add_child(landing)
-
-	# 9. Doanh Trại & Bệnh Xá (North & South courtyard wings)
+	# 9. Doanh Trại & Bệnh Xá (Movable 3x3 Grid Landmarks)
 	if barracks_mesh != null:
-		barracks_mesh.position = Vector3(-5.0, 1.6, -11.0)
 		var b_box := BoxMesh.new()
-		b_box.size = Vector3(4.6, 3.2, 5.8)
+		b_box.size = Vector3(4.6, 3.2, 5.2)
 		barracks_mesh.mesh = b_box
 	if barracks_body != null and barracks_body.has_node("CollisionShape3D"):
 		var b_shape: CollisionShape3D = barracks_body.get_node("CollisionShape3D")
 		var bs := BoxShape3D.new()
-		bs.size = Vector3(5.0, 3.6, 6.2)
+		bs.size = Vector3(5.0, 3.6, 5.6)
 		b_shape.shape = bs
 	var bar_lbl: Label3D = barracks_mesh.get_node_or_null("BarracksLabel")
 	if bar_lbl != null:
 		bar_lbl.position = Vector3(0.0, 2.4, 0.0)
 
 	if infirmary_mesh != null:
-		infirmary_mesh.position = Vector3(-5.0, 1.6, 11.0)
 		var i_box := BoxMesh.new()
-		i_box.size = Vector3(4.6, 3.2, 5.8)
+		i_box.size = Vector3(4.6, 3.2, 5.2)
 		infirmary_mesh.mesh = i_box
 	if infirmary_body != null and infirmary_body.has_node("CollisionShape3D"):
 		var i_shape: CollisionShape3D = infirmary_body.get_node("CollisionShape3D")
 		var ishape := BoxShape3D.new()
-		ishape.size = Vector3(5.0, 3.6, 6.2)
+		ishape.size = Vector3(5.0, 3.6, 5.6)
 		i_shape.shape = ishape
 	var inf_lbl: Label3D = infirmary_mesh.get_node_or_null("InfirmaryLabel")
 	if inf_lbl != null:
@@ -647,219 +668,513 @@ func _spawn_stacked_3d_floors_and_plots() -> void:
 	_floor_banners.clear()
 	_floor_trans_map.clear()
 
-	# Glowing Active Terrace Halo Ring & Focus Light that rides with the observed floor
-	_active_floor_ring = MeshInstance3D.new()
-	var ring_torus := TorusMesh.new()
-	ring_torus.inner_radius = 11.2
-	ring_torus.outer_radius = 11.6
-	_active_floor_ring.mesh = ring_torus
-	_active_floor_ring.position = Vector3(0.0, 0.08, 0.0)
-	var ring_mat := StandardMaterial3D.new()
-	ring_mat.albedo_color = Color(0.32, 0.86, 1.0)
-	ring_mat.emission_enabled = true
-	ring_mat.emission = Color(0.22, 0.72, 1.0)
-	ring_mat.emission_energy_multiplier = 1.8
-	_active_floor_ring.material_override = ring_mat
-	zones_container.add_child(_active_floor_ring)
-
-	_active_floor_light = OmniLight3D.new()
-	_active_floor_light.light_color = Color(0.85, 0.94, 1.0)
-	_active_floor_light.light_energy = 2.0
-	_active_floor_light.omni_range = 24.0
-	_active_floor_light.position = Vector3(0.0, 5.0, 0.0)
-	zones_container.add_child(_active_floor_light)
-
-	for f_idx in range(MAX_LOBBY_FLOORS):
-		var floor_num := f_idx + 1
-		var terrace_center := get_floor_terrace_center(floor_num)
-		_floor_trans_map[floor_num] = 0.0
-
-		# Upper Stepped Fortress Terraces (Floors 2..6)
-		if floor_num >= 2:
-			var terrace_root := _build_terrace_step_3d(floor_num, terrace_center)
-			zones_container.add_child(terrace_root)
-			_floor_platforms[floor_num] = terrace_root
-
-		var req_lvl := 1 if floor_num <= 1 else (floor_num - 1) * MASTER_LEVELS_PER_FLOOR
+	# Tier 1 & Tier 2 Floating Header Banners
+	var tier_configs := [
+		{ "floor": 1, "pos": Vector3(0.0, 6.2, -46.5), "title": "🏰 HẠ THÀNH TẦNG 1 (100m × 100m)" },
+		{ "floor": 2, "pos": Vector3(-80.0, FLOOR_HEIGHT + 6.2, -46.5), "title": "👑 THƯỢNG THÀNH TẦNG 2 (60m × 100m)" }
+	]
+	for cfg in tier_configs:
+		var f_num: int = cfg["floor"]
 		var f_banner := Label3D.new()
 		f_banner.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		f_banner.no_depth_test = true
-		f_banner.font_size = 24
+		f_banner.font_size = 25
 		f_banner.outline_size = 6
-		f_banner.position = terrace_center + Vector3(0.0, 4.8, -16.5)
-		f_banner.text = "🏰 THÀNH TRÌ BẬC THANG TẦNG #%d (Mở ở Master Lv.%d)" % [floor_num, req_lvl]
+		f_banner.position = cfg["pos"]
+		f_banner.text = cfg["title"]
+		f_banner.modulate = Color(0.65, 0.94, 1.0)
 		zones_container.add_child(f_banner)
-		_floor_banners[floor_num] = f_banner
+		_floor_banners[f_num] = f_banner
 
-		for p_local in range(PLOTS_PER_FLOOR):
-			var plot_num := f_idx * PLOTS_PER_FLOOR + p_local + 1
-			var plot_node: BasePlot3D = BASE_PLOT_SCENE.instantiate()
-			plot_node.plot_index = plot_num
-			plot_node.zone_index = floor_num
-			plots_container.add_child(plot_node)
-			plot_node.global_position = terrace_center + FLOOR_PLOT_OFFSETS[p_local]
-			_plot_nodes[plot_num] = plot_node
+	# Instantiate all 48 Plot Nodes (hidden when empty; positioned on the grid when constructed)
+	for plot_num in range(1, MAX_TOTAL_PLOTS + 1):
+		var plot_node: BasePlot3D = BASE_PLOT_SCENE.instantiate()
+		plot_node.plot_index = plot_num
+		plot_node.zone_index = 1
+		plots_container.add_child(plot_node)
+		_plot_nodes[plot_num] = plot_node
 
-## Builds a 3D Stepped Fortress Terrace ("Thành Trì Bậc Thang") for `floor_num` >= 2:
-## - Solid stone terrace platform deck (no open hole)
-## - Fortified retaining wall / cliff foundation along the East front
-## - North & South perimeter walls
-## - 2 Symmetrical stone staircases along North & South walls ascending to the next tier
-func _build_terrace_step_3d(floor_num: int, terrace_center: Vector3) -> Node3D:
-	var terrace_root := Node3D.new()
-	terrace_root.name = "SteppedTerrace_%d" % floor_num
-	terrace_root.position = terrace_center
+# ==============================================================================
+# GRID-BASED FREE PLACEMENT & ROAD BUILDING SYSTEM (2m x 2m UNIFIED GRID)
+# ==============================================================================
 
-	var floor_mat := StandardMaterial3D.new()
-	floor_mat.albedo_color = Color(0.25, 0.29, 0.38)
-	floor_mat.roughness = 0.74
+func _get_structure_footprint_size(structure_id: String) -> Vector2i:
+	if structure_id == "FOUNTAIN" or structure_id == "SUMMON_ALTAR":
+		return Vector2i(4, 4) # 8m x 8m
+	elif structure_id == "BARRACKS" or structure_id == "INFIRMARY":
+		return Vector2i(3, 3) # 6m x 6m
+	return Vector2i(2, 2) # 4m x 4m for PLOT:1..48
 
-	var wall_mat := StandardMaterial3D.new()
-	wall_mat.albedo_color = Color(0.20, 0.24, 0.31)
-	wall_mat.roughness = 0.85
+func _get_structure_display_name(structure_id: String) -> String:
+	match structure_id:
+		"FOUNTAIN":
+			return "⛲ Đài Phun Nước"
+		"SUMMON_ALTAR":
+			return "✨ Đài Triệu Hồi"
+		"BARRACKS":
+			return "🛡️ Doanh Trại"
+		"INFIRMARY":
+			return "✚ Bệnh Xá"
+		_:
+			if structure_id.begins_with("PLOT:"):
+				var p_idx := int(structure_id.trim_prefix("PLOT:"))
+				var b := GameState.get_building_on_plot(p_idx)
+				if not b.is_empty():
+					return str(b.get("typeName", b.get("buildingType", "Công trình #%d" % p_idx)))
+				return "Ô Công Trình #%d" % p_idx
+			return structure_id
 
-	var stair_mat := StandardMaterial3D.new()
-	stair_mat.albedo_color = Color(0.35, 0.40, 0.50)
-	stair_mat.roughness = 0.70
+func _world_to_grid_cell(world_pos: Vector3) -> Vector2i:
+	var gx := int(floor((world_pos.x - GRID_ORIGIN_X) / GRID_CELL_SIZE))
+	var gz := int(floor((world_pos.z - GRID_ORIGIN_Z) / GRID_CELL_SIZE))
+	return Vector2i(gx, gz)
 
-	# 1. Solid rectangular stone terrace deck (28m x 36m)
-	var deck := MeshInstance3D.new()
-	var deck_box := BoxMesh.new()
-	deck_box.size = Vector3(UPPER_TERRACE_WIDTH, 0.45, 36.0)
-	deck.mesh = deck_box
-	deck.position = Vector3(0.0, -0.225, 0.0)
-	deck.material_override = floor_mat
-	terrace_root.add_child(deck)
+func _grid_footprint_to_world_center(gx: int, gz: int, size_cells: Vector2i) -> Vector3:
+	var wx := GRID_ORIGIN_X + (float(gx) + float(size_cells.x) * 0.5) * GRID_CELL_SIZE
+	var wz := GRID_ORIGIN_Z + (float(gz) + float(size_cells.y) * 0.5) * GRID_CELL_SIZE
+	var wy := 0.0 if gx >= 0 else FLOOR_HEIGHT
+	return Vector3(wx, wy, wz)
 
-	# 2. Fortified retaining wall dropping down to the lower tier along the East front edge
-	var retaining_w := MeshInstance3D.new()
-	var rw_box := BoxMesh.new()
-	rw_box.size = Vector3(1.2, FLOOR_HEIGHT, 36.0)
-	retaining_w.mesh = rw_box
-	retaining_w.position = Vector3(UPPER_TERRACE_HALF_WIDTH - 0.6, -(FLOOR_HEIGHT * 0.5), 0.0)
-	retaining_w.material_override = wall_mat
-	terrace_root.add_child(retaining_w)
+func _is_cell_in_reserved_zone(gx: int, gz: int) -> bool:
+	# 1. Fixed East Gate entrance clearance (X near +48.2, Z near 0.0 -> gx in [45, 49], gz in [21, 28])
+	if gx >= 45 and gx <= 49 and gz >= 21 and gz <= 28:
+		return true
+	# 2. Twin Staircases clearance connecting Tier 1 and Tier 2 (X in [-40, -50] -> gx in [-2, 6], Z around -18 and +18)
+	if gx >= -2 and gx <= 6:
+		if (gz >= 13 and gz <= 18) or (gz >= 31 and gz <= 36):
+			return true
+	return false
 
-	# 3. Perimeter walls for this terrace
-	var pw_north := MeshInstance3D.new()
-	var pwn_box := BoxMesh.new()
-	pwn_box.size = Vector3(UPPER_TERRACE_WIDTH, 4.2, 1.2)
-	pw_north.mesh = pwn_box
-	pw_north.position = Vector3(0.0, 2.1, -18.0)
-	pw_north.material_override = wall_mat
-	terrace_root.add_child(pw_north)
+func _is_footprint_valid(gx: int, gz: int, size_cells: Vector2i, ignore_structure_id: String = "") -> bool:
+	var w := size_cells.x
+	var h := size_cells.y
+	if gz < GRID_GZ_MIN or (gz + h) > GRID_GZ_MAX:
+		return false
+	var on_tier1 := (gx >= TIER1_GX_MIN and (gx + w) <= TIER1_GX_MAX)
+	var on_tier2 := (gx >= TIER2_GX_MIN and (gx + w) <= TIER2_GX_MAX)
+	if not on_tier1 and not on_tier2:
+		return false
 
-	var pw_south := MeshInstance3D.new()
-	var pws_box := BoxMesh.new()
-	pws_box.size = Vector3(UPPER_TERRACE_WIDTH, 4.2, 1.2)
-	pw_south.mesh = pws_box
-	pw_south.position = Vector3(0.0, 2.1, 18.0)
-	pw_south.material_override = wall_mat
-	terrace_root.add_child(pw_south)
+	for cx in range(gx, gx + w):
+		for cz in range(gz, gz + h):
+			if _is_cell_in_reserved_zone(cx, cz):
+				return false
 
-	var pw_west := MeshInstance3D.new()
-	var pww_box := BoxMesh.new()
-	pww_box.size = Vector3(1.2, 5.6, 36.0)
-	pw_west.mesh = pww_box
-	pw_west.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 0.6, 2.8, 0.0)
-	pw_west.material_override = wall_mat
-	terrace_root.add_child(pw_west)
+	for other_id in _grid_structures.keys():
+		var s_id := str(other_id)
+		if s_id == ignore_structure_id:
+			continue
+		if s_id.begins_with("PLOT:"):
+			var p_idx := int(s_id.trim_prefix("PLOT:"))
+			if _plot_nodes.has(p_idx):
+				var p_node: BasePlot3D = _plot_nodes[p_idx]
+				if p_node.building_data.is_empty():
+					continue
+			else:
+				var b_data := GameState.get_building_on_plot(p_idx)
+				if b_data.is_empty():
+					continue
+		var entry: Dictionary = _grid_structures[s_id]
+		var ox := int(entry.get("gx", 0))
+		var oz := int(entry.get("gz", 0))
+		var osize := _get_structure_footprint_size(s_id)
+		var overlap_x := (gx < ox + osize.x) and (gx + w > ox)
+		var overlap_z := (gz < oz + osize.y) and (gz + h > oz)
+		if overlap_x and overlap_z:
+			return false
 
-	# Front stone balustrade overlooking lower floor with center opening
-	var rail_mat := StandardMaterial3D.new()
-	rail_mat.albedo_color = Color(0.45, 0.52, 0.65)
-	rail_mat.roughness = 0.55
+	return true
 
-	for z_side in [-11.5, 11.5]:
-		var f_rail := MeshInstance3D.new()
-		var fb_box := BoxMesh.new()
-		fb_box.size = Vector3(0.32, 0.95, 11.0)
-		f_rail.mesh = fb_box
-		f_rail.position = Vector3(UPPER_TERRACE_HALF_WIDTH - 0.25, 0.48, z_side)
-		f_rail.material_override = rail_mat
-		terrace_root.add_child(f_rail)
+func _get_default_plot_grid_coord(plot_num: int) -> Vector2i:
+	# Distribute default plot positions cleanly along the avenues of Tier 1 and Tier 2
+	var idx := plot_num - 1
+	if idx < 32:
+		var col := idx % 8
+		var row_group := int(idx / 8)
+		var gx := 8 + col * 4
+		var gz_table := [17, 31, 8, 40]
+		var gz: int = gz_table[row_group % 4]
+		return Vector2i(gx, gz)
+	else:
+		var t2_idx := idx - 32
+		var col := t2_idx % 4
+		var row_group := int(t2_idx / 4)
+		var gx := -26 + col * 5
+		var gz_table := [17, 31, 8, 40]
+		var gz: int = gz_table[row_group % 4]
+		return Vector2i(gx, gz)
 
-	# 4. Two Symmetrical Solid Stone Staircases flush against the West Wall leading up to the next tier
-	if floor_num < MAX_LOBBY_FLOORS:
-		var step_count := 14
-		for s_idx in range(step_count):
-			var t := float(s_idx + 1) / float(step_count + 1)
-			var top_y := lerpf(0.35, FLOOR_HEIGHT, t)
-			var step_h := top_y
-			var sy := step_h * 0.5
+func _load_or_init_castle_grid_layout() -> void:
+	_grid_structures.clear()
+	_grid_roads.clear()
 
-			# North Staircase (solid stone steps flush against West wall, ascending Z: -15.5 -> -4.8)
-			var n_step := MeshInstance3D.new()
-			var step_box := BoxMesh.new()
-			step_box.size = Vector3(2.4, step_h, 0.88)
-			n_step.mesh = step_box
-			var n_sz := lerpf(-15.5, -4.8, t)
-			n_step.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.2, sy, n_sz)
-			n_step.material_override = stair_mat
-			terrace_root.add_child(n_step)
+	# Default landmark placements
+	_grid_structures["FOUNTAIN"] = { "gx": 23, "gz": 23, "rot": 0 }      # Center of Tier 1 (X=0, Z=0)
+	_grid_structures["SUMMON_ALTAR"] = { "gx": -17, "gz": 23, "rot": 0 } # Center of Tier 2 (X=-80, Z=0)
+	_grid_structures["BARRACKS"] = { "gx": 23, "gz": 11, "rot": 0 }      # North Courtyard Tier 1 (X=-1, Z=-25)
+	_grid_structures["INFIRMARY"] = { "gx": 23, "gz": 36, "rot": 0 }     # South Courtyard Tier 1 (X=-1, Z=+25)
 
-			# South Staircase (solid stone steps flush against West wall, ascending Z: +15.5 -> +4.8)
-			var s_step := MeshInstance3D.new()
-			s_step.mesh = step_box
-			var s_sz := lerpf(15.5, 4.8, t)
-			s_step.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.2, sy, s_sz)
-			s_step.material_override = stair_mat
-			terrace_root.add_child(s_step)
+	for p_num in range(1, MAX_TOTAL_PLOTS + 1):
+		var def_cell := _get_default_plot_grid_coord(p_num)
+		_grid_structures["PLOT:%d" % p_num] = { "gx": def_cell.x, "gz": def_cell.y, "rot": 0 }
 
-		# Upper solid stone landing platforms connecting the top of the stairs directly to next terrace
-		for z_side in [-4.4, 4.4]:
-			var landing := MeshInstance3D.new()
-			var l_box := BoxMesh.new()
-			l_box.size = Vector3(2.4, FLOOR_HEIGHT, 1.8)
-			landing.mesh = l_box
-			landing.position = Vector3(-UPPER_TERRACE_HALF_WIDTH + 1.2, FLOOR_HEIGHT * 0.5, z_side)
-			landing.material_override = stair_mat
-			terrace_root.add_child(landing)
+	# Default Grand Cobblestone Road Network connecting East Gate -> Fountain -> Stairs -> Summon Altar
+	_populate_default_road_network()
 
-	# 5. Central stone terrace pavilion / mosaic plaza ring
-	var plaza_disc := MeshInstance3D.new()
-	var pd_mesh := CylinderMesh.new()
-	pd_mesh.top_radius = 5.2
-	pd_mesh.bottom_radius = 5.5
-	pd_mesh.height = 0.12
-	plaza_disc.mesh = pd_mesh
-	plaza_disc.position = Vector3(0.0, 0.06, 0.0)
-	var pd_mat := StandardMaterial3D.new()
-	pd_mat.albedo_color = Color(0.30, 0.35, 0.46)
-	pd_mat.roughness = 0.65
-	plaza_disc.material_override = pd_mat
-	terrace_root.add_child(plaza_disc)
+	if FileAccess.file_exists(CASTLE_LAYOUT_SAVE_PATH):
+		var f := FileAccess.open(CASTLE_LAYOUT_SAVE_PATH, FileAccess.READ)
+		if f != null:
+			var raw := f.get_as_text()
+			f.close()
+			var parsed: Variant = JSON.parse_string(raw)
+			if parsed is Dictionary:
+				var saved_structs: Variant = parsed.get("structures", {})
+				if saved_structs is Dictionary:
+					for k in saved_structs.keys():
+						if saved_structs[k] is Dictionary:
+							_grid_structures[str(k)] = saved_structs[k]
+				var saved_roads: Variant = parsed.get("roads", {})
+				if saved_roads is Dictionary and not saved_roads.is_empty():
+					_grid_roads.clear()
+					for rk in saved_roads.keys():
+						if bool(saved_roads[rk]):
+							_grid_roads[str(rk)] = true
 
-	return terrace_root
+func _populate_default_road_network() -> void:
+	# 1. East Gate (gx=46) to Fountain (gx=27) along Z=0 (gz=24, 25)
+	for gx in range(27, 47):
+		_grid_roads["%d,24" % gx] = true
+		_grid_roads["%d,25" % gx] = true
+	# 2. Ring road around Fountain (gx in [21, 28], gz in [21, 28] perimeter)
+	for gx in range(21, 29):
+		for gz in range(21, 29):
+			if gx == 21 or gx == 22 or gx == 27 or gx == 28 or gz == 21 or gz == 22 or gz == 27 or gz == 28:
+				if not (gx >= 23 and gx <= 26 and gz >= 23 and gz <= 26):
+					_grid_roads["%d,%d" % [gx, gz]] = true
+	# 3. North-South Avenue from Fountain to Barracks (gz=14..20) and Infirmary (gz=29..35)
+	for gz in range(14, 21):
+		_grid_roads["24,%d" % gz] = true
+		_grid_roads["25,%d" % gz] = true
+	for gz in range(29, 36):
+		_grid_roads["24,%d" % gz] = true
+		_grid_roads["25,%d" % gz] = true
+	# 4. Westward Avenues from Fountain to Twin Staircases (gx=5..20 at gz=15,16 and gz=33,34)
+	for gz in range(15, 35):
+		_grid_roads["20,%d" % gz] = true
+	for gx in range(5, 21):
+		_grid_roads["%d,15" % gx] = true
+		_grid_roads["%d,16" % gx] = true
+		_grid_roads["%d,33" % gx] = true
+		_grid_roads["%d,34" % gx] = true
+	# 5. Tier 2 Upper Citadel Roads from Staircase tops (gx=-2..-13) to Summon Altar (gx=-17, gz=23)
+	for gx in range(-13, -1):
+		_grid_roads["%d,15" % gx] = true
+		_grid_roads["%d,16" % gx] = true
+		_grid_roads["%d,33" % gx] = true
+		_grid_roads["%d,34" % gx] = true
+	for gz in range(15, 35):
+		_grid_roads["-13,%d" % gz] = true
+
+func _save_castle_grid_layout() -> void:
+	var payload := {
+		"version": 2,
+		"structures": _grid_structures,
+		"roads": _grid_roads
+	}
+	var f := FileAccess.open(CASTLE_LAYOUT_SAVE_PATH, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(payload, "\t"))
+		f.close()
+
+func _setup_grid_overlay_and_roads() -> void:
+	if _roads_container != null and is_instance_valid(_roads_container):
+		_roads_container.queue_free()
+	_roads_container = Node3D.new()
+	_roads_container.name = "CastleRoadsContainer"
+	add_child(_roads_container)
+	_road_mesh_nodes.clear()
+	_rebuild_all_road_meshes()
+
+	if _grid_overlay_root != null and is_instance_valid(_grid_overlay_root):
+		_grid_overlay_root.queue_free()
+	_grid_overlay_root = Node3D.new()
+	_grid_overlay_root.name = "CastleGridOverlay"
+	_grid_overlay_root.visible = false
+	add_child(_grid_overlay_root)
+
+	# Build subtle grid lines on Tier 1 and Tier 2 so the 2m x 2m grid is crisp during build/move/road modes
+	var line_mat := StandardMaterial3D.new()
+	line_mat.albedo_color = Color(0.38, 0.82, 1.0, 0.24)
+	line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	# Tier 1 grid lines (X in [-48, 48], Z in [-48, 48], Y = 0.03)
+	for gx in range(1, 50, 2):
+		var wx := GRID_ORIGIN_X + float(gx) * GRID_CELL_SIZE
+		var l_inst := MeshInstance3D.new()
+		var l_box := BoxMesh.new()
+		l_box.size = Vector3(0.05, 0.02, 96.0)
+		l_inst.mesh = l_box
+		l_inst.position = Vector3(wx, 0.03, 0.0)
+		l_inst.material_override = line_mat
+		_grid_overlay_root.add_child(l_inst)
+	for gz in range(1, 50, 2):
+		var wz := GRID_ORIGIN_Z + float(gz) * GRID_CELL_SIZE
+		var l_inst := MeshInstance3D.new()
+		var l_box := BoxMesh.new()
+		l_box.size = Vector3(96.0, 0.02, 0.05)
+		l_inst.mesh = l_box
+		l_inst.position = Vector3(0.0, 0.03, wz)
+		l_inst.material_override = line_mat
+		_grid_overlay_root.add_child(l_inst)
+
+	# Tier 2 grid lines (X in [-108, -52], Z in [-48, 48], Y = 5.23)
+	for gx in range(-29, 0, 2):
+		var wx := GRID_ORIGIN_X + float(gx) * GRID_CELL_SIZE
+		var l_inst := MeshInstance3D.new()
+		var l_box := BoxMesh.new()
+		l_box.size = Vector3(0.05, 0.02, 96.0)
+		l_inst.mesh = l_box
+		l_inst.position = Vector3(wx, FLOOR_HEIGHT + 0.03, 0.0)
+		l_inst.material_override = line_mat
+		_grid_overlay_root.add_child(l_inst)
+	for gz in range(1, 50, 2):
+		var wz := GRID_ORIGIN_Z + float(gz) * GRID_CELL_SIZE
+		var l_inst := MeshInstance3D.new()
+		var l_box := BoxMesh.new()
+		l_box.size = Vector3(56.0, 0.02, 0.05)
+		l_inst.mesh = l_box
+		l_inst.position = Vector3(-80.0, FLOOR_HEIGHT + 0.03, wz)
+		l_inst.material_override = line_mat
+		_grid_overlay_root.add_child(l_inst)
+
+	# Ghost Footprint Preview Node
+	_grid_ghost_root = Node3D.new()
+	_grid_ghost_root.name = "GridGhostPreview"
+	_grid_overlay_root.add_child(_grid_ghost_root)
+
+	_grid_ghost_mesh = MeshInstance3D.new()
+	var g_box := BoxMesh.new()
+	g_box.size = Vector3(4.0, 0.25, 4.0)
+	_grid_ghost_mesh.mesh = g_box
+	_grid_ghost_mesh.position = Vector3(0.0, 0.14, 0.0)
+	_grid_ghost_root.add_child(_grid_ghost_mesh)
+
+	_grid_ghost_border = MeshInstance3D.new()
+	var gb_box := BoxMesh.new()
+	gb_box.size = Vector3(4.15, 0.08, 4.15)
+	_grid_ghost_border.mesh = gb_box
+	_grid_ghost_border.position = Vector3(0.0, 0.05, 0.0)
+	_grid_ghost_root.add_child(_grid_ghost_border)
+
+	_grid_ghost_label = Label3D.new()
+	_grid_ghost_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_grid_ghost_label.no_depth_test = true
+	_grid_ghost_label.font_size = 22
+	_grid_ghost_label.outline_size = 6
+	_grid_ghost_label.position = Vector3(0.0, 2.2, 0.0)
+	_grid_ghost_root.add_child(_grid_ghost_label)
+
+func _rebuild_all_road_meshes() -> void:
+	if _roads_container == null:
+		return
+	for child in _roads_container.get_children():
+		child.queue_free()
+	_road_mesh_nodes.clear()
+	for rk in _grid_roads.keys():
+		var parts := str(rk).split(",")
+		if parts.size() == 2:
+			_spawn_single_road_tile_mesh(int(parts[0]), int(parts[1]))
+
+func _spawn_single_road_tile_mesh(gx: int, gz: int) -> void:
+	var key := "%d,%d" % [gx, gz]
+	if _road_mesh_nodes.has(key) and is_instance_valid(_road_mesh_nodes[key]):
+		_road_mesh_nodes[key].queue_free()
+
+	var center := _grid_footprint_to_world_center(gx, gz, Vector2i(1, 1))
+	var tile_root := Node3D.new()
+	tile_root.position = center + Vector3(0.0, 0.04, 0.0)
+
+	var cobble_mat := StandardMaterial3D.new()
+	cobble_mat.albedo_color = Color(0.31, 0.36, 0.45)
+	cobble_mat.roughness = 0.72
+
+	var trim_mat := StandardMaterial3D.new()
+	trim_mat.albedo_color = Color(0.44, 0.50, 0.60)
+	trim_mat.roughness = 0.65
+
+	var slab := MeshInstance3D.new()
+	var s_box := BoxMesh.new()
+	s_box.size = Vector3(1.88, 0.08, 1.88)
+	slab.mesh = s_box
+	slab.material_override = cobble_mat
+	tile_root.add_child(slab)
+
+	var curb := MeshInstance3D.new()
+	var c_box := BoxMesh.new()
+	c_box.size = Vector3(1.98, 0.04, 1.98)
+	curb.mesh = c_box
+	curb.position = Vector3(0.0, -0.01, 0.0)
+	curb.material_override = trim_mat
+	tile_root.add_child(curb)
+
+	_roads_container.add_child(tile_root)
+	_road_mesh_nodes[key] = tile_root
+
+func _set_road_at_cell(gx: int, gz: int, place_road: bool) -> bool:
+	if gz < GRID_GZ_MIN or gz >= GRID_GZ_MAX:
+		return false
+	if not ((gx >= TIER1_GX_MIN and gx < TIER1_GX_MAX) or (gx >= TIER2_GX_MIN and gx < TIER2_GX_MAX)):
+		return false
+	var key := "%d,%d" % [gx, gz]
+	if place_road:
+		if _grid_roads.has(key):
+			return false
+		_grid_roads[key] = true
+		_spawn_single_road_tile_mesh(gx, gz)
+		_save_castle_grid_layout()
+		return true
+	else:
+		if not _grid_roads.has(key):
+			return false
+		_grid_roads.erase(key)
+		if _road_mesh_nodes.has(key) and is_instance_valid(_road_mesh_nodes[key]):
+			_road_mesh_nodes[key].queue_free()
+		_road_mesh_nodes.erase(key)
+		_save_castle_grid_layout()
+		return true
+
+func _apply_all_grid_transforms() -> void:
+	var arch := $BaseArchitecture
+	if arch == null:
+		return
+
+	# 1. FOUNTAIN (CentralBonfire + CentralPlazaDisc synced together)
+	var f_entry: Dictionary = _grid_structures.get("FOUNTAIN", { "gx": 23, "gz": 23, "rot": 0 })
+	var f_pos := _grid_footprint_to_world_center(int(f_entry.get("gx", 23)), int(f_entry.get("gz", 23)), Vector2i(4, 4))
+	var bonfire_node := arch.get_node_or_null("CentralBonfire") as Node3D
+	if bonfire_node != null:
+		bonfire_node.position = f_pos
+		bonfire_node.rotation_degrees.y = float(int(f_entry.get("rot", 0)))
+	var plaza_disc := arch.get_node_or_null("CentralPlazaDisc") as Node3D
+	if plaza_disc != null:
+		plaza_disc.position = f_pos + Vector3(0.0, 0.05, 0.0)
+
+	# 2. SUMMON_ALTAR
+	var a_entry: Dictionary = _grid_structures.get("SUMMON_ALTAR", { "gx": -17, "gz": 23, "rot": 0 })
+	var a_pos := _grid_footprint_to_world_center(int(a_entry.get("gx", -17)), int(a_entry.get("gz", 23)), Vector2i(4, 4))
+	if summon_altar_mesh != null:
+		summon_altar_mesh.position = a_pos + Vector3(0.0, 0.75, 0.0)
+		summon_altar_mesh.rotation_degrees.y = float(int(a_entry.get("rot", 0)))
+	if altar_body != null:
+		if altar_body.get_parent() == summon_altar_mesh:
+			altar_body.position = Vector3.ZERO
+		else:
+			altar_body.position = a_pos
+
+	# 3. BARRACKS
+	var b_entry: Dictionary = _grid_structures.get("BARRACKS", { "gx": 23, "gz": 11, "rot": 0 })
+	var b_pos := _grid_footprint_to_world_center(int(b_entry.get("gx", 23)), int(b_entry.get("gz", 11)), Vector2i(3, 3))
+	if barracks_mesh != null:
+		barracks_mesh.position = b_pos + Vector3(0.0, 1.6, 0.0)
+		barracks_mesh.rotation_degrees.y = float(int(b_entry.get("rot", 0)))
+
+	# 4. INFIRMARY
+	var i_entry: Dictionary = _grid_structures.get("INFIRMARY", { "gx": 23, "gz": 36, "rot": 0 })
+	var i_pos := _grid_footprint_to_world_center(int(i_entry.get("gx", 23)), int(i_entry.get("gz", 36)), Vector2i(3, 3))
+	if infirmary_mesh != null:
+		infirmary_mesh.position = i_pos + Vector3(0.0, 1.6, 0.0)
+		infirmary_mesh.rotation_degrees.y = float(int(i_entry.get("rot", 0)))
+
+	# 5. All 48 Plot Nodes
+	for p_num in _plot_nodes.keys():
+		var plot_node: BasePlot3D = _plot_nodes[p_num]
+		var p_key := "PLOT:%d" % int(p_num)
+		if not _grid_structures.has(p_key):
+			var def_c := _get_default_plot_grid_coord(int(p_num))
+			_grid_structures[p_key] = { "gx": def_c.x, "gz": def_c.y, "rot": 0 }
+		var p_entry: Dictionary = _grid_structures[p_key]
+		var pgx := int(p_entry.get("gx", 10))
+		var pgz := int(p_entry.get("gz", 10))
+		var prot := int(p_entry.get("rot", 0))
+		var p_pos := _grid_footprint_to_world_center(pgx, pgz, Vector2i(2, 2))
+		plot_node.global_position = p_pos
+		plot_node.zone_index = 1 if pgx >= 0 else 2
+		plot_node.set_grid_rotation_deg(prot)
 
 func _build_floor_elevator_buttons() -> void:
 	for child in floor_buttons_container.get_children():
 		child.queue_free()
 	_floor_buttons.clear()
 
-	# 1. Nút Xem Toàn Bộ 6 Tầng (Panorama mode)
+	var header_lbl := floor_buttons_container.get_parent().get_node_or_null("FloorHeaderLabel") as Label
+	if header_lbl != null:
+		header_lbl.text = "🏰 LÂU ĐÀI & XÂY DỰNG"
+
+	# 1. Camera Quick Focus Buttons (Seamless 2-Tier Castle)
 	var panorama_btn := Button.new()
-	panorama_btn.custom_minimum_size = Vector2(0, 34)
-	panorama_btn.text = "🌐 Xem Toàn Bộ 6 Tầng"
+	panorama_btn.custom_minimum_size = Vector2(0, 32)
+	panorama_btn.text = "🌐 Toàn Cảnh Lâu Đài"
 	panorama_btn.pressed.connect(_show_all_floors_panorama)
 	floor_buttons_container.add_child(panorama_btn)
 	_panorama_btn = panorama_btn
 
-	# 2. Render from Floor 6 down to Floor 1
-	for f_num in range(MAX_LOBBY_FLOORS, 0, -1):
-		var req_lvl := 1 if f_num <= 1 else (f_num - 1) * MASTER_LEVELS_PER_FLOOR
-		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(0, 34)
-		btn.text = "🏢 Tầng %d (Lv.%d)" % [f_num, req_lvl]
-		var target_floor := f_num
-		btn.pressed.connect(func(): _switch_to_lobby_floor(target_floor))
-		floor_buttons_container.add_child(btn)
-		_floor_buttons[f_num] = btn
+	var tier2_btn := Button.new()
+	tier2_btn.custom_minimum_size = Vector2(0, 32)
+	tier2_btn.text = "👑 Thượng Thành T2 (60×100)"
+	tier2_btn.pressed.connect(func(): _switch_to_lobby_floor(2))
+	floor_buttons_container.add_child(tier2_btn)
+	_floor_buttons[2] = tier2_btn
 
-	# 3. Nút tùy chọn chọn tướng xuất hiện tại sảnh cho tầng đang xem
+	var tier1_btn := Button.new()
+	tier1_btn.custom_minimum_size = Vector2(0, 32)
+	tier1_btn.text = "🏰 Hạ Thành T1 (100×100)"
+	tier1_btn.pressed.connect(func(): _switch_to_lobby_floor(1))
+	floor_buttons_container.add_child(tier1_btn)
+	_floor_buttons[1] = tier1_btn
+
+	var sep := HSeparator.new()
+	floor_buttons_container.add_child(sep)
+
+	# 2. Grid-Based Free Placement & Road System Controls
+	_build_menu_btn = Button.new()
+	_build_menu_btn.custom_minimum_size = Vector2(0, 34)
+	_build_menu_btn.text = "🏗️ Xây Công Trình Mới"
+	_build_menu_btn.pressed.connect(_open_free_grid_build_catalog)
+	floor_buttons_container.add_child(_build_menu_btn)
+
+	_move_mode_btn = Button.new()
+	_move_mode_btn.custom_minimum_size = Vector2(0, 34)
+	_move_mode_btn.text = "✥ Di Dời Công Trình"
+	_move_mode_btn.pressed.connect(_toggle_move_structure_prompt)
+	floor_buttons_container.add_child(_move_mode_btn)
+
+	_road_paint_btn = Button.new()
+	_road_paint_btn.custom_minimum_size = Vector2(0, 32)
+	_road_paint_btn.text = "🧱 Lát Đường Đá (1×1)"
+	_road_paint_btn.pressed.connect(func(): _enter_road_edit_mode(false))
+	floor_buttons_container.add_child(_road_paint_btn)
+
+	_road_erase_btn = Button.new()
+	_road_erase_btn.custom_minimum_size = Vector2(0, 32)
+	_road_erase_btn.text = "🧹 Xóa Đường Đá"
+	_road_erase_btn.pressed.connect(func(): _enter_road_edit_mode(true))
+	floor_buttons_container.add_child(_road_erase_btn)
+
+	_cancel_grid_btn = Button.new()
+	_cancel_grid_btn.custom_minimum_size = Vector2(0, 32)
+	_cancel_grid_btn.text = "✖ Thoát Chế Độ Lưới (ESC)"
+	_cancel_grid_btn.modulate = Color(1.0, 0.55, 0.55)
+	_cancel_grid_btn.visible = false
+	_cancel_grid_btn.pressed.connect(_exit_grid_edit_mode)
+	floor_buttons_container.add_child(_cancel_grid_btn)
+
+	var sep2 := HSeparator.new()
+	floor_buttons_container.add_child(sep2)
+
 	var manage_btn := Button.new()
-	manage_btn.custom_minimum_size = Vector2(0, 34)
-	manage_btn.text = "👥 Chọn Tướng Tầng %d" % _current_lobby_floor
+	manage_btn.custom_minimum_size = Vector2(0, 32)
+	manage_btn.text = "👥 Quản Lý Tướng Sảnh"
 	manage_btn.pressed.connect(func(): _open_floor_hero_manager(_current_lobby_floor))
 	floor_buttons_container.add_child(manage_btn)
 	_manage_floor_heroes_btn = manage_btn
@@ -867,118 +1182,47 @@ func _build_floor_elevator_buttons() -> void:
 func _show_all_floors_panorama() -> void:
 	_close_inspector()
 	_panorama_mode = true
-	var mid_center := get_floor_terrace_center(1).lerp(get_floor_terrace_center(MAX_LOBBY_FLOORS), 0.5)
-	camera_rig.focus_base_overview(mid_center + Vector3(0.0, 2.0, 0.0), 98.0, 0.65)
-	_apply_floor_focus_isolation(0, false, 0)
-	status_banner_label.text = "🌐 Đang xem toàn cảnh tất cả 6 tầng Thành Trì Bậc Thang (Stepped Citadel Terraces Đông -> Tây)."
+	camera_rig.focus_base_overview(Vector3(-30.0, 2.6, 0.0), 92.0, 0.65)
+	status_banner_label.text = "🌐 Toàn cảnh Lâu Đài 2 Tầng Liền Khối (160m × 100m — Không chia render)."
 	_refresh_hud()
 
 func _switch_to_lobby_floor(floor_num: int) -> void:
 	var next_floor := clampi(floor_num, 1, MAX_LOBBY_FLOORS)
-	var travel_dir := signi(next_floor - _current_lobby_floor)
 	_current_lobby_floor = next_floor
 	_panorama_mode = false
 	var terrace_center := get_floor_terrace_center(_current_lobby_floor)
-	camera_rig.focus_lobby_floor(terrace_center, 0.55)
-	_apply_floor_focus_isolation(_current_lobby_floor, true, travel_dir)
-
-	var req_lvl := 1 if _current_lobby_floor <= 1 else (_current_lobby_floor - 1) * MASTER_LEVELS_PER_FLOOR
-	var is_open := _current_lobby_floor <= GameState.unlocked_lobby_floors
-	status_banner_label.text = "🏰 Đang quan sát Tầng Bậc Thang #%d (Thành Trì Đông -> Tây & 8 Ô Xây Dựng) — %s" % [
-		_current_lobby_floor,
-		"Đã mở khóa ✅" if is_open else ("🔒 Mở khóa khi Master đạt cấp %d (hoặc nhấn Mở Tầng)" % req_lvl)
-	]
+	camera_rig.focus_base_overview(terrace_center, 44.0 if _current_lobby_floor == 1 else 36.0, 0.55)
+	status_banner_label.text = (
+		"🏰 Đang quan sát Hạ Thành Tầng 1 (100m × 100m) — Cổng Đông cố định, mọi công trình khác tự do trên lưới!"
+		if _current_lobby_floor == 1
+		else "👑 Đang quan sát Thượng Thành Tầng 2 (60m × 100m) — Nối liền vách Tây Hạ Thành qua 2 cầu thang đá!"
+	)
 	_refresh_hud()
 
-## Isolates the currently observed floor (`active_floor_num`) while keeping lower stepped
-## terraces visible to maintain the grand mountain citadel tiered aesthetic.
-func _apply_floor_focus_isolation(active_floor_num: int, animate: bool = true, travel_dir: int = 0) -> void:
-	if _floor_isolation_tween and _floor_isolation_tween.is_valid():
-		_floor_isolation_tween.kill()
-
-	var target_center := get_floor_terrace_center(active_floor_num)
-	var ring_radius_scale := 1.15 if active_floor_num == 1 else 0.95
-
-	# 1. Move & pulse the Active Terrace Halo Ring + Spotlight
-	if _active_floor_ring != null and _active_floor_light != null:
-		if _panorama_mode:
-			_active_floor_ring.visible = false
-			_active_floor_light.visible = false
-		else:
-			var target_ring_pos := target_center + Vector3(0.0, 0.08, 0.0)
-			var target_light_pos := target_center + Vector3(0.0, 5.0, 0.0)
-			_active_floor_ring.visible = true
-			_active_floor_light.visible = true
-			if not animate:
-				_active_floor_ring.position = target_ring_pos
-				_active_floor_ring.scale = Vector3(ring_radius_scale, 1.0, ring_radius_scale)
-				_active_floor_light.position = target_light_pos
-			else:
-				_floor_isolation_tween = create_tween().set_parallel(true)
-				_floor_isolation_tween.tween_property(_active_floor_ring, "position", target_ring_pos, 0.45).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
-				_floor_isolation_tween.tween_property(_active_floor_light, "position", target_light_pos, 0.45).set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
-				_active_floor_ring.scale = Vector3(ring_radius_scale * 0.84, 1.0, ring_radius_scale * 0.84)
-				_floor_isolation_tween.tween_property(_active_floor_ring, "scale", Vector3(ring_radius_scale, 1.0, ring_radius_scale), 0.48).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-	# 2. Floor 1 Central Plaza & Landmarks:
-	# Visible whenever viewing Floor 1 or as lower terrace in panorama / upper tiers
-	var floor1_interactive := (active_floor_num == 1)
-	var floor1_visible := (active_floor_num == 1 or _panorama_mode or active_floor_num <= 3)
+## Seamless 2-Tier Castle: No split rendering! Both tiers, all walls, landmarks, buildings, and heroes remain 100% visible.
+func _apply_floor_focus_isolation(_active_floor_num: int, _animate: bool = true, _travel_dir: int = 0) -> void:
 	var arch := $BaseArchitecture
 	if arch != null:
-		arch.visible = floor1_visible
-		arch.process_mode = Node.PROCESS_MODE_INHERIT if floor1_interactive else Node.PROCESS_MODE_DISABLED
-	_set_floor1_landmarks_interactive(floor1_interactive)
+		arch.visible = true
+		arch.process_mode = Node.PROCESS_MODE_INHERIT
+	_set_floor1_landmarks_interactive(true)
 	if bonfire_light != null:
-		bonfire_light.visible = floor1_visible
+		bonfire_light.visible = true
 	if dungeon_portal_mesh != null:
-		dungeon_portal_mesh.visible = floor1_visible
-	var floor1_trans := 0.0 if (active_floor_num == 1 or _panorama_mode) else 0.15
-	_apply_floor1_architecture_transparency(floor1_trans)
+		dungeon_portal_mesh.visible = true
+	_apply_floor1_architecture_transparency(0.0)
 
-	# 3. Upper Stepped Fortress Terraces (Floors 2..6):
-	# Show active floor platform, or all floors in panorama mode.
-	# Terraces above the active floor are hidden so they don't occlude the camera view.
-	for f_num in range(2, MAX_LOBBY_FLOORS + 1):
-		var is_active := (f_num == active_floor_num or _panorama_mode)
-		var is_below := (f_num < active_floor_num)
-
-		if _floor_banners.has(f_num):
-			var banner: Label3D = _floor_banners[f_num]
-			banner.visible = is_active
-			banner.modulate.a = 1.0 if is_active else 0.0
-
-		if _floor_platforms.has(f_num):
-			var terrace_root: Node3D = _floor_platforms[f_num]
-			var show_platform := (is_active or is_below)
-			terrace_root.visible = show_platform
-			terrace_root.process_mode = Node.PROCESS_MODE_INHERIT if is_active else Node.PROCESS_MODE_DISABLED
-			if show_platform:
-				terrace_root.scale = Vector3.ONE
-				terrace_root.position = get_floor_terrace_center(f_num)
-				var trans := 0.0 if is_active else 0.20
-				_set_terrace_node_transparency(terrace_root, trans)
-
-	# 4. All Building Plots (8 per Floor): Render plot thuộc tầng đang xem hoặc toàn bộ khi xem Toàn Cảnh
 	for p_num in _plot_nodes.keys():
 		var plot_node: BasePlot3D = _plot_nodes[p_num]
-		var is_active := (plot_node.zone_index == active_floor_num or _panorama_mode)
-		var is_above := (plot_node.zone_index > active_floor_num)
-		plot_node.set_floor_focus_state(is_active, is_above, animate, travel_dir)
+		plot_node.set_floor_focus_state(true, false, false, 0)
 
-	# 5. Resident Heroes: Render hero thuộc tầng đang xem hoặc toàn bộ khi xem Toàn Cảnh
 	for hid in _hero_actors.keys():
 		var actor: UnitActor3D = _hero_actors[hid]
 		if is_instance_valid(actor):
-			var is_actor_active := (actor.floor_index == active_floor_num or _panorama_mode)
-			actor.set_floor_focus_state(is_actor_active, animate)
+			actor.set_floor_focus_state(true, false)
 
-func _set_terrace_node_transparency(terrace_root: Node3D, trans: float) -> void:
-	if terrace_root == null:
-		return
-	for child in terrace_root.get_children():
-		if child is MeshInstance3D:
-			(child as MeshInstance3D).transparency = trans
+func _set_terrace_node_transparency(_terrace_root: Node3D, _trans: float) -> void:
+	pass
 
 func _set_floor1_landmarks_interactive(enabled: bool) -> void:
 	for body in [bonfire_body, altar_body, portal_body, barracks_body, infirmary_body]:
@@ -986,20 +1230,8 @@ func _set_floor1_landmarks_interactive(enabled: bool) -> void:
 			var shape: CollisionShape3D = body.get_node("CollisionShape3D")
 			shape.disabled = not enabled
 
-func _apply_floor1_architecture_transparency(trans: float) -> void:
-	_floor1_current_trans = trans
-	var arch := $BaseArchitecture
-	if arch == null:
-		return
-	var show_labels := trans < 0.35
-	var label_alpha := clampf(1.0 - trans * 1.2, 0.0, 1.0)
-	for node in arch.find_children("*", "GeometryInstance3D", true, false):
-		if node is Label3D:
-			var lbl := node as Label3D
-			lbl.visible = show_labels
-			lbl.modulate.a = label_alpha
-		elif node is MeshInstance3D:
-			(node as MeshInstance3D).transparency = trans
+func _apply_floor1_architecture_transparency(_trans: float) -> void:
+	_floor1_current_trans = 0.0
 
 func _process(delta: float) -> void:
 	_bonfire_time += delta * 2.2
@@ -1054,16 +1286,28 @@ func _format_num(val: int) -> String:
 		cnt += 1
 	return res
 
+func _get_constructed_building_count() -> int:
+	var buildings: Array = GameState.base_overview.get("buildings", [])
+	return buildings.size()
+
+func _find_first_free_unlocked_plot_index() -> int:
+	var max_plots := GameState.unlocked_plots
+	for p_idx in range(1, max_plots + 1):
+		var b_data := GameState.get_building_on_plot(p_idx)
+		if b_data.is_empty():
+			return p_idx
+	return -1
+
 func _refresh_hud() -> void:
 	var m_name := GameState.master_name if GameState.master_name != "" else "Master"
-	var unlocked_floors := GameState.unlocked_lobby_floors
+	var built_cnt := _get_constructed_building_count()
+	var max_plots := GameState.unlocked_plots
 
-	master_info_label.text = "🏰 %s (Lv.%d) · Tầng %d/%d (Đã mở %d Tầng)" % [
+	master_info_label.text = "🏰 %s (Lv.%d) · Lâu Đài 2 Tầng · Công trình: %d/%d (Theo cấp Master)" % [
 		m_name,
 		GameState.master_level,
-		_current_lobby_floor,
-		MAX_LOBBY_FLOORS,
-		unlocked_floors
+		built_cnt,
+		max_plots
 	]
 
 	var gems := _format_num(GameState.gem_stones)
@@ -1071,7 +1315,6 @@ func _refresh_hud() -> void:
 	var scrolls := _format_num(GameState.normal_scrolls)
 	var ration := _format_num(int(GameState.materials.get("RATION", 0)))
 
-	# Chỉ hiển thị Đá Quý, Vàng, Thiên Thư, Khẩu Phần theo đúng thiết kế Sảnh Chờ
 	resource_info_label.text = "💎 Đá Quý: %s   |   🪙 Vàng: %s   |   📜 Thiên Thư: %s   |   🍖 Khẩu Phần: %s" % [
 		gems,
 		gold,
@@ -1082,54 +1325,62 @@ func _refresh_hud() -> void:
 	if portal_sub_label != null:
 		portal_sub_label.text = "Đội hình xuất kích: %d/5 Tướng [Kéo-thả Tướng vào đây]" % GameState.active_party_ids.size()
 
-	# Update Panorama Button
 	if _panorama_btn != null:
 		if _panorama_mode:
-			_panorama_btn.text = "▶ 🌐 Toàn Bộ 6 Tầng"
+			_panorama_btn.text = "▶ 🌐 Toàn Cảnh Lâu Đài"
 			_panorama_btn.modulate = Color(1.0, 0.92, 0.45)
 		else:
-			_panorama_btn.text = "🌐 Xem Toàn Bộ 6 Tầng"
+			_panorama_btn.text = "🌐 Toàn Cảnh Lâu Đài"
 			_panorama_btn.modulate = Color(0.85, 0.92, 1.0)
 
-	# Update Floor Elevator Buttons
 	for f_num in _floor_buttons.keys():
 		var btn: Button = _floor_buttons[f_num]
-		var req_lvl := 1 if int(f_num) <= 1 else (int(f_num) - 1) * MASTER_LEVELS_PER_FLOOR
-		var is_open := int(f_num) <= unlocked_floors
 		var is_active := (int(f_num) == _current_lobby_floor and not _panorama_mode)
 		var active_prefix := "▶ " if is_active else ""
-		var lock_icon := "🏢" if is_open else "🔒"
-		btn.text = "%s%s Tầng %d (Lv.%d)" % [active_prefix, lock_icon, int(f_num), req_lvl]
-		btn.modulate = Color(1.0, 0.92, 0.45) if is_active else (Color(0.82, 0.96, 0.86) if is_open else Color(0.65, 0.65, 0.72))
+		if int(f_num) == 1:
+			btn.text = "%s🏰 Hạ Thành T1 (100×100)" % active_prefix
+		else:
+			btn.text = "%s👑 Thượng Thành T2 (60×100)" % active_prefix
+		btn.modulate = Color(1.0, 0.92, 0.45) if is_active else Color(0.84, 0.95, 0.88)
+
+	if _build_menu_btn != null:
+		_build_menu_btn.text = "🏗️ Xây Công Trình (%d/%d)" % [built_cnt, max_plots]
+		_build_menu_btn.modulate = Color(0.55, 1.0, 0.68) if _grid_edit_mode == GridEditMode.PLACE_NEW_BUILDING else Color(0.92, 0.96, 1.0)
+	if _move_mode_btn != null:
+		_move_mode_btn.modulate = Color(1.0, 0.88, 0.38) if _grid_edit_mode == GridEditMode.MOVE_STRUCTURE else Color(0.92, 0.96, 1.0)
+	if _road_paint_btn != null:
+		_road_paint_btn.modulate = Color(0.55, 0.92, 1.0) if _grid_edit_mode == GridEditMode.ROAD_PAINT else Color(0.92, 0.96, 1.0)
+	if _road_erase_btn != null:
+		_road_erase_btn.modulate = Color(1.0, 0.65, 0.55) if _grid_edit_mode == GridEditMode.ROAD_ERASE else Color(0.92, 0.96, 1.0)
+	if _cancel_grid_btn != null:
+		_cancel_grid_btn.visible = (_grid_edit_mode != GridEditMode.NONE)
 
 	if _manage_floor_heroes_btn != null:
 		_manage_floor_heroes_btn.text = "👥 Chọn Tướng Tầng %d" % _current_lobby_floor
-		_manage_floor_heroes_btn.disabled = (_current_lobby_floor > unlocked_floors)
+		_manage_floor_heroes_btn.disabled = false
 
-	# Update Expand Floor button
+	# Update Expand Quota button (Master Level / Zone expansion)
 	var exp_info: Dictionary = GameState.base_overview.get("expansion", {})
-	if bool(exp_info.get("canExpand", true)) and GameState.base_zones < MAX_LOBBY_FLOORS:
-		var next_z := int(exp_info.get("nextZone", GameState.base_zones + 1))
+	if bool(exp_info.get("canExpand", true)) and GameState.base_zones < 6:
 		var cost := int(exp_info.get("costSilver", 2000))
-		expand_zone_btn.text = "🏗️ Mở Tầng %d (🪙 %s)" % [next_z, _format_num(cost)]
+		expand_zone_btn.text = "🏗️ Mở Rộng Giới Hạn Ô (+%d Ô · 🪙 %s)" % [PLOTS_PER_FLOOR, _format_num(cost)]
 		expand_zone_btn.disabled = false
 	else:
-		expand_zone_btn.text = "🏗️ Tối Đa (6 Tầng)"
+		expand_zone_btn.text = "🏗️ Đã Mở Tối Đa (%d Ô)" % max_plots
 		expand_zone_btn.disabled = true
 
 func _refresh_3d_plots() -> void:
-	var unlocked_floors := GameState.unlocked_lobby_floors
 	var unlocked_plot_count := GameState.unlocked_plots
+	var built_cnt := _get_constructed_building_count()
 
-	for f_num in _floor_banners.keys():
-		var banner: Label3D = _floor_banners[f_num]
-		var req_lvl := 1 if int(f_num) <= 1 else (int(f_num) - 1) * MASTER_LEVELS_PER_FLOOR
-		if int(f_num) <= unlocked_floors:
-			banner.text = "🏢 TẦNG SẢNH CHỜ #%d [ĐÃ MỞ — Master Lv.%d+]" % [int(f_num), req_lvl]
-			banner.modulate = Color(0.55, 0.96, 0.68)
-		else:
-			banner.text = "🔒 TẦNG SẢNH CHỜ #%d [Mở ở Master Lv.%d]" % [int(f_num), req_lvl]
-			banner.modulate = Color(0.78, 0.62, 0.65)
+	if _floor_banners.has(1):
+		var b1: Label3D = _floor_banners[1]
+		b1.text = "🏰 HẠ THÀNH TẦNG 1 (100m × 100m) — Công trình: %d/%d" % [built_cnt, unlocked_plot_count]
+	if _floor_banners.has(2):
+		var b2: Label3D = _floor_banners[2]
+		b2.text = "👑 THƯỢNG THÀNH TẦNG 2 (60m × 100m) — Tự Do Đặt Trên Lưới"
+
+	_apply_all_grid_transforms()
 
 	for plot_num in _plot_nodes.keys():
 		var plot_node: BasePlot3D = _plot_nodes[plot_num]
@@ -1153,16 +1404,9 @@ func _spawn_resident_heroes() -> void:
 		]
 
 	var worker_map := GameState.get_worker_assignment_map()
-	var unlocked_floors: int = clampi(GameState.unlocked_lobby_floors, 1, MAX_LOBBY_FLOORS)
-
-	# Phân bổ hero cho các tầng: mỗi tầng TỐI ĐA 6 hero để chống lag
-	var floor_heroes: Dictionary = {}
-	for f in range(1, MAX_LOBBY_FLOORS + 1):
-		floor_heroes[f] = []
-
+	var floor_heroes: Dictionary = { 1: [], 2: [] }
 	var assigned_hero_ids: Dictionary = {}
 
-	# 1. Ưu tiên cấu hình tùy chọn Master đã chọn riêng cho từng tầng (nếu có)
 	for f in range(1, MAX_LOBBY_FLOORS + 1):
 		var custom_ids: Array = GameState.get_assigned_heroes_for_floor(f)
 		for hid in custom_ids:
@@ -1173,8 +1417,6 @@ func _spawn_resident_heroes() -> void:
 				floor_heroes[f].append(h_data)
 				assigned_hero_ids[hid] = f
 
-	# 2. Với các tầng chưa cấu hình hoặc còn slot:
-	# 2a. Ưu tiên các hero đang được phân công làm việc (worker) tại các plot của tầng đó
 	for h in roster:
 		var hid := str(h.get("id", ""))
 		if assigned_hero_ids.has(hid):
@@ -1186,47 +1428,41 @@ func _spawn_resident_heroes() -> void:
 			if _plot_nodes.has(p_idx):
 				var plot_node: BasePlot3D = _plot_nodes[p_idx]
 				var f_idx: int = clampi(plot_node.zone_index, 1, MAX_LOBBY_FLOORS)
-				var has_custom: bool = not GameState.get_assigned_heroes_for_floor(f_idx).is_empty()
-				if not has_custom and floor_heroes[f_idx].size() < MAX_HEROES_PER_FLOOR:
+				if floor_heroes[f_idx].size() < MAX_HEROES_PER_FLOOR:
 					floor_heroes[f_idx].append(h)
 					assigned_hero_ids[hid] = f_idx
 
-	# 2b. Ưu tiên các hero trong Đội hình Chinh phạt (active party): xếp tại Tầng 1 (nếu Tầng 1 chưa có custom list)
-	var f1_has_custom: bool = not GameState.get_assigned_heroes_for_floor(1).is_empty()
-	if not f1_has_custom:
-		for h in roster:
-			var hid := str(h.get("id", ""))
-			if assigned_hero_ids.has(hid):
-				continue
-			if GameState.active_party_ids.has(hid):
-				if floor_heroes[1].size() < MAX_HEROES_PER_FLOOR:
-					floor_heroes[1].append(h)
-					assigned_hero_ids[hid] = 1
-
-	# 2c. Các hero còn lại: rải đều vào các tầng đã mở khóa chưa có custom list (mỗi tầng tối đa 6 hero)
 	for h in roster:
 		var hid := str(h.get("id", ""))
 		if assigned_hero_ids.has(hid):
 			continue
-		var placed := false
-		for f in range(1, unlocked_floors + 1):
-			var f_has_custom: bool = not GameState.get_assigned_heroes_for_floor(f).is_empty()
-			if not f_has_custom and floor_heroes[f].size() < MAX_HEROES_PER_FLOOR:
+		if GameState.active_party_ids.has(hid) and floor_heroes[1].size() < MAX_HEROES_PER_FLOOR:
+			floor_heroes[1].append(h)
+			assigned_hero_ids[hid] = 1
+
+	for h in roster:
+		var hid := str(h.get("id", ""))
+		if assigned_hero_ids.has(hid):
+			continue
+		for f in range(1, MAX_LOBBY_FLOORS + 1):
+			if floor_heroes[f].size() < MAX_HEROES_PER_FLOOR:
 				floor_heroes[f].append(h)
 				assigned_hero_ids[hid] = f
-				placed = true
 				break
-		if not placed:
-			# Tất cả các tầng mở khóa đã đủ 6 hero -> dừng lại (không spawn thêm tránh lag)
-			pass
 
-	# Spawn các hero đã phân bổ cho từng tầng
+	var arch := $BaseArchitecture
+	var bonfire_node := arch.get_node_or_null("CentralBonfire") as Node3D if arch != null else null
+	var f1_hub := bonfire_node.global_position if bonfire_node != null else get_floor_terrace_center(1)
+	var f2_hub := summon_altar_mesh.global_position if (summon_altar_mesh != null and summon_altar_mesh.global_position.x < -50.0) else get_floor_terrace_center(2)
+	f2_hub.y = FLOOR_HEIGHT
+
 	for f_num in range(1, MAX_LOBBY_FLOORS + 1):
 		var heroes_on_floor: Array = floor_heroes[f_num]
 		var count := heroes_on_floor.size()
 		if count == 0:
 			continue
 
+		var hub_center := f1_hub if f_num == 1 else f2_hub
 		var terrace_center := get_floor_terrace_center(f_num)
 
 		for i in range(count):
@@ -1236,7 +1472,7 @@ func _spawn_resident_heroes() -> void:
 			heroes_container.add_child(actor)
 
 			var angle := (TAU / float(count)) * float(i) + randf_range(-0.15, 0.15)
-			var radius := randf_range(5.0, 9.2) if f_num == 1 else randf_range(11.0, 14.8)
+			var radius := randf_range(5.2, 8.8)
 
 			var worker_info: Dictionary = {}
 			if worker_map.has(hid):
@@ -1252,23 +1488,206 @@ func _spawn_resident_heroes() -> void:
 						"buildingCenter": plot_node.global_position
 					}
 
-			var default_pos := terrace_center + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+			var default_pos := hub_center + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+			default_pos.y = terrace_center.y
 			var in_party := GameState.active_party_ids.has(hid)
 			actor.floor_index = f_num
 			actor.setup_base_resident(h, default_pos, worker_info, in_party, infirmary_mesh.global_position, terrace_center)
-			actor.set_floor_focus_state(f_num == _current_lobby_floor or _panorama_mode, false)
+			actor.set_floor_focus_state(true, false)
 			_hero_actors[hid] = actor
 
-	_apply_floor_focus_isolation(_current_lobby_floor, false, 0)
+# ==============================================================================
+# 3D RAYCAST INPUT, GRID PLACEMENT / RELOCATION / ROAD PAINTING & DRAG-AND-DROP
+# ==============================================================================
 
-# ==============================================================================
-# 3D RAYCAST INPUT, FLOOR ELEVATOR SHORTCUTS & PICK ME UP DRAG-AND-DROP
-# ==============================================================================
+func _project_mouse_to_castle_ground(screen_pos: Vector2) -> Vector3:
+	var cam := camera_rig.get_camera_3d()
+	if cam == null:
+		return Vector3.ZERO
+	var from := cam.project_ray_origin(screen_pos)
+	var dir := cam.project_ray_normal(screen_pos)
+
+	# Check Tier 2 plane (Y = 5.2, X in [-110, -50]) first
+	var plane_t2 := Plane(Vector3.UP, FLOOR_HEIGHT)
+	var hit_t2: Variant = plane_t2.intersects_ray(from, dir)
+	if hit_t2 is Vector3:
+		var pt2: Vector3 = hit_t2
+		if pt2.x < -50.0 and pt2.x >= -112.0 and pt2.z >= -52.0 and pt2.z <= 52.0:
+			return pt2
+
+	# Otherwise intersect Tier 1 plane (Y = 0.0)
+	var plane_t1 := Plane(Vector3.UP, 0.0)
+	var hit_t1: Variant = plane_t1.intersects_ray(from, dir)
+	if hit_t1 is Vector3:
+		return hit_t1
+	return Vector3.ZERO
+
+func _project_mouse_to_active_floor(screen_pos: Vector2) -> Vector3:
+	return _project_mouse_to_castle_ground(screen_pos)
+
+func _exit_grid_edit_mode() -> void:
+	_grid_edit_mode = GridEditMode.NONE
+	_pending_build_code = ""
+	_pending_build_name = ""
+	_moving_structure_id = ""
+	_is_painting_road_drag = false
+	if _grid_overlay_root != null:
+		_grid_overlay_root.visible = false
+	_refresh_hud()
+
+func _enter_place_new_building_mode(b_code: String, b_name: String) -> void:
+	var free_plot := _find_first_free_unlocked_plot_index()
+	if free_plot < 0:
+		status_banner_label.text = "⚠️ Đã đạt giới hạn số lượng công trình theo cấp Master (%d/%d)! Hãy nâng cấp Master/Mở rộng hoặc phá dỡ bớt." % [
+			_get_constructed_building_count(),
+			GameState.unlocked_plots
+		]
+		return
+	_grid_edit_mode = GridEditMode.PLACE_NEW_BUILDING
+	_pending_build_code = b_code
+	_pending_build_name = b_name
+	_moving_structure_id = ""
+	_placement_rot_deg = 0
+	if _grid_overlay_root != null:
+		_grid_overlay_root.visible = true
+	status_banner_label.text = "🏗️ Chế độ Đặt [%s] (2×2 Ô): Di chuột trên lưới Tầng 1 hoặc Tầng 2 • Nhấn [R] xoay 90° • Chuột Trái để Xây • Chuột Phải/ESC để hủy." % b_name
+	_refresh_hud()
+
+func _start_moving_structure(structure_id: String) -> void:
+	if structure_id == "DUNGEON_PORTAL" or structure_id == "":
+		status_banner_label.text = "⛩️ Cổng Thành Phía Đông là công trình duy nhất gắn cố định vào tường thành!"
+		return
+	_grid_edit_mode = GridEditMode.MOVE_STRUCTURE
+	_moving_structure_id = structure_id
+	_pending_build_code = ""
+	var cur_entry: Dictionary = _grid_structures.get(structure_id, { "gx": 23, "gz": 23, "rot": 0 })
+	_placement_rot_deg = int(cur_entry.get("rot", 0))
+	if _grid_overlay_root != null:
+		_grid_overlay_root.visible = true
+	var d_name := _get_structure_display_name(structure_id)
+	var f_size := _get_structure_footprint_size(structure_id)
+	status_banner_label.text = "✥ Đang di dời [%s] (%d×%d Ô): Chọn vị trí mới trên lưới Tầng 1 hoặc Tầng 2 • Nhấn [R] xoay 90° • Chuột Trái để Đặt." % [d_name, f_size.x, f_size.y]
+	_refresh_hud()
+
+func _toggle_move_structure_prompt() -> void:
+	if _grid_edit_mode == GridEditMode.MOVE_STRUCTURE:
+		_exit_grid_edit_mode()
+		status_banner_label.text = "✅ Đã thoát chế độ Di Dời Công Trình."
+		return
+	# If a plot or movable landmark is currently open in Inspector, start moving it immediately
+	if inspector_panel.visible and not _inspector_context.is_empty():
+		var ctype := str(_inspector_context.get("type", ""))
+		if ctype == "PLOT":
+			var p_idx := int(_inspector_context.get("plot_index", -1))
+			if p_idx > 0 and not GameState.get_building_on_plot(p_idx).is_empty():
+				_start_moving_structure("PLOT:%d" % p_idx)
+				return
+		elif ctype == "LANDMARK":
+			var l_code := str(_inspector_context.get("landmark_code", ""))
+			if l_code != "" and l_code != "DUNGEON_PORTAL":
+				_start_moving_structure(l_code)
+				return
+	_open_movable_structures_picker()
+
+func _enter_road_edit_mode(erase_mode: bool) -> void:
+	_grid_edit_mode = GridEditMode.ROAD_ERASE if erase_mode else GridEditMode.ROAD_PAINT
+	_pending_build_code = ""
+	_moving_structure_id = ""
+	_is_painting_road_drag = false
+	if _grid_overlay_root != null:
+		_grid_overlay_root.visible = true
+	status_banner_label.text = (
+		"🧹 Chế độ Xóa Đường Đá (1×1 Ô): Nhấn hoặc giữ kéo Chuột Trái trên mặt đường để xóa • Chuột Phải/ESC để thoát."
+		if erase_mode
+		else "🧱 Chế độ Lát Đường Đá (1×1 Ô): Nhấn hoặc giữ kéo Chuột Trái trên lưới Tầng 1 / Tầng 2 để lát đường • Chuột Phải/ESC để thoát."
+	)
+	_refresh_hud()
+
+func _update_grid_ghost_preview(screen_pos: Vector2) -> void:
+	if _grid_edit_mode == GridEditMode.NONE or _grid_ghost_root == null:
+		return
+
+	var ground_pt := _project_mouse_to_castle_ground(screen_pos)
+	var cell := _world_to_grid_cell(ground_pt)
+	var size_cells := Vector2i(1, 1)
+	var ignore_id := ""
+	var label_txt := ""
+
+	if _grid_edit_mode == GridEditMode.PLACE_NEW_BUILDING:
+		size_cells = Vector2i(2, 2)
+		cell.x -= 1
+		cell.y -= 1
+		_hover_valid = _is_footprint_valid(cell.x, cell.y, size_cells, "")
+		label_txt = "🏗️ %s (%d°)\n[%s]" % [_pending_build_name, _placement_rot_deg, "Hợp lệ - Nhấn để Xây" if _hover_valid else "Không thể đặt tại đây"]
+	elif _grid_edit_mode == GridEditMode.MOVE_STRUCTURE:
+		size_cells = _get_structure_footprint_size(_moving_structure_id)
+		ignore_id = _moving_structure_id
+		cell.x -= int(size_cells.x / 2)
+		cell.y -= int(size_cells.y / 2)
+		_hover_valid = _is_footprint_valid(cell.x, cell.y, size_cells, ignore_id)
+		var d_name := _get_structure_display_name(_moving_structure_id)
+		label_txt = "✥ %s (%d°)\n[%s]" % [d_name, _placement_rot_deg, "Hợp lệ - Nhấn để Đặt" if _hover_valid else "Vị trí bị vướng"]
+	elif _grid_edit_mode == GridEditMode.ROAD_PAINT:
+		size_cells = Vector2i(1, 1)
+		_hover_valid = (cell.y >= GRID_GZ_MIN and cell.y < GRID_GZ_MAX) and ((cell.x >= TIER1_GX_MIN and cell.x < TIER1_GX_MAX) or (cell.x >= TIER2_GX_MIN and cell.x < TIER2_GX_MAX))
+		label_txt = "🧱 Lát Đường (%d, %d)" % [cell.x, cell.y]
+	elif _grid_edit_mode == GridEditMode.ROAD_ERASE:
+		size_cells = Vector2i(1, 1)
+		_hover_valid = _grid_roads.has("%d,%d" % [cell.x, cell.y])
+		label_txt = "🧹 Xóa Đường (%d, %d)" % [cell.x, cell.y]
+
+	_hover_gx = cell.x
+	_hover_gz = cell.y
+
+	var world_center := _grid_footprint_to_world_center(_hover_gx, _hover_gz, size_cells)
+	_grid_ghost_root.global_position = world_center
+
+	var w_m := float(size_cells.x) * GRID_CELL_SIZE
+	var h_m := float(size_cells.y) * GRID_CELL_SIZE
+	if _grid_ghost_mesh != null and _grid_ghost_mesh.mesh is BoxMesh:
+		(_grid_ghost_mesh.mesh as BoxMesh).size = Vector3(w_m - 0.12, 0.28, h_m - 0.12)
+	if _grid_ghost_border != null and _grid_ghost_border.mesh is BoxMesh:
+		(_grid_ghost_border.mesh as BoxMesh).size = Vector3(w_m + 0.08, 0.08, h_m + 0.08)
+
+	var ghost_col := Color(0.22, 0.96, 0.48, 0.46) if _hover_valid else Color(0.98, 0.26, 0.26, 0.48)
+	var border_col := Color(0.35, 1.0, 0.58, 0.90) if _hover_valid else Color(1.0, 0.35, 0.35, 0.90)
+	if _grid_edit_mode == GridEditMode.ROAD_ERASE:
+		ghost_col = Color(1.0, 0.58, 0.24, 0.52)
+		border_col = Color(1.0, 0.72, 0.32, 0.92)
+
+	var g_mat := StandardMaterial3D.new()
+	g_mat.albedo_color = ghost_col
+	g_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	g_mat.emission_enabled = true
+	g_mat.emission = Color(ghost_col.r, ghost_col.g, ghost_col.b)
+	g_mat.emission_energy_multiplier = 1.2
+	_grid_ghost_mesh.material_override = g_mat
+
+	var b_mat := StandardMaterial3D.new()
+	b_mat.albedo_color = border_col
+	b_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	b_mat.emission_enabled = true
+	b_mat.emission = Color(border_col.r, border_col.g, border_col.b)
+	b_mat.emission_energy_multiplier = 1.6
+	_grid_ghost_border.material_override = b_mat
+
+	if _grid_ghost_label != null:
+		_grid_ghost_label.text = label_txt
+		_grid_ghost_label.modulate = Color(0.58, 1.0, 0.68) if _hover_valid else Color(1.0, 0.55, 0.55)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var ke := event as InputEventKey
-		if ke.keycode == KEY_E or ke.keycode == KEY_PAGEUP:
+		if ke.keycode == KEY_ESCAPE and _grid_edit_mode != GridEditMode.NONE:
+			_exit_grid_edit_mode()
+			status_banner_label.text = "✅ Đã thoát chế độ chỉnh sửa lưới."
+			return
+		elif ke.keycode == KEY_R and (_grid_edit_mode == GridEditMode.PLACE_NEW_BUILDING or _grid_edit_mode == GridEditMode.MOVE_STRUCTURE):
+			_placement_rot_deg = (_placement_rot_deg + 90) % 360
+			_update_grid_ghost_preview(get_viewport().get_mouse_position())
+			status_banner_label.text = "🔄 Đã xoay hướng công trình: %d°" % _placement_rot_deg
+			return
+		elif ke.keycode == KEY_E or ke.keycode == KEY_PAGEUP:
 			_switch_to_lobby_floor(mini(MAX_LOBBY_FLOORS, _current_lobby_floor + 1))
 			return
 		elif ke.keycode == KEY_Q or ke.keycode == KEY_PAGEDOWN:
@@ -1277,14 +1696,23 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
+		if _grid_edit_mode != GridEditMode.NONE:
+			_update_grid_ghost_preview(mm.position)
+			if _is_painting_road_drag:
+				if _grid_edit_mode == GridEditMode.ROAD_PAINT:
+					_set_road_at_cell(_hover_gx, _hover_gz, true)
+				elif _grid_edit_mode == GridEditMode.ROAD_ERASE:
+					_set_road_at_cell(_hover_gx, _hover_gz, false)
+			return
+
 		if _pressed_hero != null and _dragging_hero == null:
 			if mm.position.distance_to(_press_screen_pos) >= DRAG_THRESHOLD_PX:
 				_dragging_hero = _pressed_hero
 				_dragging_hero.start_drag_lift()
-				status_banner_label.text = "🙌 Đang nhấc [%s]! Thả vào Công trình trên Tầng %d để phân công, hoặc thả vào Cổng Tháp để vào Đội hình PvE!" % [_dragging_hero.unit_name, _current_lobby_floor]
+				status_banner_label.text = "🙌 Đang nhấc [%s]! Thả vào Công trình bất kỳ để phân công, hoặc thả vào Cổng Đông để vào Đội hình PvE!" % _dragging_hero.unit_name
 
 		if _dragging_hero != null:
-			var ground_hit := _project_mouse_to_active_floor(mm.position)
+			var ground_hit := _project_mouse_to_castle_ground(mm.position)
 			_dragging_hero.update_drag_ground_position(ground_hit)
 			_update_hover_feedback(mm.position, true)
 		else:
@@ -1292,6 +1720,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed and _grid_edit_mode != GridEditMode.NONE:
+			_exit_grid_edit_mode()
+			status_banner_label.text = "✅ Đã thoát chế độ chỉnh sửa lưới."
+			return
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
 				_on_left_mouse_down(mb.position)
@@ -1299,6 +1731,16 @@ func _unhandled_input(event: InputEvent) -> void:
 				_on_left_mouse_up(mb.position)
 
 func _on_left_mouse_down(screen_pos: Vector2) -> void:
+	if _grid_edit_mode != GridEditMode.NONE:
+		_update_grid_ghost_preview(screen_pos)
+		if _grid_edit_mode == GridEditMode.ROAD_PAINT:
+			_is_painting_road_drag = true
+			_set_road_at_cell(_hover_gx, _hover_gz, true)
+		elif _grid_edit_mode == GridEditMode.ROAD_ERASE:
+			_is_painting_road_drag = true
+			_set_road_at_cell(_hover_gx, _hover_gz, false)
+		return
+
 	_press_screen_pos = screen_pos
 	_pressed_hero = null
 	_dragging_hero = null
@@ -1314,6 +1756,50 @@ func _on_left_mouse_down(screen_pos: Vector2) -> void:
 				_pressed_hero = hero_actor
 
 func _on_left_mouse_up(screen_pos: Vector2) -> void:
+	if _grid_edit_mode != GridEditMode.NONE:
+		_is_painting_road_drag = false
+		_update_grid_ghost_preview(screen_pos)
+		if _grid_edit_mode == GridEditMode.PLACE_NEW_BUILDING:
+			if not _hover_valid:
+				status_banner_label.text = "❌ Vị trí lưới không hợp lệ hoặc bị vướng công trình khác!"
+				return
+			var free_plot := _find_first_free_unlocked_plot_index()
+			if free_plot < 0:
+				status_banner_label.text = "⚠️ Đã đạt giới hạn công trình theo cấp Master!"
+				_exit_grid_edit_mode()
+				return
+			var b_code := _pending_build_code
+			_grid_structures["PLOT:%d" % free_plot] = {
+				"gx": _hover_gx,
+				"gz": _hover_gz,
+				"rot": _placement_rot_deg
+			}
+			_save_castle_grid_layout()
+			_apply_all_grid_transforms()
+			_exit_grid_edit_mode()
+			await _construct_building_on_plot(b_code, free_plot)
+			return
+		elif _grid_edit_mode == GridEditMode.MOVE_STRUCTURE:
+			if not _hover_valid:
+				status_banner_label.text = "❌ Vị trí mới bị vướng hoặc nằm ngoài khuôn viên Lâu Đài!"
+				return
+			var s_id := _moving_structure_id
+			var d_name := _get_structure_display_name(s_id)
+			_grid_structures[s_id] = {
+				"gx": _hover_gx,
+				"gz": _hover_gz,
+				"rot": _placement_rot_deg
+			}
+			_save_castle_grid_layout()
+			_apply_all_grid_transforms()
+			_spawn_resident_heroes()
+			_exit_grid_edit_mode()
+			camera_rig.shake(0.14, 0.18)
+			status_banner_label.text = "✅ Đã di dời [%s] tới tọa độ lưới (%d, %d)!" % [d_name, _hover_gx, _hover_gz]
+			_re_render_inspector_if_open()
+			return
+		return
+
 	if _dragging_hero != null:
 		var dropped_hero := _dragging_hero
 		_dragging_hero = null
@@ -1340,11 +1826,8 @@ func _on_left_mouse_up(screen_pos: Vector2) -> void:
 	match itype:
 		"PLOT":
 			var plot_node: BasePlot3D = collider.get_meta("plot_node")
-			if plot_node != null:
-				_current_lobby_floor = plot_node.zone_index
-				var t_center := get_floor_terrace_center(_current_lobby_floor)
-				camera_rig.current_floor_y = t_center.y
-				camera_rig.current_terrace_center = t_center
+			if plot_node != null and not plot_node.building_data.is_empty():
+				_current_lobby_floor = 2 if plot_node.global_position.x < -50.0 else 1
 				_refresh_hud()
 				_open_plot_inspector(plot_node)
 		"LANDMARK":
@@ -1356,16 +1839,13 @@ func _on_left_mouse_up(screen_pos: Vector2) -> void:
 				_open_hero_inspector(hero_actor)
 
 func _handle_hero_drop(hero_actor: UnitActor3D, screen_pos: Vector2) -> void:
-	var ground_pos := _project_mouse_to_active_floor(screen_pos)
-	var terrace_center := get_floor_terrace_center(_current_lobby_floor)
-	var max_r := 16.5 if _current_lobby_floor == 1 else 16.0
-	var drop_rel := ground_pos - terrace_center
-	var drop_horiz := Vector2(drop_rel.x, drop_rel.z)
-	if drop_horiz.length() > max_r:
-		drop_horiz = drop_horiz.normalized() * (max_r - 0.3)
-	ground_pos = terrace_center + Vector3(drop_horiz.x, 0.0, drop_horiz.y)
+	var ground_pos := _project_mouse_to_castle_ground(screen_pos)
+	var target_tier := 2 if ground_pos.x < -50.0 else 1
+	_current_lobby_floor = target_tier
+	var terrace_center := get_floor_terrace_center(target_tier)
+	var max_r := 44.0 if target_tier == 1 else 26.0
 
-	hero_actor.floor_index = _current_lobby_floor
+	hero_actor.floor_index = target_tier
 	hero_actor.terrace_center = terrace_center
 	hero_actor.max_walk_radius = max_r
 	hero_actor.end_drag_drop(ground_pos)
@@ -1394,8 +1874,11 @@ func _handle_hero_drop(hero_actor: UnitActor3D, screen_pos: Vector2) -> void:
 					_on_barracks_pressed()
 					return
 
-	status_banner_label.text = "📍 Đã đặt [%s] tại Tầng Sảnh Chờ #%d." % [hero_actor.unit_name, _current_lobby_floor]
-	hero_actor.show_speech_bubble("😮‍💨 Phù... Tầng %d nhìn thoáng đãng thật đấy!" % _current_lobby_floor, 2.8)
+	status_banner_label.text = "📍 Đã đặt [%s] tại %s." % [
+		hero_actor.unit_name,
+		"Hạ Thành Tầng 1" if target_tier == 1 else "Thượng Thành Tầng 2"
+	]
+	hero_actor.show_speech_bubble("😮‍💨 Phù... Lâu đài rộng rãi thật đấy!", 2.8)
 
 func _update_hover_feedback(screen_pos: Vector2, is_dragging: bool) -> void:
 	var exclude: Array[RID] = []
@@ -1413,7 +1896,7 @@ func _update_hover_feedback(screen_pos: Vector2, is_dragging: bool) -> void:
 				next_hovered_plot = collider.get_meta("plot_node")
 				if is_dragging and next_hovered_plot != null and not next_hovered_plot.building_data.is_empty():
 					var b_name := str(next_hovered_plot.building_data.get("typeName", "Công trình"))
-					status_banner_label.text = "🎯 Thả chuột để phân công [%s] vào [%s] (Tầng %d)!" % [_dragging_hero.unit_name, b_name, next_hovered_plot.zone_index]
+					status_banner_label.text = "🎯 Thả chuột để phân công [%s] vào [%s]!" % [_dragging_hero.unit_name, b_name]
 			elif itype == "LANDMARK" and is_dragging:
 				var l_code := str(collider.get_meta("landmark_code"))
 				if l_code == "DUNGEON_PORTAL":
@@ -1434,24 +1917,11 @@ func _raycast_3d(screen_pos: Vector2, exclude_rids: Array[RID] = []) -> Dictiona
 		return {}
 	var from := cam.project_ray_origin(screen_pos)
 	var dir := cam.project_ray_normal(screen_pos)
-	var to := from + dir * 250.0
+	var to := from + dir * 350.0
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.exclude = exclude_rids
 	query.collide_with_bodies = true
 	return get_world_3d().direct_space_state.intersect_ray(query)
-
-func _project_mouse_to_active_floor(screen_pos: Vector2) -> Vector3:
-	var cam := camera_rig.get_camera_3d()
-	var terrace_center := get_floor_terrace_center(_current_lobby_floor)
-	if cam == null:
-		return terrace_center
-	var from := cam.project_ray_origin(screen_pos)
-	var dir := cam.project_ray_normal(screen_pos)
-	var plane := Plane(Vector3.UP, terrace_center.y)
-	var intersection: Variant = plane.intersects_ray(from, dir)
-	if intersection is Vector3:
-		return intersection
-	return terrace_center
 
 # ==============================================================================
 # CONTEXTUAL RIGHT-SIDE INSPECTOR PANEL (AUTHENTIC PICK ME UP BUILDINGS)
@@ -1574,6 +2044,141 @@ func _re_render_inspector_if_open() -> void:
 	elif ctype == "FLOOR_HERO_MANAGER":
 		var f_num := int(_inspector_context.get("floor", _current_lobby_floor))
 		_open_floor_hero_manager(f_num)
+	elif ctype == "FREE_BUILD_CATALOG":
+		_open_free_grid_build_catalog()
+	elif ctype == "MOVE_PICKER":
+		_open_movable_structures_picker()
+
+func _open_free_grid_build_catalog() -> void:
+	if _selected_plot != null and is_instance_valid(_selected_plot):
+		_selected_plot.set_selected(false)
+		_selected_plot = null
+
+	_inspector_context = {
+		"type": "FREE_BUILD_CATALOG"
+	}
+	inspector_panel.visible = true
+	_clear_inspector_actions()
+
+	var built_cnt := _get_constructed_building_count()
+	var max_cnt := GameState.unlocked_plots
+	var free_slot := _find_first_free_unlocked_plot_index()
+
+	inspector_title_label.text = "🏗️ XÂY CÔNG TRÌNH TRÊN LƯỚI (%d/%d)" % [built_cnt, max_cnt]
+	inspector_subtitle_label.text = "Đặt tự do trên lưới 2m×2m tại Hạ Thành (100×100m) hoặc Thượng Thành (60×100m)"
+
+	_add_inspector_section_header("📏 GIỚI HẠN THEO LEVEL MASTER (Lv.%d)" % GameState.master_level, Color(1.0, 0.88, 0.42))
+	_add_inspector_info(
+		"• Số lượng công trình đã xây: %d / %d (Mở rộng thêm ô xây dựng khi tăng cấp Master / Mở rộng Khu vực).\n• Các ô chưa xây được ẩn hoàn toàn để mặt sân Lâu đài thoáng đãng." % [
+			built_cnt, max_cnt
+		],
+		Color(0.85, 0.94, 1.0)
+	)
+
+	if built_cnt >= max_cnt or free_slot < 0:
+		var exp_info: Dictionary = GameState.base_overview.get("expansion", {})
+		var next_z := int(exp_info.get("nextZone", GameState.base_zones + 1))
+		var cost := int(exp_info.get("costSilver", 2000))
+		var req_wl := int(exp_info.get("requiredWorldLevel", maxi(1, next_z - 1)))
+		var req_ml := 1 if next_z <= 1 else (next_z - 1) * MASTER_LEVELS_PER_FLOOR
+		_add_inspector_info(
+			"⚠️ Bạn đã đạt giới hạn %d/%d công trình theo cấp Master hiện tại!\nHãy nâng cấp Master Lv.%d (hoặc WL %d) để mở khóa thêm ô công trình mới." % [
+				built_cnt, max_cnt, req_ml, req_wl
+			],
+			Color(1.0, 0.78, 0.42)
+		)
+		if next_z <= MAX_LOBBY_FLOORS:
+			_add_inspector_button(
+				"🔓 Mở Thêm Giới Hạn Công Trình Cấp #%d (🪙 %d Bạc)" % [next_z, cost],
+				_on_expand_zone_pressed,
+				(GameState.master_level < req_ml and GameState.world_level < req_wl) or GameState.silver_coins < cost
+			)
+
+	_add_inspector_section_header("📐 DANH MỤC BẢN VẼ CÔNG TRÌNH (2×2 Ô = 4m×4m)", Color(0.62, 0.96, 0.75))
+
+	var b_types: Array = GameState.base_overview.get("buildingTypes", [])
+	if b_types.is_empty():
+		_add_inspector_info("Đang tải danh mục công trình từ máy chủ...")
+		return
+
+	for bt in b_types:
+		if not (bt is Dictionary):
+			continue
+		var code := str(bt.get("code", ""))
+		var bname := str(bt.get("name", code))
+		var desc_txt := str(bt.get("description", ""))
+		var cost := int(bt.get("buildCostSilver", 1000))
+		var req_wl := int(bt.get("requiredWorldLevel", 1))
+		var req_ml := int(bt.get("requiredMasterLevel", 1))
+		var unlocked := bool(bt.get("unlocked", true))
+		var max_w := int(bt.get("maxWorkers", 0))
+
+		var info_line := "📌 %s [Kích thước: 2×2 ô]\n   • %s\n   • Giá xây: 🪙 %d Bạc | Cần WL %d%s | Tối đa %d Hero" % [
+			bname,
+			desc_txt,
+			cost,
+			req_wl,
+			(" & Master Lv.%d" % req_ml) if req_ml > 1 else "",
+			max_w
+		]
+		_add_inspector_info(info_line, Color(0.86, 0.95, 0.88) if unlocked else Color(0.68, 0.65, 0.65))
+
+		var can_pick := unlocked and GameState.silver_coins >= cost and free_slot > 0
+		_add_inspector_button(
+			"📐 Chọn Vị Trí Đặt %s Trên Lưới (🪙 %d)" % [bname, cost],
+			func(): _enter_place_new_building_mode(code, bname),
+			not can_pick
+		)
+
+func _open_movable_structures_picker() -> void:
+	if _selected_plot != null and is_instance_valid(_selected_plot):
+		_selected_plot.set_selected(false)
+		_selected_plot = null
+
+	_inspector_context = {
+		"type": "MOVE_PICKER"
+	}
+	inspector_panel.visible = true
+	_clear_inspector_actions()
+
+	inspector_title_label.text = "✥ DI DỜI & QUY HOẠCH CÔNG TRÌNH"
+	inspector_subtitle_label.text = "Mọi công trình đều tự do trên lưới (Chỉ Cổng Phía Đông là gắn cố định)"
+
+	_add_inspector_section_header("🏛️ CÔNG TRÌNH TRUNG TÂM & ĐẶC BIỆT", Color(0.65, 0.92, 1.0))
+	var landmarks := [
+		{"key": "FOUNTAIN", "label": "⛲ Đài Phun Nước & Vòng Tròn Năng Lượng (4×4 ô)"},
+		{"key": "SUMMON_ALTAR", "label": "✨ Đài Triệu Hồi Anh Hùng (4×4 ô)"},
+		{"key": "BARRACKS", "label": "🛡️ Doanh Trại & Thăng Sao (3×3 ô)"},
+		{"key": "INFIRMARY", "label": "✚ Bệnh Xá & Hậu Cần (3×3 ô)"}
+	]
+	for lm in landmarks:
+		var k := str(lm["key"])
+		var lbl := str(lm["label"])
+		var pos: Dictionary = _grid_structures.get(k, {"gx": 0, "gz": 0, "rot": 0})
+		var tier_txt := "Thượng Thành (T2)" if int(pos.get("gx", 0)) < 0 else "Hạ Thành (T1)"
+		_add_inspector_info("• %s — Ô (%d, %d) [%s]" % [lbl, int(pos.get("gx", 0)), int(pos.get("gz", 0)), tier_txt], Color(0.88, 0.94, 1.0))
+		_add_inspector_button(
+			"✥ Di Dời %s" % lbl,
+			func(): _start_moving_structure(k)
+		)
+
+	_add_inspector_section_header("🏗️ CÔNG TRÌNH CHỨC NĂNG ĐÃ XÂY (2×2 Ô)", Color(1.0, 0.88, 0.42))
+	var any_built := false
+	for p_idx in _plot_nodes.keys():
+		var p_node: BasePlot3D = _plot_nodes[p_idx]
+		if not p_node.building_data.is_empty():
+			any_built = true
+			var b_name := str(p_node.building_data.get("typeName", p_node.building_data.get("buildingType", "Công trình")))
+			var b_lvl := int(p_node.building_data.get("level", 1))
+			var skey := "PLOT:%d" % int(p_idx)
+			var pos: Dictionary = _grid_structures.get(skey, {"gx": 0, "gz": 0, "rot": 0})
+			var tier_txt := "Thượng Thành (T2)" if int(pos.get("gx", 0)) < 0 else "Hạ Thành (T1)"
+			_add_inspector_button(
+				"✥ Di Dời %s (Lv.%d) — Ô (%d, %d) [%s]" % [b_name, b_lvl, int(pos.get("gx", 0)), int(pos.get("gz", 0)), tier_txt],
+				func(): _start_moving_structure(skey)
+			)
+	if not any_built:
+		_add_inspector_info("Chưa có công trình chức năng nào được xây dựng.", Color(0.75, 0.8, 0.88))
 
 func _open_floor_hero_manager(target_floor: int) -> void:
 	if _selected_plot != null and is_instance_valid(_selected_plot):
@@ -1811,6 +2416,8 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 
 	inspector_title_label.text = "%s %s (Lv.%d/%d)" % [plot_node._icon_for_type(b_code), b_name, b_lvl, max_lvl]
 	inspector_subtitle_label.text = "Ô #%d (Tầng %d) • Trạng thái: %s" % [plot_node.plot_index, plot_node.zone_index, b_status]
+
+	_add_inspector_grid_placement_controls("PLOT:%d" % plot_node.plot_index)
 
 	# Specialized Facility Operations by Building Type
 	_render_specialized_facility_section(b_id, b_code, b_lvl, b_status)
@@ -2401,6 +3008,46 @@ func _render_warehouse_facility(b_lvl: int) -> void:
 				if qty > 0:
 					_add_inspector_info("   • %s: ×%d" % [str(k), qty], Color(0.78, 0.86, 0.84))
 
+func _add_inspector_grid_placement_controls(structure_key: String) -> void:
+	var fp := _get_structure_footprint_size(structure_key)
+	var pos: Dictionary = _grid_structures.get(structure_key, {"gx": 0, "gz": 0, "rot": 0})
+	var gx := int(pos.get("gx", 0))
+	var gz := int(pos.get("gz", 0))
+	var rot := int(pos.get("rot", 0)) % 360
+	var tier_label := "Thượng Thành (Tầng 2)" if gx < 0 else "Hạ Thành (Tầng 1)"
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+
+	var move_btn := Button.new()
+	move_btn.text = "✥ Di Dời Trên Lưới (%d×%d Ô)" % [fp.x, fp.y]
+	move_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	move_btn.custom_minimum_size = Vector2(0, 32)
+	move_btn.modulate = Color(0.55, 0.96, 0.72)
+	move_btn.pressed.connect(func():
+		_start_moving_structure(structure_key)
+	)
+	row.add_child(move_btn)
+
+	var rot_btn := Button.new()
+	rot_btn.text = "🔄 Xoay 90° (%d°)" % rot
+	rot_btn.custom_minimum_size = Vector2(115, 32)
+	rot_btn.modulate = Color(0.68, 0.90, 1.0)
+	rot_btn.pressed.connect(func():
+		var next_rot := (rot + 90) % 360
+		_grid_structures[structure_key] = {
+			"gx": gx,
+			"gz": gz,
+			"rot": next_rot
+		}
+		_apply_all_grid_transforms()
+		_save_castle_grid_layout()
+		_re_render_inspector_if_open()
+	)
+	row.add_child(rot_btn)
+	inspector_action_container.add_child(row)
+	_add_inspector_info("📐 Tọa độ lưới hiện tại: Ô (%d, %d) • %s" % [gx, gz, tier_label], Color(0.75, 0.88, 0.98))
+
 func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> void:
 	if _selected_plot != null and is_instance_valid(_selected_plot):
 		_selected_plot.set_selected(false)
@@ -2417,8 +3064,9 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 		"SUMMON_ALTAR":
 			if focus_cam:
 				camera_rig.focus_action_unit(summon_altar_mesh.global_position, 11.0, 0.35)
-			inspector_title_label.text = "✨ ĐÀI TRIỆU HỒI (PHÍA TÂY)"
-			inspector_subtitle_label.text = "Nghi thức triệu hồi Anh Hùng & Thiên Thư tại Thánh điện phía Tây"
+			inspector_title_label.text = "✨ ĐÀI TRIỆU HỒI ANH HÙNG"
+			inspector_subtitle_label.text = "Nghi thức triệu hồi Anh Hùng & Thiên Thư (Công trình tự do 4×4 ô trên lưới)"
+			_add_inspector_grid_placement_controls("SUMMON_ALTAR")
 			var banner_name := "Thiên Thư Thường (Standard Banner)"
 			if not _active_banners.is_empty() and _active_banners[0] is Dictionary:
 				banner_name = str(_active_banners[0].get("name", banner_name))
@@ -2458,7 +3106,8 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 			if focus_cam:
 				camera_rig.focus_action_unit(dungeon_portal_mesh.global_position, 12.0, 0.35)
 			inspector_title_label.text = "⛩️ CỔNG THÁP CHINH PHẠT PvE (PHÍA ĐÔNG)"
-			inspector_subtitle_label.text = "Cổng thành phía Đông tích hợp phòng thủ & viễn chinh — Tầng %d (World Level %d)" % [GameState.current_floor, GameState.world_level]
+			inspector_subtitle_label.text = "Cổng thành phía Đông gắn cố định trên tường thành — Tầng %d (World Level %d)" % [GameState.current_floor, GameState.world_level]
+			_add_inspector_info("📌 Công trình cố định duy nhất tại tường thành phía Đông.", Color(1.0, 0.88, 0.45))
 			_add_inspector_info("⚔️ Đội hình xuất kích (%d/5 Tướng):\n(Mẹo: Kéo-thả Tướng 3D vào Cổng Tháp hoặc nhấn nút bên dưới)" % GameState.active_party_ids.size(), Color(0.88, 0.72, 1.0))
 
 			for h in GameState.heroes:
@@ -2482,16 +3131,19 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 			if focus_cam:
 				camera_rig.focus_action_unit(barracks_mesh.global_position, 11.0, 0.35)
 			inspector_title_label.text = "🛡️ DOANH TRẠI & THĂNG SAO"
-			inspector_subtitle_label.text = "Quản lý đội ngũ Tướng và Ghép Thăng Sao (Pick Me Up)"
+			inspector_subtitle_label.text = "Quản lý đội ngũ Tướng và Ghép Thăng Sao (Công trình tự do 3×3 ô trên lưới)"
+			_add_inspector_grid_placement_controls("BARRACKS")
 			_add_inspector_info("Tổng số Tướng sở hữu: %d Tướng" % GameState.heroes.size())
 			_add_inspector_button("👥 Quản Lý Hero Từng Tầng Sảnh Chờ", func(): _open_floor_hero_manager(_current_lobby_floor))
 			_add_inspector_button("🛡️ Mở Bảng Tướng & Ghép Thăng Sao", _on_barracks_pressed)
 
 		"FOUNTAIN", "BONFIRE":
-			if focus_cam:
-				camera_rig.focus_action_unit(Vector3(0.0, 1.2, 0.0), 12.0, 0.35)
-			inspector_title_label.text = "⛲ ĐÀI PHUN NƯỚC TRUNG TÂM & KHÔNG GIAN"
-			inspector_subtitle_label.text = "Điểm tụ năng lượng linh hồn, hồi phục thể lực và điều chỉnh thời tiết Sảnh Chờ"
+			var f_node := get_node_or_null("BaseArchitecture/CentralBonfire") as Node3D
+			if focus_cam and f_node != null:
+				camera_rig.focus_action_unit(f_node.global_position, 12.0, 0.35)
+			inspector_title_label.text = "⛲ ĐÀI PHUN NƯỚC & VÒNG TRÒN NĂNG LƯỢNG"
+			inspector_subtitle_label.text = "Điểm tụ năng lượng linh hồn, hồi phục thể lực (Công trình tự do 4×4 ô trên lưới)"
+			_add_inspector_grid_placement_controls("FOUNTAIN")
 			_add_inspector_info("🍖 Khẩu phần dự trữ: %d | 🌾 Lương thực thô: %d" % [
 				int(GameState.materials.get("RATION", 0)),
 				int(GameState.materials.get("RAW_FOOD", 0))
@@ -2514,7 +3166,8 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 			if focus_cam:
 				camera_rig.focus_action_unit(infirmary_mesh.global_position, 11.0, 0.35)
 			inspector_title_label.text = "✚ BỆNH XÁ & HẬU CẦN"
-			inspector_subtitle_label.text = "Chữa trị thương tích và hồi phục thể lực cho Tướng sau viễn chinh"
+			inspector_subtitle_label.text = "Chữa trị thương tích và hồi phục thể lực (Công trình tự do 3×3 ô trên lưới)"
+			_add_inspector_grid_placement_controls("INFIRMARY")
 			_add_inspector_info("🍖 Khẩu phần dự trữ: %d | 🌾 Lương thực thô: %d" % [
 				int(GameState.materials.get("RATION", 0)),
 				int(GameState.materials.get("RAW_FOOD", 0))

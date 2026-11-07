@@ -12,6 +12,11 @@ class_name IsometricCameraRig
 @export var pan_limits_min: Vector2 = Vector2(-38.0, -38.0)
 @export var pan_limits_max: Vector2 = Vector2(38.0, 38.0)
 @export var allow_manual_pan: bool = true
+@export var use_castle_world_bounds: bool = false
+@export var castle_world_min: Vector2 = Vector2(-115.0, -54.0)
+@export var castle_world_max: Vector2 = Vector2(54.0, 54.0)
+@export var castle_tier2_x_threshold: float = -50.0
+@export var castle_tier2_height: float = 5.2
 
 @onready var rotation_arm: Node3D = $RotationArm
 @onready var camera: Camera3D = $RotationArm/Camera3D
@@ -39,9 +44,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			camera.size = clampf(camera.size - 1.8, 10.0, 72.0)
+			camera.size = clampf(camera.size - 2.2, 8.0, 135.0)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			camera.size = clampf(camera.size + 1.8, 10.0, 72.0)
+			camera.size = clampf(camera.size + 2.2, 8.0, 135.0)
 		elif mb.button_index == MOUSE_BUTTON_RIGHT or mb.button_index == MOUSE_BUTTON_MIDDLE:
 			_rmb_panning = mb.pressed
 	elif event is InputEventMouseMotion and _rmb_panning:
@@ -50,10 +55,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var right := Vector3(1.0, 0.0, -1.0).normalized()
 		var scale_factor := camera.size * 0.0022
 		global_position += (-right * mm.relative.x + forward * mm.relative.y) * scale_factor
-		global_position.x = clampf(global_position.x, current_terrace_center.x + pan_limits_min.x, current_terrace_center.x + pan_limits_max.x)
-		global_position.z = clampf(global_position.z, current_terrace_center.z + pan_limits_min.y, current_terrace_center.z + pan_limits_max.y)
-		global_position.y = current_floor_y
-		_overview_position = global_position
+		_clamp_and_settle_pan_position(0.25)
 
 func _process(delta: float) -> void:
 	if not allow_manual_pan:
@@ -72,12 +74,23 @@ func _process(delta: float) -> void:
 		input_dir = input_dir.normalized()
 		var forward := Vector3(-1.0, 0.0, -1.0).normalized()
 		var right := Vector3(1.0, 0.0, -1.0).normalized()
-		var move := (right * input_dir.x + (-forward) * input_dir.y) * pan_speed * delta
+		var speed_mult := clampf(camera.size / 28.0, 0.85, 2.6)
+		var move := (right * input_dir.x + (-forward) * input_dir.y) * pan_speed * speed_mult * delta
 		global_position += move
+		_clamp_and_settle_pan_position(delta * 10.0)
+
+func _clamp_and_settle_pan_position(y_lerp_weight: float = 0.25) -> void:
+	if use_castle_world_bounds:
+		global_position.x = clampf(global_position.x, castle_world_min.x, castle_world_max.x)
+		global_position.z = clampf(global_position.z, castle_world_min.y, castle_world_max.y)
+		var target_y := castle_tier2_height if global_position.x < castle_tier2_x_threshold else 0.0
+		current_floor_y = target_y
+		global_position.y = lerpf(global_position.y, target_y, clampf(y_lerp_weight, 0.15, 1.0))
+	else:
 		global_position.x = clampf(global_position.x, current_terrace_center.x + pan_limits_min.x, current_terrace_center.x + pan_limits_max.x)
 		global_position.z = clampf(global_position.z, current_terrace_center.z + pan_limits_min.y, current_terrace_center.z + pan_limits_max.y)
 		global_position.y = current_floor_y
-		_overview_position = global_position
+	_overview_position = global_position
 
 ## Cinematic Terrace Glide Transition between Lobby Floors (10h <-> 4h Stepped Terrace Model):
 ## - Smoothly glides diagonally across (X, Y, Z) to the target terrace center with QUINT easing
