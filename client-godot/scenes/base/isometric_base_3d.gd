@@ -771,32 +771,277 @@ func _setup_grand_citadel_floor1() -> void:
 				ob.material_override = ob_mat
 				altar_dais.add_child(ob)
 
-	# 9. Doanh Trại & Bệnh Xá (Movable 3x3 Grid Landmarks)
+	# 9. Authentic Medieval Architecture for BARRACKS & INFIRMARY (Movable 3x3 Grid Landmarks)
+	# 9A. BARRACKS (🛡️ Doanh Trại Quân Đội & Thăng Sao)
 	if barracks_mesh != null:
-		var b_box := BoxMesh.new()
-		b_box.size = Vector3(4.6, 3.2, 5.2)
-		barracks_mesh.mesh = b_box
+		barracks_mesh.mesh = null # Remove legacy plain block box
+		var old_bv := barracks_mesh.get_node_or_null("BarracksVisuals")
+		if old_bv != null:
+			old_bv.queue_free()
+
+		var bv := Node3D.new()
+		bv.name = "BarracksVisuals"
+		barracks_mesh.add_child(bv)
+
+		# Stone foundation plinth (5.6m x 0.4m x 5.6m)
+		var b_plinth := MeshInstance3D.new()
+		var bp_box := BoxMesh.new()
+		bp_box.size = Vector3(5.6, 0.4, 5.6)
+		b_plinth.mesh = bp_box
+		b_plinth.position = Vector3(0.0, 0.2, 0.0)
+		b_plinth.material_override = plinth_mat
+		bv.add_child(b_plinth)
+
+		# Main Garrison Fortress Hall (4.6m x 2.6m x 3.8m)
+		var b_hall := MeshInstance3D.new()
+		var bh_box := BoxMesh.new()
+		bh_box.size = Vector3(4.6, 2.6, 3.8)
+		b_hall.mesh = bh_box
+		b_hall.position = Vector3(0.0, 1.7, -0.5)
+		b_hall.material_override = wall_mat
+		bv.add_child(b_hall)
+
+		# Clay Gable Roof (4.9m x 1.7m x 4.2m)
+		var b_roof := MeshInstance3D.new()
+		var br_prism := PrismMesh.new()
+		br_prism.size = Vector3(4.9, 1.7, 4.2)
+		b_roof.mesh = br_prism
+		b_roof.position = Vector3(0.0, 3.85, -0.5)
+		var broof_mat := StandardMaterial3D.new()
+		broof_mat.albedo_color = Color(0.68, 0.25, 0.20) # Medieval Knight Clay Red Tiles
+		broof_mat.roughness = 0.70
+		b_roof.material_override = broof_mat
+		bv.add_child(b_roof)
+
+		# Twin Front Corner Watchtowers (Tháp canh gác góc mặt tiền)
+		for t_x in [-2.15, 2.15]:
+			var wt := MeshInstance3D.new()
+			var wt_cyl := CylinderMesh.new()
+			wt_cyl.top_radius = 0.65
+			wt_cyl.bottom_radius = 0.75
+			wt_cyl.height = 3.6
+			wt.mesh = wt_cyl
+			wt.position = Vector3(t_x, 1.8, 1.25)
+			wt.material_override = wall_mat
+			bv.add_child(wt)
+
+			var wt_cap := MeshInstance3D.new()
+			var wtc_cyl := CylinderMesh.new()
+			wtc_cyl.top_radius = 0.06
+			wtc_cyl.bottom_radius = 0.85
+			wtc_cyl.height = 1.6
+			wt_cap.mesh = wtc_cyl
+			wt_cap.position = Vector3(t_x, 4.4, 1.25)
+			wt_cap.material_override = spire_mat
+			bv.add_child(wt_cap)
+
+		# Reinforced Oak Gate (Cổng gỗ đai sắt trung cổ)
+		var b_gate := MeshInstance3D.new()
+		var bg_box := BoxMesh.new()
+		bg_box.size = Vector3(1.6, 2.0, 0.2)
+		b_gate.mesh = bg_box
+		b_gate.position = Vector3(0.0, 1.3, 1.42)
+		var bg_mat := StandardMaterial3D.new()
+		bg_mat.albedo_color = Color(0.38, 0.26, 0.16)
+		bg_mat.roughness = 0.82
+		b_gate.material_override = bg_mat
+		bv.add_child(b_gate)
+
+		# Golden Heraldic Shield & Crossed Swords Crest (Biểu tượng Khiên Hiệp Sĩ mạ vàng)
+		var b_shield := MeshInstance3D.new()
+		var bsh_box := BoxMesh.new()
+		bsh_box.size = Vector3(0.85, 1.05, 0.12)
+		b_shield.mesh = bsh_box
+		b_shield.position = Vector3(0.0, 2.75, 1.45)
+		var bsh_mat := StandardMaterial3D.new()
+		bsh_mat.albedo_color = Color(0.96, 0.82, 0.25)
+		bsh_mat.metallic = 0.75
+		bsh_mat.roughness = 0.32
+		bsh_mat.emission_enabled = true
+		bsh_mat.emission = Color(0.85, 0.65, 0.15)
+		bsh_mat.emission_energy_multiplier = 0.7
+		b_shield.material_override = bsh_mat
+		bv.add_child(b_shield)
+
+		# War Banner Mast (Cột quân kỳ cao 5.5m với lá cờ chiến phấp phới)
+		var b_mast := MeshInstance3D.new()
+		var bm_cyl := CylinderMesh.new()
+		bm_cyl.top_radius = 0.05
+		bm_cyl.bottom_radius = 0.08
+		bm_cyl.height = 5.2
+		b_mast.mesh = bm_cyl
+		b_mast.position = Vector3(-1.9, 2.6, 1.8)
+		b_mast.material_override = corbel_mat
+		bv.add_child(b_mast)
+
+		var b_flag := MeshInstance3D.new()
+		var bf_box := BoxMesh.new()
+		bf_box.size = Vector3(0.04, 0.95, 1.35)
+		b_flag.mesh = bf_box
+		b_flag.position = Vector3(-1.9, 4.6, 2.45)
+		var bflag_mat := StandardMaterial3D.new()
+		bflag_mat.albedo_color = Color(0.85, 0.20, 0.18)
+		b_flag.material_override = bflag_mat
+		bv.add_child(b_flag)
+
+		# Forecourt Weapon Rack & Training Dummy (Giá vũ khí & bia tập đánh)
+		var rack := MeshInstance3D.new()
+		var r_box := BoxMesh.new()
+		r_box.size = Vector3(1.2, 0.85, 0.35)
+		rack.mesh = r_box
+		rack.position = Vector3(1.4, 0.65, 1.8)
+		var rack_mat := StandardMaterial3D.new()
+		rack_mat.albedo_color = Color(0.48, 0.35, 0.22)
+		rack.material_override = rack_mat
+		bv.add_child(rack)
+
+		var bar_lbl: Label3D = barracks_mesh.get_node_or_null("BarracksLabel")
+		if bar_lbl != null:
+			bar_lbl.position = Vector3(0.0, 5.2, 0.0)
+
 	if barracks_body != null and barracks_body.has_node("CollisionShape3D"):
 		var b_shape: CollisionShape3D = barracks_body.get_node("CollisionShape3D")
 		var bs := BoxShape3D.new()
-		bs.size = Vector3(5.0, 3.6, 5.6)
+		bs.size = Vector3(5.6, 4.5, 5.6)
 		b_shape.shape = bs
-	var bar_lbl: Label3D = barracks_mesh.get_node_or_null("BarracksLabel")
-	if bar_lbl != null:
-		bar_lbl.position = Vector3(0.0, 2.4, 0.0)
+		b_shape.position = Vector3(0.0, 2.25, 0.0)
 
+	# 9B. INFIRMARY (✚ Bệnh Xá Thánh Điện & Hậu Cần Dược Liệu)
 	if infirmary_mesh != null:
-		var i_box := BoxMesh.new()
-		i_box.size = Vector3(4.6, 3.2, 5.2)
-		infirmary_mesh.mesh = i_box
+		infirmary_mesh.mesh = null # Remove legacy plain block box
+		var old_iv := infirmary_mesh.get_node_or_null("InfirmaryVisuals")
+		if old_iv != null:
+			old_iv.queue_free()
+
+		var iv := Node3D.new()
+		iv.name = "InfirmaryVisuals"
+		infirmary_mesh.add_child(iv)
+
+		# Polished Marble Foundation Plinth (5.6m x 0.4m x 5.6m)
+		var i_plinth := MeshInstance3D.new()
+		var ip_box := BoxMesh.new()
+		ip_box.size = Vector3(5.6, 0.4, 5.6)
+		i_plinth.mesh = ip_box
+		i_plinth.position = Vector3(0.0, 0.2, 0.0)
+		var iplinth_mat := StandardMaterial3D.new()
+		iplinth_mat.albedo_color = Color(0.72, 0.76, 0.80)
+		i_plinth.material_override = iplinth_mat
+		iv.add_child(i_plinth)
+
+		# Sanctuary Hall Body (4.5m x 2.6m x 3.8m)
+		var i_hall := MeshInstance3D.new()
+		var ih_box := BoxMesh.new()
+		ih_box.size = Vector3(4.5, 2.6, 3.8)
+		i_hall.mesh = ih_box
+		ih_box.material = null
+		i_hall.position = Vector3(0.0, 1.7, -0.4)
+		var ihall_mat := StandardMaterial3D.new()
+		ihall_mat.albedo_color = Color(0.86, 0.90, 0.92) # Pure White Sanctuary Stone
+		ihall_mat.roughness = 0.65
+		i_hall.material_override = ihall_mat
+		iv.add_child(i_hall)
+
+		# Healing Emerald Roof (4.8m x 1.6m x 4.2m)
+		var i_roof := MeshInstance3D.new()
+		var ir_prism := PrismMesh.new()
+		ir_prism.size = Vector3(4.8, 1.6, 4.2)
+		i_roof.mesh = ir_prism
+		i_roof.position = Vector3(0.0, 3.8, -0.4)
+		var iroof_mat := StandardMaterial3D.new()
+		iroof_mat.albedo_color = Color(0.18, 0.65, 0.48) # Emerald Green Healing Slate
+		iroof_mat.roughness = 0.62
+		i_roof.material_override = iroof_mat
+		iv.add_child(i_roof)
+
+		# Arched Portico Columns (Hàng cột vòm mặt tiền)
+		for col_x in [-1.8, -0.6, 0.6, 1.8]:
+			var col := MeshInstance3D.new()
+			var c_cyl := CylinderMesh.new()
+			c_cyl.top_radius = 0.16
+			c_cyl.bottom_radius = 0.22
+			c_cyl.height = 2.4
+			col.mesh = c_cyl
+			col.position = Vector3(col_x, 1.4, 1.45)
+			col.material_override = ihall_mat
+			iv.add_child(col)
+
+		# Portico Canopy Roof (Mái hiên vòm)
+		var canopy := MeshInstance3D.new()
+		var can_box := BoxMesh.new()
+		can_box.size = Vector3(4.2, 0.28, 1.2)
+		canopy.mesh = can_box
+		canopy.position = Vector3(0.0, 2.68, 1.45)
+		canopy.material_override = iroof_mat
+		iv.add_child(canopy)
+
+		# Central Healing Cupola Spire (Chóp tháp ngọc bích trung tâm)
+		var spire_dome := MeshInstance3D.new()
+		var sd_cyl := CylinderMesh.new()
+		sd_cyl.top_radius = 0.55
+		sd_cyl.bottom_radius = 0.75
+		sd_cyl.height = 1.1
+		spire_dome.mesh = sd_cyl
+		spire_dome.position = Vector3(0.0, 4.95, -0.4)
+		spire_dome.material_override = ihall_mat
+		iv.add_child(spire_dome)
+
+		# Levitating Glowing Emerald Healing Cross (Thánh Giá Trị Liệu 3D phát sáng lơ lửng)
+		var cross_root := Node3D.new()
+		cross_root.position = Vector3(0.0, 6.2, -0.4)
+
+		var cross_v := MeshInstance3D.new()
+		var cv_box := BoxMesh.new()
+		cv_box.size = Vector3(0.24, 1.15, 0.24)
+		cross_v.mesh = cv_box
+		var cross_mat := StandardMaterial3D.new()
+		cross_mat.albedo_color = Color(0.35, 1.0, 0.65)
+		cross_mat.emission_enabled = true
+		cross_mat.emission = Color(0.22, 0.95, 0.55)
+		cross_mat.emission_energy_multiplier = 2.4
+		cross_v.material_override = cross_mat
+		cross_root.add_child(cross_v)
+
+		var cross_h := MeshInstance3D.new()
+		var ch_box := BoxMesh.new()
+		ch_box.size = Vector3(0.85, 0.24, 0.24)
+		cross_h.mesh = ch_box
+		cross_h.material_override = cross_mat
+		cross_root.add_child(cross_h)
+		iv.add_child(cross_root)
+
+		# Logistics & Apothecary Staging Area (Bao lương thực, thùng gỗ tiếp tế & vạc sắc thuốc)
+		var crate1 := MeshInstance3D.new()
+		var cr1_box := BoxMesh.new()
+		cr1_box.size = Vector3(0.55, 0.55, 0.55)
+		crate1.mesh = cr1_box
+		crate1.position = Vector3(-1.6, 0.65, 1.7)
+		var cr_mat := StandardMaterial3D.new()
+		cr_mat.albedo_color = Color(0.58, 0.42, 0.25)
+		crate1.material_override = cr_mat
+		iv.add_child(crate1)
+
+		var cauldron := MeshInstance3D.new()
+		var ca_cyl := CylinderMesh.new()
+		ca_cyl.top_radius = 0.35
+		ca_cyl.bottom_radius = 0.28
+		ca_cyl.height = 0.52
+		cauldron.mesh = ca_cyl
+		cauldron.position = Vector3(1.6, 0.62, 1.7)
+		var ca_mat := StandardMaterial3D.new()
+		ca_mat.albedo_color = Color(0.25, 0.28, 0.32)
+		cauldron.material_override = ca_mat
+		iv.add_child(cauldron)
+
+		var inf_lbl: Label3D = infirmary_mesh.get_node_or_null("InfirmaryLabel")
+		if inf_lbl != null:
+			inf_lbl.position = Vector3(0.0, 7.2, 0.0)
+
 	if infirmary_body != null and infirmary_body.has_node("CollisionShape3D"):
 		var i_shape: CollisionShape3D = infirmary_body.get_node("CollisionShape3D")
 		var ishape := BoxShape3D.new()
-		ishape.size = Vector3(5.0, 3.6, 5.6)
+		ishape.size = Vector3(5.6, 4.5, 5.6)
 		i_shape.shape = ishape
-	var inf_lbl: Label3D = infirmary_mesh.get_node_or_null("InfirmaryLabel")
-	if inf_lbl != null:
-		inf_lbl.position = Vector3(0.0, 2.4, 0.0)
+		i_shape.position = Vector3(0.0, 2.25, 0.0)
 
 func _setup_landmark_metadata() -> void:
 	bonfire_body.set_meta("interactable_type", "LANDMARK")
@@ -1252,17 +1497,17 @@ func _apply_all_grid_transforms() -> void:
 			altar_body.position = a_pos
 
 	# 3. BARRACKS
-	var b_entry: Dictionary = _grid_structures.get("BARRACKS", { "gx": 23, "gz": 11, "rot": 0 })
-	var b_pos := _grid_footprint_to_world_center(int(b_entry.get("gx", 23)), int(b_entry.get("gz", 11)), Vector2i(3, 3))
+	var b_entry: Dictionary = _grid_structures.get("BARRACKS", { "gx": 23, "gz": 6, "rot": 0 })
+	var b_pos := _grid_footprint_to_world_center(int(b_entry.get("gx", 23)), int(b_entry.get("gz", 6)), Vector2i(3, 3))
 	if barracks_mesh != null:
-		barracks_mesh.position = b_pos + Vector3(0.0, 1.6, 0.0)
+		barracks_mesh.position = b_pos
 		barracks_mesh.rotation_degrees.y = float(int(b_entry.get("rot", 0)))
 
 	# 4. INFIRMARY
-	var i_entry: Dictionary = _grid_structures.get("INFIRMARY", { "gx": 23, "gz": 36, "rot": 0 })
-	var i_pos := _grid_footprint_to_world_center(int(i_entry.get("gx", 23)), int(i_entry.get("gz", 36)), Vector2i(3, 3))
+	var i_entry: Dictionary = _grid_structures.get("INFIRMARY", { "gx": 23, "gz": 40, "rot": 0 })
+	var i_pos := _grid_footprint_to_world_center(int(i_entry.get("gx", 23)), int(i_entry.get("gz", 40)), Vector2i(3, 3))
 	if infirmary_mesh != null:
-		infirmary_mesh.position = i_pos + Vector3(0.0, 1.6, 0.0)
+		infirmary_mesh.position = i_pos
 		infirmary_mesh.rotation_degrees.y = float(int(i_entry.get("rot", 0)))
 
 	# 5. All 48 Plot Nodes
