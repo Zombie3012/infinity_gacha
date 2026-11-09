@@ -24,6 +24,9 @@ const BuildingInfoPopupScript := preload("res://scripts/ui/building_info_popup.g
 const BuildingUpgradePopupScript := preload("res://scripts/ui/building_upgrade_popup.gd")
 const BuildingConstructionModalScript := preload("res://scripts/ui/building_construction_modal.gd")
 const KitchenMessHallModalScript := preload("res://scripts/ui/kitchen_mess_hall_modal.gd")
+const ForgeModalScript := preload("res://scripts/ui/forge_modal.gd")
+const DormitoryModalScript := preload("res://scripts/ui/dormitory_modal.gd")
+const TrainingCenterModalScript := preload("res://scripts/ui/training_center_modal.gd")
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
@@ -2895,6 +2898,12 @@ func _on_action_bar_facility_pressed(b_data: Dictionary, action_code: String) ->
 			_open_recovery_center_modal()
 		"WAREHOUSE":
 			_open_gear_warehouse_modal()
+		"FORGE":
+			_open_forge_modal(b_data)
+		"DORMITORY":
+			_open_dormitory_modal(b_data)
+		"TRAINING":
+			_open_training_center_modal(b_data)
 		_:
 			# Fallback for facilities where dedicated modal will be built
 			inspector_panel.visible = true
@@ -2914,6 +2923,93 @@ func _open_kitchen_modal(b_data: Dictionary) -> void:
 	var modal = KitchenMessHallModalScript.new()
 	modal.name = "KitchenMessHallModal"
 	modal.setup(b_data)
+	modal.closed.connect(func():
+		await _sync_all_from_backend()
+	)
+	$HUD.add_child(modal)
+
+func _open_forge_modal(b_data: Dictionary) -> void:
+	var existing = $HUD.get_node_or_null("ForgeModal")
+	if existing != null:
+		existing.queue_free()
+	var modal = ForgeModalScript.new()
+	modal.name = "ForgeModal"
+	modal.setup(b_data)
+	modal.craft_requested.connect(func(rcode, rname):
+		await _craft_equipment_recipe(rcode, rname)
+		if is_instance_valid(modal):
+			modal.refresh_all()
+	)
+	modal.enhance_requested.connect(func(eid, ename):
+		await _enhance_equipment_item(eid, ename)
+		if is_instance_valid(modal):
+			modal.refresh_all()
+	)
+	modal.fuse_requested.connect(func(tcode, slvl, gname):
+		await _fuse_equipment_items(tcode, slvl, gname)
+		if is_instance_valid(modal):
+			modal.refresh_all()
+	)
+	modal.closed.connect(func():
+		await _sync_all_from_backend()
+	)
+	$HUD.add_child(modal)
+
+func _open_dormitory_modal(b_data: Dictionary) -> void:
+	var existing = $HUD.get_node_or_null("DormitoryModal")
+	if existing != null:
+		existing.queue_free()
+	var modal = DormitoryModalScript.new()
+	modal.name = "DormitoryModal"
+	modal.setup(b_data)
+	modal.hero_rest_toggled.connect(func(hid, hname, is_resting):
+		await _toggle_hero_rest(hid, hname, is_resting)
+		if is_instance_valid(modal):
+			modal.refresh_ui()
+	)
+	modal.squad_rest_requested.connect(func(is_resting):
+		for hid in GameState.active_party_ids:
+			var hname := "Hero"
+			for h in GameState.heroes:
+				if h is Dictionary and str(h.get("id", "")) == hid:
+					hname = str(h.get("name", "Hero"))
+					break
+			await _toggle_hero_rest(hid, hname, not is_resting)
+		if is_instance_valid(modal):
+			modal.refresh_ui()
+	)
+	modal.feed_hero_requested.connect(func(hid, hname):
+		await _feed_hero(hid, hname)
+		if is_instance_valid(modal):
+			modal.refresh_ui()
+	)
+	modal.closed.connect(func():
+		await _sync_all_from_backend()
+	)
+	$HUD.add_child(modal)
+
+func _open_training_center_modal(b_data: Dictionary) -> void:
+	var existing = $HUD.get_node_or_null("TrainingCenterModal")
+	if existing != null:
+		existing.queue_free()
+	var modal = TrainingCenterModalScript.new()
+	modal.name = "TrainingCenterModal"
+	modal.setup(b_data)
+	modal.stat_train_requested.connect(func(hid, hname, scode):
+		await _train_hero_stat(hid, hname, scode)
+		if is_instance_valid(modal):
+			modal.refresh_ui()
+	)
+	modal.skill_unlock_requested.connect(func(hid, hname, sk_code, sk_name):
+		await _unlock_hero_skill(hid, hname, sk_code, sk_name)
+		if is_instance_valid(modal):
+			modal.refresh_ui()
+	)
+	modal.skill_upgrade_requested.connect(func(hid, hname, sk_code, sk_name):
+		await _upgrade_hero_skill(hid, hname, sk_code, sk_name)
+		if is_instance_valid(modal):
+			modal.refresh_ui()
+	)
 	modal.closed.connect(func():
 		await _sync_all_from_backend()
 	)
