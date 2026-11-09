@@ -5,5 +5,9 @@ node_modules/
 .DS_Store
 *.log
 scratch/
+logs/
 __pycache__/
 *.pyc
+.godot/
+*.uid
+
