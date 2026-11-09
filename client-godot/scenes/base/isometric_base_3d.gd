@@ -2508,6 +2508,39 @@ func _open_hero_picker_for_facility(ctx_mode: int = 0, allowed_classes: Array = 
 	)
 	$HUD.add_child(modal)
 
+func _open_worker_assignment_modal(building_id: String, building_name: String, building_code: String, remaining_slots: int) -> void:
+	var existing = $HUD.get_node_or_null("HeroPickerModal")
+	if existing != null:
+		existing.queue_free()
+
+	var assigned_map := GameState.get_worker_assignment_map()
+	var exclude_ids: Array = assigned_map.keys()
+	var allowed_cls: Array = ["MAGE"] if building_code == "LIBRARY" else []
+	var ctx_mode: int = UniversalHeroCardScript.ContextMode.LIBRARY if building_code == "LIBRARY" else UniversalHeroCardScript.ContextMode.DEFAULT
+
+	var modal = HeroPickerModalScript.new()
+	modal.name = "HeroPickerModal"
+	var sub := "Chọn Hero đảm nhận vị trí nhân sự tại công trình (Còn %d chỗ trống)" % remaining_slots
+	if building_code == "LIBRARY":
+		sub += " • Yêu cầu: Hệ MAGE"
+
+	modal.configure(
+		"Phân Công Hero: %s" % building_name,
+		false,
+		1,
+		ctx_mode,
+		allowed_cls,
+		exclude_ids,
+		["Tất cả", "Chưa xếp", "Trong Đội PvE"],
+		sub
+	)
+	modal.hero_picked.connect(func(picked_hero: Dictionary):
+		var hid := str(picked_hero.get("id", ""))
+		var hname := str(picked_hero.get("name", "Hero"))
+		_assign_worker_to_building(building_id, hid, hname, building_name)
+	)
+	$HUD.add_child(modal)
+
 func _re_render_inspector_if_open() -> void:
 	if not inspector_panel.visible or _inspector_context.is_empty():
 		return
@@ -2858,27 +2891,50 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 
 	# Workers management section
 	if max_w > 0:
-		var worker_hint := "👷 Hero phụ trách (%d/%d) — Mẹo: Kéo-thả Tướng 3D trực tiếp vào ô này!" % [workers.size(), max_w]
+		_add_inspector_section_header("👷 NHÂN SỰ PHỤ TRÁCH (%d/%d)" % [workers.size(), max_w], Color(0.95, 0.85, 0.55))
+		var worker_hint := "Hiệu suất sản xuất và vận hành phụ thuộc vào cấp độ và thuộc tính của Hero."
 		if b_code == "LIBRARY":
-			worker_hint += "\n🔮 Quy tắc Thư Viện: Chỉ Hero hệ MAGE (only MAGE class) mới được phân công & sản xuất Sách EXP!"
-		_add_inspector_info(worker_hint, Color(0.95, 0.85, 0.55))
+			worker_hint += "\n🔮 Quy tắc Thư Viện: Chỉ Hero hệ MAGE mới được phân công & sản xuất Sách EXP!"
+		_add_inspector_info(worker_hint, Color(0.85, 0.90, 0.96))
+
 		for w in workers:
 			if w is Dictionary:
 				var w_hid := str(w.get("heroInstanceId", ""))
 				var w_name := str(w.get("heroName", "Hero"))
-				var w_lvl := int(w.get("heroLevel", 1))
 				var boost := int(round((float(w.get("efficiencyBoost", 1.0)) - 1.0) * 100.0))
-				_add_inspector_button(
-					"➖ Gỡ %s (Lv.%d, Hiệu suất +%d%%)" % [w_name, w_lvl, boost],
+				var full_hero := GameState.get_hero_by_id(w_hid)
+				if not full_hero.is_empty():
+					var w_card_wrap := CenterContainer.new()
+					w_card_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					var w_card = UniversalHeroCardScript.new()
+					w_card.custom_minimum_size = Vector2(210, 240)
+					var w_ctx: int = UniversalHeroCardScript.ContextMode.LIBRARY if b_code == "LIBRARY" else UniversalHeroCardScript.ContextMode.DEFAULT
+					w_card.setup(full_hero, w_ctx, false)
+					w_card.add_badge("👷 Hiệu suất +%d%%" % boost, Color(0.18, 0.65, 0.38, 0.95))
+					w_card_wrap.add_child(w_card)
+					inspector_action_container.add_child(w_card_wrap)
+
+				var unassign_btn := _add_inspector_button(
+					"➖ Gỡ %s Khỏi Công Trình" % w_name,
 					func(): _remove_worker_from_building(b_id, w_hid, w_name)
 				)
+				unassign_btn.modulate = Color(1.0, 0.65, 0.65)
 
 		if workers.size() < max_w and b_status == "READY":
+			var remaining := max_w - workers.size()
+			var pick_worker_btn := Button.new()
+			pick_worker_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			pick_worker_btn.custom_minimum_size = Vector2(0, 36)
+			pick_worker_btn.text = "➕ Chọn Hero Phân Công (Còn %d Chỗ)" % remaining
+			pick_worker_btn.modulate = Color(0.45, 0.95, 0.65)
+			pick_worker_btn.pressed.connect(func():
+				_open_worker_assignment_modal(b_id, b_name, b_code, remaining)
+			)
+			inspector_action_container.add_child(pick_worker_btn)
+
 			var assigned_map := GameState.get_worker_assignment_map()
-			var shown := 0
+			var quick_workers: Array = []
 			for h in GameState.heroes:
-				if shown >= 4:
-					break
 				var hid := str(h.get("id", ""))
 				var hstate := str(h.get("state", "IDLE"))
 				var hclass := str(h.get("classCode", h.get("heroClass", "WARRIOR"))).to_upper()
@@ -2886,15 +2942,29 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 					continue
 				if b_code == "LIBRARY" and hclass != "MAGE":
 					continue
-				var hname := str(h.get("name", "Hero"))
-				var hlvl := int(h.get("level", 1))
-				shown += 1
-				_add_inspector_button(
-					"➕ Phân công %s [%s Lv.%d]" % [hname, hclass, hlvl],
-					func(): _assign_worker_to_building(b_id, hid, hname, b_name)
-				)
-			if b_code == "LIBRARY" and shown == 0:
-				_add_inspector_info("⚠️ Chưa có Hero hệ MAGE nào rảnh rỗi để phân công vào Thư Viện Ma Thuật.", Color(1.0, 0.75, 0.45))
+				quick_workers.append(h)
+				if quick_workers.size() >= 3:
+					break
+
+			if not quick_workers.is_empty():
+				var qrow := HBoxContainer.new()
+				qrow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				qrow.add_theme_constant_override("separation", 4)
+				for qh in quick_workers:
+					var qhid := str(qh.get("id", ""))
+					var qhname := str(qh.get("name", "Hero"))
+					var qbtn := Button.new()
+					qbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					qbtn.custom_minimum_size = Vector2(0, 26)
+					qbtn.text = "➕ %s" % qhname
+					qbtn.modulate = Color(0.85, 0.95, 0.85)
+					qbtn.pressed.connect(func():
+						_assign_worker_to_building(b_id, qhid, qhname, b_name)
+					)
+					qrow.add_child(qbtn)
+				inspector_action_container.add_child(qrow)
+			elif b_code == "LIBRARY":
+				_add_inspector_info("⚠️ Chưa có Hero hệ MAGE nào rảnh rỗi để phân công vào Thư Viện.", Color(1.0, 0.75, 0.45))
 
 	_add_inspector_button(
 		"🏚️ Phá Dỡ Công Trình (Hoàn 50% Bạc)",

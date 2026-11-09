@@ -42,9 +42,12 @@ func configure(
 	ctx_mode: int = 0,
 	classes_filter: Array = [],
 	exclude_ids: Array = [],
-	pills: Array = []
+	pills: Array = [],
+	subtitle: String = ""
 ) -> void:
 	modal_title = title
+	if subtitle != "":
+		modal_subtitle = subtitle
 	multi_select = can_multi
 	max_selection = max_sel
 	context_mode = ctx_mode
@@ -56,6 +59,10 @@ func configure(
 	if is_inside_tree():
 		if title_label != null:
 			title_label.text = modal_title
+		if subtitle_label != null:
+			subtitle_label.text = modal_subtitle
+		if browser != null:
+			browser.configure_header("Danh sách Hero phù hợp", filter_pills)
 		_populate_browser()
 
 func _build_ui() -> void:
