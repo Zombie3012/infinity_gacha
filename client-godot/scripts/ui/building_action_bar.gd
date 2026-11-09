@@ -362,7 +362,7 @@ func _parse_iso_to_unix(iso_str: String) -> float:
 	return float(Time.get_unix_time_from_datetime_dict(dt))
 
 ## Show action bar for major landmarks (Summon Altar, Barracks/Strategic House, Infirmary/Recovery Center, Fountain, East Gate)
-func show_landmark(code: String, title: String, subtitle: String, actions: Array[Dictionary]) -> void:
+func show_landmark(code: String, title: String, subtitle: String, actions: Array = []) -> void:
 	current_data = {"landmark_code": code, "typeName": title, "buildingType": code, "is_landmark": true}
 	is_plot_empty = false
 	is_plot_locked = false
