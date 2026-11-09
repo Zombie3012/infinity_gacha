@@ -14,6 +14,8 @@ extends Node3D
 
 const UNIT_ACTOR_SCENE := preload("res://scenes/common/unit_actor_3d.tscn")
 const BASE_PLOT_SCENE := preload("res://scenes/base/base_plot_3d.tscn")
+const UniversalHeroCardScript := preload("res://scripts/ui/universal_hero_card.gd")
+const UniversalItemCardScript := preload("res://scripts/ui/universal_item_card.gd")
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
@@ -4242,7 +4244,7 @@ func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: in
 	overlay.add_child(center)
 
 	var card_panel := PanelContainer.new()
-	card_panel.custom_minimum_size = Vector2(780, 480)
+	card_panel.custom_minimum_size = Vector2(980, 560)
 	var pstyle := StyleBoxFlat.new()
 	pstyle.bg_color = Color(0.07, 0.10, 0.16, 0.97)
 	pstyle.border_width_left = 2
@@ -4291,14 +4293,14 @@ func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: in
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(0, 290)
+	scroll.custom_minimum_size = Vector2(0, 320)
 	vbox.add_child(scroll)
 
 	var grid := GridContainer.new()
-	grid.columns = 5 if results.size() > 2 else maxi(1, results.size())
+	grid.columns = mini(5, maxi(1, results.size()))
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
 	scroll.add_child(grid)
 
 	for r in results:
@@ -4309,84 +4311,46 @@ func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: in
 		var rname := str(r.get("rewardName", "Anh Hùng" if is_hero else "Vật phẩm"))
 		var rar := int(r.get("rarity", 1))
 
-		var item_card := PanelContainer.new()
-		item_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		item_card.custom_minimum_size = Vector2(138, 136)
-		var cstyle := StyleBoxFlat.new()
-		cstyle.corner_radius_top_left = 8
-		cstyle.corner_radius_top_right = 8
-		cstyle.corner_radius_bottom_left = 8
-		cstyle.corner_radius_bottom_right = 8
-		cstyle.border_width_left = 2
-		cstyle.border_width_top = 2
-		cstyle.border_width_right = 2
-		cstyle.border_width_bottom = 2
-		if is_hero and rar >= 5:
-			cstyle.bg_color = Color(0.24, 0.18, 0.05, 0.96)
-			cstyle.border_color = Color(1.0, 0.84, 0.18)
-		elif is_hero and rar == 4:
-			cstyle.bg_color = Color(0.18, 0.09, 0.26, 0.96)
-			cstyle.border_color = Color(0.84, 0.42, 1.0)
-		elif is_hero:
-			cstyle.bg_color = Color(0.08, 0.16, 0.26, 0.96)
-			cstyle.border_color = Color(0.35, 0.80, 1.0)
-		else:
-			cstyle.bg_color = Color(0.10, 0.13, 0.18, 0.92)
-			cstyle.border_color = Color(0.38, 0.46, 0.58)
-		item_card.add_theme_stylebox_override("panel", cstyle)
-
-		var cm := MarginContainer.new()
-		cm.add_theme_constant_override("margin_left", 8)
-		cm.add_theme_constant_override("margin_top", 8)
-		cm.add_theme_constant_override("margin_right", 8)
-		cm.add_theme_constant_override("margin_bottom", 8)
-		item_card.add_child(cm)
-
-		var cv := VBoxContainer.new()
-		cv.alignment = BoxContainer.ALIGNMENT_CENTER
-		cv.add_theme_constant_override("separation", 5)
-		cm.add_child(cv)
-
-		var badge_lbl := Label.new()
-		badge_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		badge_lbl.add_theme_font_size_override("font_size", 13)
 		if is_hero:
-			badge_lbl.text = "🦸 ANH HÙNG " + "★".repeat(clampi(rar, 1, 5))
-			badge_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.25) if rar >= 4 else Color(0.55, 0.90, 1.0))
-		else:
-			badge_lbl.text = "🪨 NGUYÊN LIỆU" if rtype == "MATERIAL" else "📦 VẬT PHẨM"
-			badge_lbl.add_theme_color_override("font_color", Color(0.70, 0.82, 0.90))
-		cv.add_child(badge_lbl)
-
-		var name_lbl := Label.new()
-		name_lbl.text = rname
-		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		name_lbl.add_theme_font_size_override("font_size", 13)
-		name_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-		cv.add_child(name_lbl)
-
-		var detail_lbl := Label.new()
-		detail_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		detail_lbl.add_theme_font_size_override("font_size", 11)
-		if is_hero:
-			if bool(r.get("isDuplicate", false)):
-				detail_lbl.text = "🔄 Trùng: +1 Thiên Mệnh"
-				detail_lbl.add_theme_color_override("font_color", Color(1.0, 0.72, 0.35))
+			var hero_dict: Dictionary = r.get("hero", {}) if r.get("hero") is Dictionary else {}
+			if hero_dict.is_empty():
+				hero_dict = {
+					"id": str(r.get("heroId", r.get("id", ""))),
+					"name": rname,
+					"rarity": rar,
+					"level": 1,
+					"classCode": str(r.get("classCode", "WARRIOR")),
+					"element": str(r.get("element", "NEUTRAL")),
+					"state": "HEALTHY"
+				}
 			else:
-				var h_inst: Dictionary = r.get("hero", {}) if r.get("hero") is Dictionary else {}
-				var h_cls := str(h_inst.get("classCode", r.get("classCode", "")))
-				if not h_cls.is_empty():
-					detail_lbl.text = "✨ Hệ: %s" % h_cls
-				else:
-					detail_lbl.text = "✨ Mới thu nhận"
-				detail_lbl.add_theme_color_override("font_color", Color(0.45, 0.92, 0.55))
-		else:
-			detail_lbl.text = "Vật phẩm doanh trại"
-			detail_lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.85))
-		cv.add_child(detail_lbl)
+				hero_dict = hero_dict.duplicate()
+				if not hero_dict.has("rarity"):
+					hero_dict["rarity"] = rar
+				if not hero_dict.has("name"):
+					hero_dict["name"] = rname
 
-		grid.add_child(item_card)
+			var card = UniversalHeroCardScript.new()
+			card.setup(hero_dict, UniversalHeroCardScript.ContextMode.DEFAULT, false)
+			if bool(r.get("isDuplicate", false)):
+				card.add_badge("🔄 Trùng (+1 Mảnh)", Color(0.85, 0.45, 0.15, 0.95))
+			else:
+				card.add_badge("✨ MỚI", Color(0.18, 0.65, 0.35, 0.95))
+			grid.add_child(card)
+		else:
+			var item_dict := {
+				"id": str(r.get("itemId", r.get("id", ""))),
+				"name": rname,
+				"rarity": rar,
+				"starLevel": rar,
+				"quantity": int(r.get("quantity", 1)),
+				"itemType": rtype,
+				"slot": rtype
+			}
+			var icard = UniversalItemCardScript.new()
+			icard.setup(item_dict, UniversalItemCardScript.ContextMode.MATERIAL, false)
+			icard.add_badge("📦 VẬT PHẨM", Color(0.20, 0.35, 0.55, 0.95))
+			grid.add_child(icard)
 
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
