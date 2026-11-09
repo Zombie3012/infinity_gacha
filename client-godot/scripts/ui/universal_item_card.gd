@@ -38,12 +38,16 @@ var _custom_badges: Array[Dictionary] = []
 func _init() -> void:
 	custom_minimum_size = Vector2(170, 195)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mouse_filter = Control.MOUSE_FILTER_PASS
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	gui_input.connect(_on_gui_input)
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
+	resized.connect(func(): pivot_offset = size / 2.0)
 
 func setup(data: Dictionary, mode: ContextMode = ContextMode.INVENTORY, can_select: bool = false) -> void:
 	item_data = data
@@ -183,6 +187,7 @@ func _rebuild_ui() -> void:
 	_refresh_badges()
 
 	_update_selection_visual()
+	_set_children_mouse_filter_ignore(self)
 
 func _apply_item_context() -> void:
 	var atk := int(item_data.get("atkBonus", item_data.get("attack", 0)))
@@ -227,9 +232,11 @@ func _refresh_badges() -> void:
 	for b_def in _custom_badges:
 		var badge := _create_mini_badge(str(b_def.get("text", "")), b_def.get("bg", Color(0.2, 0.4, 0.7, 0.9)), b_def.get("fg", Color.WHITE))
 		_badge_container.add_child(badge)
+	_set_children_mouse_filter_ignore(self)
 
 func _create_mini_badge(text: String, bg_col: Color, fg_col: Color = Color.WHITE) -> PanelContainer:
 	var pill := PanelContainer.new()
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var pstyle := StyleBoxFlat.new()
 	pstyle.bg_color = bg_col
 	pstyle.corner_radius_top_left = 3
@@ -239,6 +246,7 @@ func _create_mini_badge(text: String, bg_col: Color, fg_col: Color = Color.WHITE
 	pill.add_theme_stylebox_override("panel", pstyle)
 
 	var pm := MarginContainer.new()
+	pm.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pm.add_theme_constant_override("margin_left", 4)
 	pm.add_theme_constant_override("margin_right", 4)
 	pm.add_theme_constant_override("margin_top", 1)
@@ -246,11 +254,18 @@ func _create_mini_badge(text: String, bg_col: Color, fg_col: Color = Color.WHITE
 	pill.add_child(pm)
 
 	var lbl := Label.new()
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lbl.text = text
 	lbl.add_theme_font_size_override("font_size", 9)
 	lbl.add_theme_color_override("font_color", fg_col)
 	pm.add_child(lbl)
 	return pill
+
+func _set_children_mouse_filter_ignore(node: Node) -> void:
+	for child in node.get_children():
+		if child is Control:
+			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_set_children_mouse_filter_ignore(child)
 
 func _update_selection_visual() -> void:
 	if _outer_style == null:
