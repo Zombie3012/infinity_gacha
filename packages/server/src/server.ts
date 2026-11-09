@@ -1138,6 +1138,139 @@ export function createApp() {
     }
   }));
 
+  app.post('/api/giftcodes/redeem', requireAccount, asyncRoute(async (req, res) => {
+    const rawCode = String(req.body?.code || '').trim().toUpperCase();
+    if (!rawCode) return res.status(400).json({ error: 'Mã quà tặng không được để trống.' });
+
+    const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+
+    type GiftReward = {
+      title: string;
+      desc: string;
+      gems?: number;
+      silver?: number;
+      exp?: number;
+      food?: number;
+      scrolls?: number;
+      materials?: { itemId: string; quantity: number }[];
+    };
+
+    const CODES: Record<string, GiftReward> = {
+      FULL: {
+        title: 'Mã Thử Nghiệm FULL',
+        desc: 'Đã nhận toàn bộ tài nguyên tối đa (99M Đá Quý, 999M Vàng, 1M Khẩu Phần, 99K Thiên Thư)!',
+        gems: 99999999,
+        silver: 999999999,
+        exp: 1000000,
+        food: 1000000,
+        scrolls: 99999,
+        materials: [
+          { itemId: 'WOOD', quantity: 100000 },
+          { itemId: 'STONE', quantity: 100000 },
+          { itemId: 'IRON_ORE', quantity: 100000 },
+          { itemId: 'ENHANCEMENT_STONE', quantity: 50000 },
+        ],
+      },
+      VIP999: {
+        title: 'Gói Quà VIP 999',
+        desc: '10,000 Đá Quý, 500,000 Vàng, 2,000 Khẩu Phần, 50 Thiên Thư',
+        gems: 10000,
+        silver: 500000,
+        exp: 5000,
+        food: 2000,
+        scrolls: 50,
+      },
+      INFINITI2026: {
+        title: 'Quà Mừng Năm 2026',
+        desc: '5,000 Đá Quý, 200,000 Vàng, 1,000 Khẩu Phần, 20 Thiên Thư',
+        gems: 5000,
+        silver: 200000,
+        exp: 2000,
+        food: 1000,
+        scrolls: 20,
+      },
+      FREESUMMON: {
+        title: 'Vé Triệu Hồi Tân Thủ',
+        desc: '3,000 Đá Quý, 100,000 Vàng, 30 Thiên Thư',
+        gems: 3000,
+        silver: 100000,
+        scrolls: 30,
+      },
+    };
+
+    const reward = CODES[rawCode];
+    if (!reward) {
+      return res.status(404).json({ error: `Mã quà tặng "${rawCode}" không tồn tại hoặc đã hết hạn.` });
+    }
+
+    const now = new Date();
+    await db.transaction(async tx => {
+      const deltaGems = BigInt(reward.gems ?? 0);
+      const deltaSilver = BigInt(reward.silver ?? 0);
+      const deltaExp = BigInt(reward.exp ?? 0);
+
+      await tx.update(masters).set({
+        gems: sql`${masters.gems} + ${deltaGems}`,
+        silverCoins: sql`${masters.silverCoins} + ${deltaSilver}`,
+        exp: sql`${masters.exp} + ${deltaExp}`,
+        updatedAt: now,
+      }).where(eq(masters.id, master.id));
+
+      if (reward.food && reward.food > 0) {
+        const [existingFood] = await tx.select().from(masterItems)
+          .where(and(eq(masterItems.masterId, master.id), eq(masterItems.itemId, 'FOOD'))).limit(1);
+        if (existingFood) {
+          await tx.update(masterItems).set({ quantity: existingFood.quantity + reward.food, updatedAt: now }).where(eq(masterItems.id, existingFood.id));
+        } else {
+          await tx.insert(masterItems).values({ id: uuidv4(), masterId: master.id, itemId: 'FOOD', quantity: reward.food, updatedAt: now });
+        }
+      }
+
+      if (reward.materials) {
+        for (const mat of reward.materials) {
+          const [existingMat] = await tx.select().from(masterItems)
+            .where(and(eq(masterItems.masterId, master.id), eq(masterItems.itemId, mat.itemId))).limit(1);
+          if (existingMat) {
+            await tx.update(masterItems).set({ quantity: existingMat.quantity + mat.quantity, updatedAt: now }).where(eq(masterItems.id, existingMat.id));
+          } else {
+            await tx.insert(masterItems).values({ id: uuidv4(), masterId: master.id, itemId: mat.itemId, quantity: mat.quantity, updatedAt: now });
+          }
+        }
+      }
+
+      if (reward.scrolls && reward.scrolls > 0) {
+        await tx.insert(masterSummonInventory).values({
+          id: uuidv4(),
+          masterId: master.id,
+          scrollType: 'NORMAL',
+          quantity: reward.scrolls,
+          updatedAt: now,
+        }).onConflictDoUpdate({
+          target: [masterSummonInventory.masterId, masterSummonInventory.scrollType],
+          set: {
+            quantity: sql`${masterSummonInventory.quantity} + ${reward.scrolls}`,
+            updatedAt: now,
+          },
+        });
+      }
+    });
+
+    return res.json({
+      success: true,
+      code: rawCode,
+      title: reward.title,
+      message: reward.desc,
+      rewards: {
+        gems: reward.gems ?? 0,
+        silver: reward.silver ?? 0,
+        exp: reward.exp ?? 0,
+        food: reward.food ?? 0,
+        scrolls: reward.scrolls ?? 0,
+      },
+    });
+  }));
+
   app.get('/api/admin/support/tickets', requireAdminApiKey, asyncRoute(async (req, res) => {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     return res.json(await supportService.listForOperators(status));

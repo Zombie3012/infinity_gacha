@@ -42,6 +42,50 @@ var floor_assigned_hero_ids: Dictionary = {} # floor_num (int) -> Array[String h
 
 var world_base_pos: Vector2i = Vector2i(0, 0)
 var world_unlocked: bool = false
+var selected_avatar_hero_id: String = ""
+
+func get_party_combat_power() -> int:
+	var total_cp: int = 0
+	if active_party_ids.size() > 0:
+		for h in heroes:
+			if h is Dictionary and active_party_ids.has(str(h.get("id", ""))):
+				total_cp += calculate_hero_cp(h)
+	else:
+		var cps: Array = []
+		for h in heroes:
+			if h is Dictionary:
+				cps.append(calculate_hero_cp(h))
+		cps.sort()
+		cps.reverse()
+		for i in range(mini(5, cps.size())):
+			total_cp += int(cps[i])
+	return total_cp
+
+static func calculate_hero_cp(hero: Dictionary) -> int:
+	var cp_val := int(hero.get("combatPower", 0))
+	if cp_val > 0:
+		return cp_val
+	var mhp := int(hero.get("maxHp", hero.get("hp", 100)))
+	var atk := int(hero.get("atk", hero.get("attack", 25)))
+	var def_v := int(hero.get("def", hero.get("defense", 15)))
+	var spd := int(hero.get("spd", hero.get("speed", 10)))
+	var str_v := int(hero.get("str", 10))
+	var agi_v := int(hero.get("agi", 10))
+	var int_v := int(hero.get("int", 10))
+	var sta_v := int(hero.get("sta", 10))
+	return mhp + atk * 4 + def_v * 3 + spd * 2 + (str_v + agi_v + int_v + sta_v) * 5
+
+func get_master_max_exp() -> int:
+	return maxi(1000, master_level * 1000)
+
+func redeem_giftcode(code: String) -> Dictionary:
+	var payload := {"code": code}
+	var res = await ApiClient.post_req("/api/giftcodes/redeem", payload)
+	if res.get("ok", false):
+		await refresh_profile()
+		await refresh_inventory()
+		return {"ok": true, "data": res.get("data", {})}
+	return {"ok": false, "error": res.get("error", "Lỗi nhận mã quà tặng.")}
 
 func is_logged_in() -> bool:
 	return ApiClient.auth_token != "" and master_id != ""

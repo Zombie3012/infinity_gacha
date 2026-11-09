@@ -27,6 +27,7 @@ const KitchenMessHallModalScript := preload("res://scripts/ui/kitchen_mess_hall_
 const ForgeModalScript := preload("res://scripts/ui/forge_modal.gd")
 const DormitoryModalScript := preload("res://scripts/ui/dormitory_modal.gd")
 const TrainingCenterModalScript := preload("res://scripts/ui/training_center_modal.gd")
+const PlayerProfileModalScript := preload("res://scripts/ui/player_profile_modal.gd")
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
@@ -83,14 +84,29 @@ func get_floor_terrace_center(floor_num: int) -> Vector3:
 @onready var plots_container: Node3D = $PlotsContainer
 @onready var heroes_container: Node3D = $HeroesContainer
 
-@onready var master_info_label: Label = %MasterInfoLabel
-@onready var resource_info_label: Label = %ResourceInfoLabel
+@onready var player_card_btn: Button = %PlayerCardBtn
+@onready var player_card_panel: PanelContainer = %PlayerCardPanel
+@onready var avatar_frame: PanelContainer = %AvatarFrame
+@onready var avatar_icon_label: Label = %AvatarIconLabel
+@onready var avatar_level_badge: Label = %AvatarLevelBadge
+@onready var player_name_label: Label = %PlayerNameLabel
+@onready var player_cp_label: Label = %PlayerCpLabel
+@onready var player_exp_bar: ProgressBar = %PlayerExpBar
+@onready var player_exp_text: Label = %PlayerExpText
+
+@onready var gems_pill: PanelContainer = %GemsPill
+@onready var gems_val_label: Label = %GemsValLabel
+@onready var gold_pill: PanelContainer = %GoldPill
+@onready var gold_val_label: Label = %GoldValLabel
+@onready var ration_pill: PanelContainer = %RationPill
+@onready var ration_val_label: Label = %RationValLabel
+
 @onready var status_banner_label: Label = %StatusBannerLabel
 
-@onready var lighting_toggle_btn: Button = %LightingToggleBtn
-@onready var focus_base_btn: Button = %FocusBaseBtn
-@onready var refresh_base_btn: Button = %RefreshBaseBtn
-@onready var back_hub_btn: Button = %BackHubBtn
+var lighting_toggle_btn: Button = null
+var focus_base_btn: Button = null
+var refresh_base_btn: Button = null
+var back_hub_btn: Button = null
 @onready var floor_buttons_container: VBoxContainer = %FloorButtonsContainer
 
 @onready var summon_altar_btn: Button = %SummonAltarBtn
@@ -184,13 +200,26 @@ func _ready() -> void:
 	_apply_all_grid_transforms()
 	_build_floor_elevator_buttons()
 
-	back_hub_btn.visible = false
-	collect_all_btn.visible = false
+	if back_hub_btn != null:
+		back_hub_btn.visible = false
+	if collect_all_btn != null:
+		collect_all_btn.visible = false
 
-	lighting_toggle_btn.pressed.connect(_on_lighting_toggle_pressed)
-	focus_base_btn.pressed.connect(_on_focus_base_pressed)
-	refresh_base_btn.pressed.connect(_sync_all_from_backend)
-	back_hub_btn.pressed.connect(_on_back_hub_pressed)
+	if player_card_btn != null:
+		player_card_btn.pressed.connect(func():
+			_open_player_profile_modal(0)
+		)
+
+	_setup_top_hud_styles()
+
+	if lighting_toggle_btn != null:
+		lighting_toggle_btn.pressed.connect(_on_lighting_toggle_pressed)
+	if focus_base_btn != null:
+		focus_base_btn.pressed.connect(_on_focus_base_pressed)
+	if refresh_base_btn != null:
+		refresh_base_btn.pressed.connect(_sync_all_from_backend)
+	if back_hub_btn != null:
+		back_hub_btn.pressed.connect(_on_back_hub_pressed)
 	close_inspector_btn.pressed.connect(_close_inspector)
 
 	summon_altar_btn.pressed.connect(func():
@@ -1756,28 +1785,39 @@ func _find_first_free_unlocked_plot_index() -> int:
 	return -1
 
 func _refresh_hud() -> void:
-	var m_name := GameState.master_name if GameState.master_name != "" else "Master"
+	var m_name := GameState.master_name if GameState.master_name != "" else "Demo Master"
+	var party_cp := GameState.get_party_combat_power()
 	var built_cnt := _get_constructed_building_count()
 	var max_plots := GameState.unlocked_plots
 
-	master_info_label.text = "🏰 %s (Lv.%d) · Lâu Đài 2 Tầng · Công trình: %d/%d (Theo cấp Master)" % [
-		m_name,
-		GameState.master_level,
-		built_cnt,
-		max_plots
-	]
+	if player_name_label != null:
+		player_name_label.text = m_name
+	if player_cp_label != null:
+		player_cp_label.text = "⚔️ %s" % _format_num(party_cp)
+	if avatar_icon_label != null:
+		avatar_icon_label.text = _get_avatar_icon()
+	if avatar_level_badge != null:
+		avatar_level_badge.text = "Lv.%d" % GameState.master_level
+
+	var cur_exp: int = GameState.master_exp
+	var max_exp: int = GameState.get_master_max_exp()
+	var exp_pct: float = clampf(float(cur_exp) / float(maxi(1, max_exp)), 0.0, 1.0) * 100.0
+	if player_exp_bar != null:
+		player_exp_bar.max_value = 100.0
+		player_exp_bar.value = exp_pct
+	if player_exp_text != null:
+		player_exp_text.text = "EXP: %d%%" % int(exp_pct)
 
 	var gems := _format_num(GameState.gem_stones)
 	var gold := _format_num(GameState.silver_coins)
-	var scrolls := _format_num(GameState.normal_scrolls)
 	var ration := _format_num(int(GameState.materials.get("RATION", 0)))
 
-	resource_info_label.text = "💎 Đá Quý: %s   |   🪙 Vàng: %s   |   📜 Thiên Thư: %s   |   🍖 Khẩu Phần: %s" % [
-		gems,
-		gold,
-		scrolls,
-		ration
-	]
+	if gems_val_label != null:
+		gems_val_label.text = gems
+	if gold_val_label != null:
+		gold_val_label.text = gold
+	if ration_val_label != null:
+		ration_val_label.text = ration
 
 	if portal_sub_label != null:
 		portal_sub_label.text = "Đội hình xuất kích: %d/5 Tướng [Kéo-thả Tướng vào đây]" % GameState.active_party_ids.size()
@@ -1825,6 +1865,108 @@ func _refresh_hud() -> void:
 	else:
 		expand_zone_btn.text = "🏗️ Đã Mở Tối Đa (%d Ô)" % max_plots
 		expand_zone_btn.disabled = true
+
+func _setup_top_hud_styles() -> void:
+	if player_card_panel != null:
+		var p_style := StyleBoxFlat.new()
+		p_style.bg_color = Color(0.06, 0.08, 0.14, 0.90)
+		p_style.border_width_left = 1
+		p_style.border_width_top = 1
+		p_style.border_width_right = 1
+		p_style.border_width_bottom = 1
+		p_style.border_color = Color(0.25, 0.38, 0.58, 0.75)
+		p_style.corner_radius_top_left = 8
+		p_style.corner_radius_top_right = 8
+		p_style.corner_radius_bottom_left = 8
+		p_style.corner_radius_bottom_right = 8
+		p_style.shadow_color = Color(0, 0, 0, 0.5)
+		p_style.shadow_size = 6
+		player_card_panel.add_theme_stylebox_override("panel", p_style)
+
+	if avatar_frame != null:
+		var av_style := StyleBoxFlat.new()
+		av_style.bg_color = Color(0.04, 0.05, 0.09, 0.95)
+		av_style.border_width_left = 1
+		av_style.border_width_top = 1
+		av_style.border_width_right = 1
+		av_style.border_width_bottom = 1
+		av_style.border_color = Color(0.9, 0.75, 0.3, 0.8)
+		av_style.corner_radius_top_left = 6
+		av_style.corner_radius_top_right = 6
+		av_style.corner_radius_bottom_left = 6
+		av_style.corner_radius_bottom_right = 6
+		avatar_frame.add_theme_stylebox_override("panel", av_style)
+
+	if player_exp_bar != null:
+		var exp_bg := StyleBoxFlat.new()
+		exp_bg.bg_color = Color(0.08, 0.12, 0.18, 0.9)
+		exp_bg.corner_radius_top_left = 3
+		exp_bg.corner_radius_top_right = 3
+		exp_bg.corner_radius_bottom_left = 3
+		exp_bg.corner_radius_bottom_right = 3
+		player_exp_bar.add_theme_stylebox_override("background", exp_bg)
+
+		var exp_fill := StyleBoxFlat.new()
+		exp_fill.bg_color = Color(0.2, 0.65, 0.95)
+		exp_fill.corner_radius_top_left = 3
+		exp_fill.corner_radius_top_right = 3
+		exp_fill.corner_radius_bottom_left = 3
+		exp_fill.corner_radius_bottom_right = 3
+		player_exp_bar.add_theme_stylebox_override("fill", exp_fill)
+
+	_style_resource_pill(gems_pill, Color(0.2, 0.45, 0.75, 0.65))
+	_style_resource_pill(gold_pill, Color(0.75, 0.55, 0.2, 0.65))
+	_style_resource_pill(ration_pill, Color(0.75, 0.35, 0.2, 0.65))
+
+func _style_resource_pill(pill: PanelContainer, border_col: Color) -> void:
+	if pill == null: return
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.08, 0.14, 0.88)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = border_col
+	style.corner_radius_top_left = 16
+	style.corner_radius_top_right = 16
+	style.corner_radius_bottom_left = 16
+	style.corner_radius_bottom_right = 16
+	style.shadow_color = Color(0, 0, 0, 0.4)
+	style.shadow_size = 4
+	pill.add_theme_stylebox_override("panel", style)
+
+func _get_avatar_icon() -> String:
+	if GameState.selected_avatar_hero_id != "":
+		for h in GameState.heroes:
+			if h is Dictionary and str(h.get("id", "")) == GameState.selected_avatar_hero_id:
+				var elem := str(h.get("element", "NEUTRAL")).to_upper()
+				match elem:
+					"FIRE": return "🔥"
+					"WATER": return "💧"
+					"WIND": return "🌪️"
+					"EARTH": return "🪨"
+					"LIGHT": return "✨"
+					"DARK": return "🌑"
+					_: return "⚔️"
+	return "🧙‍♂️"
+
+func _open_player_profile_modal(tab_idx: int = 0) -> void:
+	var existing = $HUD.get_node_or_null("PlayerProfileModal")
+	if existing != null:
+		existing.queue_free()
+	var modal = PlayerProfileModalScript.new()
+	modal.name = "PlayerProfileModal"
+	$HUD.add_child(modal)
+	modal.setup(tab_idx)
+	modal.weather_changed.connect(func(preset_name: String):
+		match preset_name:
+			"day": _apply_lighting_preset(0, true)
+			"sunset": _apply_lighting_preset(1, true)
+			"night": _apply_lighting_preset(2, true)
+	)
+	modal.closed.connect(func():
+		_refresh_hud()
+	)
 
 func _refresh_3d_plots() -> void:
 	var unlocked_plot_count := GameState.unlocked_plots
@@ -4829,21 +4971,21 @@ func _apply_lighting_preset(mode_idx: int, animate: bool) -> void:
 
 	match mode_idx:
 		0:
-			lighting_toggle_btn.text = "🌤️ Ngày"
+			if lighting_toggle_btn != null: lighting_toggle_btn.text = "🌤️ Ngày"
 			target_light_col = Color(1.0, 0.98, 0.92)
 			target_light_energy = 1.18
 			target_bg = Color(0.13, 0.18, 0.26)
 			target_ambient = Color(0.72, 0.78, 0.90)
 			target_ambient_energy = 0.90
 		1:
-			lighting_toggle_btn.text = "🌅 Hoàng Hôn"
+			if lighting_toggle_btn != null: lighting_toggle_btn.text = "🌅 Hoàng Hôn"
 			target_light_col = Color(1.0, 0.62, 0.34)
 			target_light_energy = 0.95
 			target_bg = Color(0.16, 0.10, 0.18)
 			target_ambient = Color(0.78, 0.52, 0.45)
 			target_ambient_energy = 0.68
 		2:
-			lighting_toggle_btn.text = "🌙 Đêm"
+			if lighting_toggle_btn != null: lighting_toggle_btn.text = "🌙 Đêm"
 			target_light_col = Color(0.38, 0.50, 0.82)
 			target_light_energy = 0.35
 			target_bg = Color(0.05, 0.07, 0.12)
