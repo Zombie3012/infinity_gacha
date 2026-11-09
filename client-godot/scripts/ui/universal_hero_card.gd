@@ -158,6 +158,11 @@ func _rebuild_ui() -> void:
 		var party_badge := _create_mini_badge("⚔️ PVE", Color(0.85, 0.22, 0.22, 0.9))
 		header_row.add_child(party_badge)
 
+	var is_locked: bool = bool(hero_data.get("isLocked", false))
+	if is_locked:
+		var lock_badge := _create_mini_badge("🔒", Color(0.18, 0.22, 0.28, 0.9))
+		header_row.add_child(lock_badge)
+
 	if selectable:
 		_checkbox_icon = Label.new()
 		_checkbox_icon.text = "☑" if is_selected else "☐"
@@ -198,12 +203,40 @@ func _rebuild_ui() -> void:
 	center_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_avatar_box.add_child(center_icon)
 
+	# Awakening Rank Badge (Top-left of avatar)
+	var awaken_rank: int = int(hero_data.get("awakeningRank", 0))
+	if awaken_rank > 0:
+		var awk_lbl := Label.new()
+		awk_lbl.text = "⚡ +%d" % awaken_rank
+		awk_lbl.add_theme_font_size_override("font_size", 9)
+		awk_lbl.add_theme_color_override("font_color", Color(0.45, 0.95, 1.0))
+		awk_lbl.position = Vector2(6, 4)
+		_avatar_box.add_child(awk_lbl)
+
+	# Dead / Disabled status overlay
+	var hero_state_str: String = str(hero_data.get("state", "HEALTHY")).to_upper()
+	if hero_state_str == "DEAD" or hero_state_str == "DISABLED":
+		var dead_panel := PanelContainer.new()
+		dead_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+		var dp_style := StyleBoxFlat.new()
+		dp_style.bg_color = Color(0.4, 0.05, 0.05, 0.75)
+		dead_panel.add_theme_stylebox_override("panel", dp_style)
+		var dead_lbl := Label.new()
+		dead_lbl.text = "TỬ TRẬN" if hero_state_str == "DEAD" else "THƯƠNG NẶNG"
+		dead_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		dead_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		dead_lbl.add_theme_font_size_override("font_size", 13)
+		dead_lbl.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+		dead_panel.add_child(dead_lbl)
+		_avatar_box.add_child(dead_panel)
+
 	# Class Title Pill on bottom of Avatar Box
+	var elem: String = str(hero_data.get("element", "NEUTRAL")).to_upper()
 	var class_pill := Label.new()
 	class_pill.text = cls
 	class_pill.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	class_pill.add_theme_font_size_override("font_size", 9)
-	class_pill.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0))
+	class_pill.add_theme_color_override("font_color", _get_element_color(elem) if elem != "NEUTRAL" else Color(0.85, 0.92, 1.0))
 	class_pill.position = Vector2(0, 92)
 	class_pill.size = Vector2(_avatar_box.custom_minimum_size.x, 20)
 	class_pill.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -227,8 +260,11 @@ func _rebuild_ui() -> void:
 	name_row.add_child(_name_label)
 
 	var lvl: int = int(hero_data.get("level", 1))
+	var promo_rank: int = int(hero_data.get("promotionRank", 0))
+	var star_ceiling: int = int(hero_data.get("starCeiling", star * 10))
+	var max_lvl: int = int(hero_data.get("maxLevel", mini(star_ceiling, (promo_rank + 1) * 10)))
 	_level_label = Label.new()
-	_level_label.text = "Lv.%d" % lvl
+	_level_label.text = "Lv.%d/%d" % [lvl, max_lvl]
 	_level_label.add_theme_font_size_override("font_size", 11)
 	_level_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.38))
 	name_row.add_child(_level_label)
@@ -340,7 +376,8 @@ func _apply_context_rules() -> void:
 			var def_v: int = int(hero_data.get("defense", 10))
 			var spd: int = int(hero_data.get("speed", 10))
 			var cp: int = int(hero_data.get("combatPower", mhp + atk * 4 + def_v * 3 + spd * 2))
-			_status_bar_label.text = "⚔️ Lực chiến: %s" % _format_number(cp)
+			_status_bar_label.text = "🔥 LC: %s" % _format_number(cp)
+			_status_bar_label.add_theme_color_override("font_color", Color(1.0, 0.65, 0.25))
 			_status_bar.visible = false
 
 func _refresh_badges() -> void:
@@ -443,13 +480,29 @@ func _on_mouse_exited() -> void:
 # ==============================================================================
 
 func _get_rarity_color(star: int) -> Color:
-	if star >= 5:
-		return Color(1.0, 0.82, 0.24, 0.95) # Gold
+	if star >= 7:
+		return Color(1.0, 0.45, 0.95, 1.0) # 7★ Prismatic Rainbow
+	elif star == 6:
+		return Color(0.95, 0.22, 0.28, 1.0) # 6★ Crimson / Mythic Red
+	elif star == 5:
+		return Color(1.0, 0.82, 0.24, 0.95) # 5★ Gold
 	elif star == 4:
-		return Color(0.78, 0.48, 0.95, 0.95) # Purple
+		return Color(0.78, 0.48, 0.95, 0.95) # 4★ Purple
 	elif star == 3:
-		return Color(0.32, 0.72, 0.95, 0.90) # Blue
-	return Color(0.68, 0.52, 0.36, 0.90)     # Bronze
+		return Color(0.32, 0.72, 0.95, 0.90) # 3★ Blue
+	elif star == 2:
+		return Color(0.35, 0.85, 0.50, 0.90) # 2★ Green
+	return Color(0.68, 0.72, 0.78, 0.85)     # 1★ Gray/Bronze
+
+func _get_element_color(elem: String) -> Color:
+	match elem.to_upper():
+		"FIRE": return Color(1.0, 0.40, 0.25)
+		"WATER": return Color(0.35, 0.75, 1.0)
+		"WIND", "AIR": return Color(0.40, 0.95, 0.65)
+		"EARTH": return Color(0.85, 0.68, 0.35)
+		"LIGHT": return Color(1.0, 0.95, 0.55)
+		"DARK": return Color(0.75, 0.45, 0.95)
+		_: return Color(0.85, 0.88, 0.95)
 
 func _get_class_icon(hero_class: String) -> String:
 	match hero_class.to_upper():
