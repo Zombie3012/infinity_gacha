@@ -370,6 +370,17 @@ func _apply_context_rules() -> void:
 			add_badge("🔮 INT %d" % int_v, Color(0.68, 0.42, 0.95, 0.85))
 			add_badge("🛡️ STA %d" % sta_v, Color(0.42, 0.85, 0.55, 0.85))
 
+		ContextMode.EQUIPMENT:
+			_status_bar.visible = false
+			var cp: int = int(hero_data.get("combatPower", 0))
+			if cp > 0:
+				_status_bar_label.text = "🔥 LC: %s" % _format_number(cp)
+				_status_bar_label.add_theme_color_override("font_color", Color(1.0, 0.65, 0.25))
+			else:
+				_status_bar_vbox.visible = false
+			var eq_list: Array = hero_data.get("equippedGear", hero_data.get("equipment", []))
+			add_badge("🛡️ Trang bị (%d)" % eq_list.size(), Color(0.22, 0.55, 0.85, 0.9))
+
 		ContextMode.DEFAULT, _:
 			var mhp: int = int(hero_data.get("maxHp", 100))
 			var atk: int = int(hero_data.get("attack", 10))

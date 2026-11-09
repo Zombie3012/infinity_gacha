@@ -401,11 +401,18 @@ func _passes_pill_filter(it: Dictionary) -> bool:
 
 	# General item/gear filters
 	if "vũ khí" in pill_text or "weapon" in pill_text:
-		return str(it.get("slot", "")).to_upper() == "WEAPON"
+		var slot: String = str(it.get("slot", it.get("itemType", ""))).to_upper()
+		return slot in ["WEAPON", "MAIN_HAND", "OFF_HAND", "SWORD", "BOW", "STAFF", "DAGGER"]
 	elif "giáp" in pill_text or "armor" in pill_text:
-		return str(it.get("slot", "")).to_upper() in ["ARMOR", "HELMET", "BOOTS"]
+		var slot: String = str(it.get("slot", it.get("itemType", ""))).to_upper()
+		return slot in ["ARMOR", "HELMET", "CHEST", "PANTS", "BOOTS", "BELT", "SHIELD"]
 	elif "trang sức" in pill_text or "jewelry" in pill_text:
-		return str(it.get("slot", "")).to_upper() in ["RING", "AMULET"]
+		var slot: String = str(it.get("slot", it.get("itemType", ""))).to_upper()
+		return slot in ["RING", "AMULET", "NECKLACE", "EARRING"]
+	elif "chưa trang bị" in pill_text or "lưu kho" in pill_text or "chưa mặc" in pill_text:
+		return str(it.get("equippedHeroId", "")).is_empty()
+	elif "đang mặc" in pill_text or "đã mặc" in pill_text or "trên hero" in pill_text:
+		return not str(it.get("equippedHeroId", "")).is_empty()
 
 	return true
 

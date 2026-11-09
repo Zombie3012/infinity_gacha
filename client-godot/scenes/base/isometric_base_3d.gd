@@ -18,6 +18,7 @@ const UniversalHeroCardScript := preload("res://scripts/ui/universal_hero_card.g
 const UniversalItemCardScript := preload("res://scripts/ui/universal_item_card.gd")
 const FloorHeroModalScript := preload("res://scripts/ui/floor_hero_modal.gd")
 const HeroPickerModalScript := preload("res://scripts/ui/hero_picker_modal.gd")
+const GearWarehouseModalScript := preload("res://scripts/ui/gear_warehouse_modal.gd")
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
@@ -1697,6 +1698,7 @@ func _sync_all_from_backend() -> void:
 	await GameState.refresh_base_overview()
 	await GameState.refresh_inventory()
 	await GameState.refresh_crafting()
+	await GameState.refresh_equipment()
 	await GameState.refresh_heroes()
 	await GameState.refresh_party()
 	_refresh_hud()
@@ -2540,6 +2542,49 @@ func _open_worker_assignment_modal(building_id: String, building_name: String, b
 		_assign_worker_to_building(building_id, hid, hname, building_name)
 	)
 	$HUD.add_child(modal)
+
+func _get_all_equipment() -> Array:
+	if not GameState.equipment_list.is_empty():
+		return GameState.equipment_list
+	return GameState.crafting_overview.get("equipment", [])
+
+func _open_gear_warehouse_modal(hero_id: String = "") -> void:
+	var existing = $HUD.get_node_or_null("GearWarehouseModal")
+	if existing != null:
+		existing.queue_free()
+
+	var modal = GearWarehouseModalScript.new()
+	modal.name = "GearWarehouseModal"
+	var hid := hero_id if not hero_id.is_empty() else _selected_facility_hero_id
+	modal.setup(hid)
+	modal.item_equipped.connect(func(iid, iname, thid, thname):
+		await _equip_item_to_hero(iid, iname, thid, thname)
+		if is_instance_valid(modal):
+			modal.refresh_items()
+	)
+	modal.item_unequipped.connect(func(iid, iname):
+		await _unequip_item_from_hero(iid, iname)
+		if is_instance_valid(modal):
+			modal.refresh_items()
+	)
+	modal.quick_unequip_requested.connect(func(thid, thname):
+		await _quick_unequip_hero(thid, thname)
+		if is_instance_valid(modal):
+			modal.refresh_items()
+	)
+	$HUD.add_child(modal)
+
+func _quick_unequip_hero(hero_id: String, hero_name: String) -> void:
+	if hero_id.is_empty():
+		return
+	status_banner_label.text = "🔄 Đang tháo toàn bộ trang bị của [%s] về Kho..." % hero_name
+	var res := await ApiClient.post_req("/api/equipment/heroes/%s/quick-unequip" % hero_id, {})
+	if res["ok"] and res["data"] is Dictionary:
+		var count := int(res["data"].get("unequippedCount", 0))
+		status_banner_label.text = "📦 Đã tháo toàn bộ %d trang bị của [%s] về Nhà Kho!" % [count, hero_name]
+		await _sync_all_from_backend()
+	else:
+		status_banner_label.text = "ℹ️ Không có trang bị nào được tháo."
 
 func _re_render_inspector_if_open() -> void:
 	if not inspector_panel.visible or _inspector_context.is_empty():
@@ -3471,7 +3516,7 @@ func _render_magic_research_actions(b_lvl: int) -> void:
 func _render_warehouse_facility(b_lvl: int) -> void:
 	var bonus_slots := clampi(b_lvl, 1, 3) * 100
 	_add_inspector_section_header("📦 NHÀ KHO (WAREHOUSE Lv.%d/3)" % b_lvl, Color(0.95, 0.85, 0.58))
-	var equips: Array = GameState.crafting_overview.get("equipment", [])
+	var equips: Array = _get_all_equipment()
 	_add_inspector_info(
 		"• Không cần Hero làm việc (0 Hero).\n" +
 		"• Mỗi level mở thêm +100 slot ô đồ: Hiện mở rộng +%d slot ô đồ (Lv.1: +100 | Lv.2: +200 | Lv.3: +300).\n" % bonus_slots +
@@ -3490,37 +3535,110 @@ func _render_warehouse_facility(b_lvl: int) -> void:
 		if not h.is_empty():
 			_render_hero_selector_row("🛡️ Chọn Hero để Mặc / Tháo trang bị từ Kho:", UniversalHeroCardScript.ContextMode.EQUIPMENT)
 
-		if equips.is_empty():
-			_add_inspector_info("ℹ️ Kho Trang Bị hiện đang trống. Hãy rèn trang bị mới tại Xưởng Rèn (Forge)!", Color(0.8, 0.85, 0.92))
+		# 1. Full Modal trigger button
+		var open_wh_btn := Button.new()
+		open_wh_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		open_wh_btn.custom_minimum_size = Vector2(0, 36)
+		open_wh_btn.text = "🔍 Mở Toàn Bộ Kho Trang Bị (%d Món)" % equips.size()
+		open_wh_btn.modulate = Color(0.95, 0.85, 0.45)
+		open_wh_btn.pressed.connect(func(): _open_gear_warehouse_modal(target_hid))
+		inspector_action_container.add_child(open_wh_btn)
+
+		# 2. Currently Equipped Items of Target Hero
+		var hero_equips: Array = []
 		for eq_item in equips:
-			if eq_item is Dictionary:
+			if eq_item is Dictionary and str(eq_item.get("equippedHeroId", "")) == target_hid and not target_hid.is_empty():
+				hero_equips.append(eq_item)
+
+		_add_inspector_section_header("🛡️ ĐỒ ĐANG MẶC CỦA %s (%d)" % [target_hname, hero_equips.size()], Color(0.55, 0.88, 1.0))
+		if hero_equips.is_empty():
+			_add_inspector_info("• %s hiện chưa mặc món trang bị nào." % target_hname, Color(0.75, 0.85, 0.95))
+		else:
+			var eq_grid := GridContainer.new()
+			eq_grid.columns = 2
+			eq_grid.add_theme_constant_override("h_separation", 6)
+			eq_grid.add_theme_constant_override("v_separation", 6)
+			eq_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			for eq_item in hero_equips:
+				var item_box := VBoxContainer.new()
+				item_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				item_box.add_theme_constant_override("separation", 3)
+
+				var icard := UniversalItemCardScript.new()
+				icard.custom_minimum_size = Vector2(160, 185)
+				icard.setup(eq_item, UniversalItemCardScript.ContextMode.INVENTORY, false)
+				item_box.add_child(icard)
+
 				var eid := str(eq_item.get("id", ""))
 				var ename := str(eq_item.get("name", "Trang bị"))
-				var eslot := str(eq_item.get("slot", "EQ"))
-				var estar := int(eq_item.get("starLevel", 1))
-				var eenh := int(eq_item.get("enhanceLevel", 0))
-				var eq_hid := str(eq_item.get("equippedHeroId", ""))
-				var eq_hname := str(eq_item.get("equippedHeroName", ""))
-				var atk := int(eq_item.get("atkBonus", 0))
-				var def_b := int(eq_item.get("defBonus", 0))
-				var hp_b := int(eq_item.get("hpBonus", 0))
-				_add_inspector_info(
-					"• [%s] %s (%d★ +%d) — +ATK %d | +DEF %d | +HP %d\n   Trạng thái: %s" % [
-						eslot, ename, estar, eenh, atk, def_b, hp_b,
-						("Đang mặc bởi " + eq_hname) if eq_hid != "" else "Đang lưu kho"
-					],
-					Color(0.84, 0.94, 1.0) if eq_hid == "" else Color(1.0, 0.88, 0.55)
-				)
-				if eq_hid != "":
-					_add_inspector_button(
-						"➖ Tháo %s (Khỏi %s về Kho)" % [ename, eq_hname],
-						func(): _unequip_item_from_hero(eid, ename)
-					)
-				elif target_hid != "":
-					_add_inspector_button(
-						"🛡️ Mặc %s Cho %s" % [ename, target_hname],
-						func(): _equip_item_to_hero(eid, ename, target_hid, target_hname)
-					)
+				var unbtn := Button.new()
+				unbtn.text = "➖ Tháo về Kho"
+				unbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				unbtn.custom_minimum_size = Vector2(0, 26)
+				unbtn.modulate = Color(1.0, 0.65, 0.65)
+				unbtn.pressed.connect(func(): _unequip_item_from_hero(eid, ename))
+				item_box.add_child(unbtn)
+
+				eq_grid.add_child(item_box)
+			inspector_action_container.add_child(eq_grid)
+
+			var quick_un_btn := Button.new()
+			quick_un_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			quick_un_btn.custom_minimum_size = Vector2(0, 30)
+			quick_un_btn.text = "🔄 Tháo Toàn Bộ Trang Bị Về Kho"
+			quick_un_btn.modulate = Color(1.0, 0.75, 0.65)
+			quick_un_btn.pressed.connect(func(): _quick_unequip_hero(target_hid, target_hname))
+			inspector_action_container.add_child(quick_un_btn)
+
+		# 3. Available Unassigned Items in Storage
+		var storage_equips: Array = []
+		for eq_item in equips:
+			if eq_item is Dictionary and str(eq_item.get("equippedHeroId", "")).is_empty():
+				storage_equips.append(eq_item)
+
+		_add_inspector_section_header("📦 ĐỒ TRONG KHO CHƯA TRANG BỊ (%d)" % storage_equips.size(), Color(0.95, 0.85, 0.55))
+		if storage_equips.is_empty():
+			_add_inspector_info("ℹ️ Kho đồ hiện không có trang bị nhàn rỗi. Hãy rèn thêm tại Xưởng Rèn (Forge)!", Color(0.8, 0.85, 0.92))
+		else:
+			var show_count := mini(storage_equips.size(), 4)
+			var st_grid := GridContainer.new()
+			st_grid.columns = 2
+			st_grid.add_theme_constant_override("h_separation", 6)
+			st_grid.add_theme_constant_override("v_separation", 6)
+			st_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+			for i in range(show_count):
+				var eq_item: Dictionary = storage_equips[i]
+				var item_box := VBoxContainer.new()
+				item_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				item_box.add_theme_constant_override("separation", 3)
+
+				var icard := UniversalItemCardScript.new()
+				icard.custom_minimum_size = Vector2(160, 185)
+				icard.setup(eq_item, UniversalItemCardScript.ContextMode.INVENTORY, false)
+				item_box.add_child(icard)
+
+				var eid := str(eq_item.get("id", ""))
+				var ename := str(eq_item.get("name", "Trang bị"))
+				if not target_hid.is_empty():
+					var eqbtn := Button.new()
+					eqbtn.text = "🛡️ Mặc vào %s" % target_hname
+					eqbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					eqbtn.custom_minimum_size = Vector2(0, 26)
+					eqbtn.modulate = Color(0.55, 0.95, 0.75)
+					eqbtn.pressed.connect(func(): _equip_item_to_hero(eid, ename, target_hid, target_hname))
+					item_box.add_child(eqbtn)
+
+				st_grid.add_child(item_box)
+			inspector_action_container.add_child(st_grid)
+
+			if storage_equips.size() > 4:
+				var more_btn := Button.new()
+				more_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				more_btn.custom_minimum_size = Vector2(0, 30)
+				more_btn.text = "➕ Xem & Chọn %d món đồ khác trong Kho..." % (storage_equips.size() - 4)
+				more_btn.pressed.connect(func(): _open_gear_warehouse_modal(target_hid))
+				inspector_action_container.add_child(more_btn)
 
 	elif tab_idx == 1:
 		var exp_books := int(GameState.materials.get("SAMPLE_HERO_EXP_100", 0))
