@@ -23,14 +23,43 @@ var _audio_bus_master_idx: int = -1
 var _audio_bus_bgm_idx: int = -1
 var _audio_bus_sfx_idx: int = -1
 
+var _center_box: CenterContainer = null
+
 # Avatar selector sub-modal
+var _avatar_picker_wrap: Control = null
 var _avatar_picker_panel: PanelContainer = null
+
+func _init() -> void:
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	anchor_right = 1.0
+	anchor_bottom = 1.0
+	offset_left = 0.0
+	offset_top = 0.0
+	offset_right = 0.0
+	offset_bottom = 0.0
+	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	grow_vertical = Control.GROW_DIRECTION_BOTH
+	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func _ready() -> void:
 	if not _is_ui_built:
 		_build_ui()
 	_init_audio_buses()
 	_switch_tab(_active_tab)
+	get_viewport().size_changed.connect(_on_viewport_size_changed)
+	_update_fullscreen_layout()
+
+func _on_viewport_size_changed() -> void:
+	_update_fullscreen_layout()
+
+func _update_fullscreen_layout() -> void:
+	var vp_size := get_viewport_rect().size
+	if vp_size.x > 0 and vp_size.y > 0:
+		size = vp_size
+		if _dimmer != null:
+			_dimmer.size = vp_size
+		if _center_box != null:
+			_center_box.size = vp_size
 
 func _init_audio_buses() -> void:
 	_audio_bus_master_idx = AudioServer.get_bus_index("Master")
@@ -43,6 +72,7 @@ func setup(initial_tab: int = 0) -> void:
 	_active_tab = initial_tab
 	if not _is_ui_built:
 		_build_ui()
+	_update_fullscreen_layout()
 	_switch_tab(_active_tab)
 
 func refresh_all() -> void:
@@ -51,14 +81,34 @@ func refresh_all() -> void:
 
 func _build_ui() -> void:
 	_is_ui_built = true
-	set_anchors_preset(PRESET_FULL_RECT)
-	mouse_filter = MOUSE_FILTER_STOP
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	anchor_right = 1.0
+	anchor_bottom = 1.0
+	offset_left = 0.0
+	offset_top = 0.0
+	offset_right = 0.0
+	offset_bottom = 0.0
+	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	grow_vertical = Control.GROW_DIRECTION_BOTH
+	mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var vp_size := get_viewport_rect().size
+	if vp_size.x > 0 and vp_size.y > 0:
+		size = vp_size
 
 	# 1. Dimmer Background
 	_dimmer = ColorRect.new()
-	_dimmer.set_anchors_preset(PRESET_FULL_RECT)
+	_dimmer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_dimmer.anchor_right = 1.0
+	_dimmer.anchor_bottom = 1.0
+	_dimmer.offset_left = 0.0
+	_dimmer.offset_top = 0.0
+	_dimmer.offset_right = 0.0
+	_dimmer.offset_bottom = 0.0
+	_dimmer.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_dimmer.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_dimmer.color = Color(0.02, 0.03, 0.06, 0.82)
-	_dimmer.mouse_filter = MOUSE_FILTER_STOP
+	_dimmer.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dimmer.gui_input.connect(func(event: InputEvent):
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			_close_modal()
@@ -66,14 +116,22 @@ func _build_ui() -> void:
 	add_child(_dimmer)
 
 	# 2. Main Window Center Container
-	var center_box := CenterContainer.new()
-	center_box.set_anchors_preset(PRESET_FULL_RECT)
-	center_box.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(center_box)
+	_center_box = CenterContainer.new()
+	_center_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_center_box.anchor_right = 1.0
+	_center_box.anchor_bottom = 1.0
+	_center_box.offset_left = 0.0
+	_center_box.offset_top = 0.0
+	_center_box.offset_right = 0.0
+	_center_box.offset_bottom = 0.0
+	_center_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_center_box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_center_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_center_box)
 
 	_main_panel = PanelContainer.new()
 	_main_panel.custom_minimum_size = Vector2(920, 580)
-	_main_panel.mouse_filter = MOUSE_FILTER_STOP
+	_main_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.06, 0.08, 0.12, 0.98)
@@ -89,7 +147,7 @@ func _build_ui() -> void:
 	panel_style.shadow_color = Color(0, 0, 0, 0.75)
 	panel_style.shadow_size = 24
 	_main_panel.add_theme_stylebox_override("panel", panel_style)
-	center_box.add_child(_main_panel)
+	_center_box.add_child(_main_panel)
 
 	var outer_margin := MarginContainer.new()
 	outer_margin.add_theme_constant_override("margin_left", 20)
@@ -1241,11 +1299,36 @@ func _render_support_tab() -> void:
 # AVATAR PICKER POPUP
 # ==============================================================================
 func _open_avatar_picker() -> void:
-	if _avatar_picker_panel != null:
-		_avatar_picker_panel.queue_free()
+	_close_avatar_picker()
+
+	_avatar_picker_wrap = Control.new()
+	_avatar_picker_wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_avatar_picker_wrap.anchor_right = 1.0
+	_avatar_picker_wrap.anchor_bottom = 1.0
+	_avatar_picker_wrap.size = size
+	_avatar_picker_wrap.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_avatar_picker_wrap)
+
+	var bg := ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.anchor_right = 1.0
+	bg.anchor_bottom = 1.0
+	bg.color = Color(0, 0, 0, 0.6)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	bg.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed:
+			_close_avatar_picker()
+	)
+	_avatar_picker_wrap.add_child(bg)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.anchor_right = 1.0
+	center.anchor_bottom = 1.0
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_avatar_picker_wrap.add_child(center)
 
 	_avatar_picker_panel = PanelContainer.new()
-	_avatar_picker_panel.set_anchors_preset(PRESET_CENTER)
 	_avatar_picker_panel.custom_minimum_size = Vector2(480, 340)
 
 	var p_style := StyleBoxFlat.new()
@@ -1261,7 +1344,7 @@ func _open_avatar_picker() -> void:
 	p_style.corner_radius_bottom_right = 8
 	p_style.shadow_size = 20
 	_avatar_picker_panel.add_theme_stylebox_override("panel", p_style)
-	_main_panel.add_child(_avatar_picker_panel)
+	center.add_child(_avatar_picker_panel)
 
 	var m := MarginContainer.new()
 	m.add_theme_constant_override("margin_left", 14)
@@ -1286,11 +1369,7 @@ func _open_avatar_picker() -> void:
 
 	var close_av := Button.new()
 	close_av.text = " ✕ "
-	close_av.pressed.connect(func():
-		if _avatar_picker_panel != null:
-			_avatar_picker_panel.queue_free()
-			_avatar_picker_panel = null
-	)
+	close_av.pressed.connect(_close_avatar_picker)
 	h_row.add_child(close_av)
 
 	var scroll := ScrollContainer.new()
@@ -1310,9 +1389,7 @@ func _open_avatar_picker() -> void:
 	def_btn.pressed.connect(func():
 		GameState.selected_avatar_hero_id = ""
 		show_toast("🧙‍♂️ Đã chọn đại diện Master Gốc!", true)
-		if _avatar_picker_panel != null:
-			_avatar_picker_panel.queue_free()
-			_avatar_picker_panel = null
+		_close_avatar_picker()
 		_render_profile_tab()
 	)
 	grid.add_child(def_btn)
@@ -1328,12 +1405,16 @@ func _open_avatar_picker() -> void:
 			btn.pressed.connect(func():
 				GameState.selected_avatar_hero_id = hid
 				show_toast("✨ Đã chọn đại diện: %s!" % hname, true)
-				if _avatar_picker_panel != null:
-					_avatar_picker_panel.queue_free()
-					_avatar_picker_panel = null
+				_close_avatar_picker()
 				_render_profile_tab()
 			)
 			grid.add_child(btn)
+
+func _close_avatar_picker() -> void:
+	if _avatar_picker_wrap != null:
+		_avatar_picker_wrap.queue_free()
+		_avatar_picker_wrap = null
+	_avatar_picker_panel = null
 
 # ==============================================================================
 # TOAST NOTIFICATION OVERLAY

@@ -288,6 +288,7 @@ mouse_filter = 2
 
 [node name="CardMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/margin_left = 8
 theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 12
@@ -295,16 +296,19 @@ theme_override_constants/margin_bottom = 4
 
 [node name="CardHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 10
 
 [node name="AvatarFrame" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
+mouse_filter = 2
 
 [node name="AvatarIconLabel" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/AvatarFrame"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_font_sizes/font_size = 20
 text = "🧙‍♂️"
 horizontal_alignment = 1
@@ -313,6 +317,7 @@ vertical_alignment = 1
 [node name="AvatarLevelBadge" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/AvatarFrame"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.4, 1)
 theme_override_font_sizes/font_size = 9
 text = "Lv.30"
@@ -322,16 +327,19 @@ vertical_alignment = 2
 [node name="PlayerInfoVBox" type="VBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox"]
 layout_mode = 2
 size_flags_horizontal = 3
+mouse_filter = 2
 theme_override_constants/separation = 2
 alignment = 1
 
 [node name="NameAndCpRow" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 8
 
 [node name="PlayerNameLabel" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/NameAndCpRow"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_colors/font_color = Color(0.95, 0.96, 1, 1)
 theme_override_font_sizes/font_size = 13
 text = "Demo Master"
@@ -339,12 +347,14 @@ text = "Demo Master"
 [node name="PlayerCpLabel" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/NameAndCpRow"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.82, 0.35, 1)
 theme_override_font_sizes/font_size = 11
 text = "⚔️ 45,200"
 
 [node name="ExpRow" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/separation = 6
 
 [node name="PlayerExpBar" type="ProgressBar" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/ExpRow"]
@@ -352,12 +362,14 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(110, 6)
 layout_mode = 2
 size_flags_vertical = 4
+mouse_filter = 2
 show_percentage = false
 value = 50.0
 
 [node name="PlayerExpText" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/ExpRow"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 2
 theme_override_colors/font_color = Color(0.65, 0.78, 0.92, 1)
 theme_override_font_sizes/font_size = 9
 text = "EXP: 50%"

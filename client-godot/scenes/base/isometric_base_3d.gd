@@ -210,6 +210,12 @@ func _ready() -> void:
 			_open_player_profile_modal(0)
 		)
 
+	if avatar_frame != null:
+		avatar_frame.gui_input.connect(func(event: InputEvent):
+			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+				_open_player_profile_modal(0)
+		)
+
 	_setup_top_hud_styles()
 
 	if lighting_toggle_btn != null:
@@ -1956,6 +1962,12 @@ func _open_player_profile_modal(tab_idx: int = 0) -> void:
 		existing.queue_free()
 	var modal = PlayerProfileModalScript.new()
 	modal.name = "PlayerProfileModal"
+	modal.set_anchors_preset(Control.PRESET_FULL_RECT)
+	modal.anchor_right = 1.0
+	modal.anchor_bottom = 1.0
+	var vp_size := get_viewport().get_visible_rect().size
+	if vp_size.x > 0 and vp_size.y > 0:
+		modal.size = vp_size
 	$HUD.add_child(modal)
 	modal.setup(tab_idx)
 	modal.weather_changed.connect(func(preset_name: String):
