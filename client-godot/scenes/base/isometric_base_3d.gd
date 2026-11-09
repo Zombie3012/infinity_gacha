@@ -17,6 +17,7 @@ const BASE_PLOT_SCENE := preload("res://scenes/base/base_plot_3d.tscn")
 const UniversalHeroCardScript := preload("res://scripts/ui/universal_hero_card.gd")
 const UniversalItemCardScript := preload("res://scripts/ui/universal_item_card.gd")
 const FloorHeroModalScript := preload("res://scripts/ui/floor_hero_modal.gd")
+const HeroPickerModalScript := preload("res://scripts/ui/hero_picker_modal.gd")
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
@@ -2433,36 +2434,79 @@ func _get_or_pick_facility_hero() -> Dictionary:
 	_selected_facility_hero_id = str(first.get("id", ""))
 	return first
 
-func _render_hero_selector_row(prompt_text: String = "🎯 Chọn Hero thao tác:") -> Dictionary:
+func _render_hero_selector_row(prompt_text: String = "🎯 Chọn Hero thao tác:", ctx_mode: int = 0, allowed_classes: Array = []) -> Dictionary:
 	_add_inspector_info(prompt_text, Color(0.75, 0.90, 1.0))
 	var active_h := _get_or_pick_facility_hero()
 	if active_h.is_empty():
 		_add_inspector_info("Chưa có Hero nào trong Sảnh Chờ.")
 		return {}
 
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-	for i in range(mini(GameState.heroes.size(), 6)):
+	# 1. Active Hero Card Preview
+	var card_wrap := CenterContainer.new()
+	card_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var card = UniversalHeroCardScript.new()
+	card.custom_minimum_size = Vector2(210, 260)
+	card.setup(active_h, ctx_mode, false)
+	card.card_clicked.connect(func(_d):
+		_open_hero_picker_for_facility(ctx_mode, allowed_classes)
+	)
+	card_wrap.add_child(card)
+	inspector_action_container.add_child(card_wrap)
+
+	# 2. Hero Picker Dialog trigger button
+	var pick_btn := Button.new()
+	pick_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pick_btn.custom_minimum_size = Vector2(0, 34)
+	pick_btn.text = "👥 Đổi Hero Khác (%d Tướng Sảnh Chờ)" % GameState.heroes.size()
+	pick_btn.modulate = Color(0.75, 0.95, 1.0)
+	pick_btn.pressed.connect(func():
+		_open_hero_picker_for_facility(ctx_mode, allowed_classes)
+	)
+	inspector_action_container.add_child(pick_btn)
+
+	# 3. Compact quick-switch row (up to 4 heroes)
+	var quick_row := HBoxContainer.new()
+	quick_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quick_row.add_theme_constant_override("separation", 4)
+	var quick_limit := mini(GameState.heroes.size(), 4)
+	for i in range(quick_limit):
 		var h: Dictionary = GameState.heroes[i]
 		var hid := str(h.get("id", ""))
 		var hname := str(h.get("name", "Hero"))
-		var hlvl := int(h.get("level", 1))
-		var hstar := int(h.get("rarity", 1))
 		var is_sel := (hid == _selected_facility_hero_id)
-		var btn := Button.new()
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.custom_minimum_size = Vector2(0, 30)
-		btn.text = "%s%s (%d★ Lv.%d)" % ["✅ " if is_sel else "", hname, hstar, hlvl]
-		btn.modulate = Color(1.0, 0.92, 0.45) if is_sel else Color(0.84, 0.90, 0.96)
-		btn.pressed.connect(func():
+		var qbtn := Button.new()
+		qbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		qbtn.custom_minimum_size = Vector2(0, 26)
+		qbtn.text = "%s%s" % ["✅ " if is_sel else "", hname]
+		qbtn.modulate = Color(1.0, 0.92, 0.45) if is_sel else Color(0.82, 0.88, 0.95)
+		qbtn.pressed.connect(func():
 			_selected_facility_hero_id = hid
 			_re_render_inspector_if_open()
 		)
-		grid.add_child(btn)
-	inspector_action_container.add_child(grid)
+		quick_row.add_child(qbtn)
+	inspector_action_container.add_child(quick_row)
+
 	return active_h
+
+func _open_hero_picker_for_facility(ctx_mode: int = 0, allowed_classes: Array = []) -> void:
+	var existing = $HUD.get_node_or_null("HeroPickerModal")
+	if existing != null:
+		existing.queue_free()
+
+	var modal = HeroPickerModalScript.new()
+	modal.name = "HeroPickerModal"
+	modal.configure(
+		"Chọn Hero Cho Công Trình",
+		false,
+		1,
+		ctx_mode,
+		allowed_classes
+	)
+	modal.hero_picked.connect(func(picked_hero: Dictionary):
+		_selected_facility_hero_id = str(picked_hero.get("id", ""))
+		_re_render_inspector_if_open()
+	)
+	$HUD.add_child(modal)
 
 func _re_render_inspector_if_open() -> void:
 	if not inspector_panel.visible or _inspector_context.is_empty():
@@ -2942,7 +2986,7 @@ func _render_dormitory_rest_section(is_mansion: bool) -> void:
 	var h := _get_or_pick_facility_hero()
 	if h.is_empty():
 		return
-	_render_hero_selector_row("🛏️ Chọn Hero nghỉ ngơi / tiếp tế:")
+	_render_hero_selector_row("🛏️ Chọn Hero nghỉ ngơi / tiếp tế:", UniversalHeroCardScript.ContextMode.DORMITORY)
 	var hid := str(h.get("id", ""))
 	var hname := str(h.get("name", "Hero"))
 	var hstate := str(h.get("state", "IDLE"))
@@ -3098,7 +3142,7 @@ func _render_training_center_facility(b_lvl: int, b_status: String) -> void:
 		_add_inspector_info("⚠️ Chưa có Hero nào trong Sảnh Chờ để huấn luyện.", Color(1.0, 0.75, 0.45))
 		return
 
-	_render_hero_selector_row("🥋 Chọn Hero tham gia huấn luyện:")
+	_render_hero_selector_row("🥋 Chọn Hero tham gia huấn luyện:", UniversalHeroCardScript.ContextMode.TRAINING)
 	var hid := str(h.get("id", ""))
 	var hname := str(h.get("name", "Hero"))
 	var hlvl := int(h.get("level", 1))
@@ -3200,7 +3244,7 @@ func _render_library_actions(building_id: String, b_lvl: int) -> void:
 	var h := _get_or_pick_facility_hero()
 	if h.is_empty():
 		return
-	_render_hero_selector_row("📖 Chọn Hero lĩnh hội tại Thư Viện Ma Thuật:")
+	_render_hero_selector_row("📖 Chọn Hero lĩnh hội tại Thư Viện Ma Thuật:", UniversalHeroCardScript.ContextMode.LIBRARY)
 	var hid := str(h.get("id", ""))
 	var hname := str(h.get("name", "Hero"))
 	var hlvl := int(h.get("level", 1))
@@ -3280,7 +3324,7 @@ func _render_alchemy_workshop_actions(b_lvl: int) -> void:
 	)
 	var h := _get_or_pick_facility_hero()
 	if not h.is_empty():
-		_render_hero_selector_row("🧪 Chọn Hero dùng Bình thuốc / Vật phẩm tiêu hao:")
+		_render_hero_selector_row("🧪 Chọn Hero dùng Bình thuốc / Vật phẩm tiêu hao:", UniversalHeroCardScript.ContextMode.RECOVERY)
 		var hid := str(h.get("id", ""))
 		var hname := str(h.get("name", "Hero"))
 		var hp := int(h.get("hp", 100))
@@ -3302,7 +3346,7 @@ func _render_magic_research_actions(b_lvl: int) -> void:
 	var h := _get_or_pick_facility_hero()
 	if h.is_empty():
 		return
-	_render_hero_selector_row("🔮 Chọn Hero tại Phòng Nghiên Cứu:")
+	_render_hero_selector_row("🔮 Chọn Hero tại Phòng Nghiên Cứu:", UniversalHeroCardScript.ContextMode.RESEARCH)
 	var hid := str(h.get("id", ""))
 	var hname := str(h.get("name", "Hero"))
 	var hlvl := int(h.get("level", 1))
@@ -3374,7 +3418,7 @@ func _render_warehouse_facility(b_lvl: int) -> void:
 		var target_hid := str(h.get("id", ""))
 		var target_hname := str(h.get("name", "Hero"))
 		if not h.is_empty():
-			_render_hero_selector_row("🛡️ Chọn Hero để Mặc / Tháo trang bị từ Kho:")
+			_render_hero_selector_row("🛡️ Chọn Hero để Mặc / Tháo trang bị từ Kho:", UniversalHeroCardScript.ContextMode.EQUIPMENT)
 
 		if equips.is_empty():
 			_add_inspector_info("ℹ️ Kho Trang Bị hiện đang trống. Hãy rèn trang bị mới tại Xưởng Rèn (Forge)!", Color(0.8, 0.85, 0.92))
@@ -3424,7 +3468,7 @@ func _render_warehouse_facility(b_lvl: int) -> void:
 		)
 		var h := _get_or_pick_facility_hero()
 		if not h.is_empty():
-			_render_hero_selector_row("🎯 Chọn Hero sử dụng nhanh vật phẩm:")
+			_render_hero_selector_row("🎯 Chọn Hero sử dụng nhanh vật phẩm:", UniversalHeroCardScript.ContextMode.DEFAULT)
 			var hid := str(h.get("id", ""))
 			var hname := str(h.get("name", "Hero"))
 			_add_inspector_button(
