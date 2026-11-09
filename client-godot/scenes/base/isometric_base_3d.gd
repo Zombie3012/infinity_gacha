@@ -108,11 +108,8 @@ var _cancel_grid_btn: Button = null
 var _editing_floor_hero_selection: Dictionary = {} # floor_num (int) -> Array[String]
 var _hero_actors: Dictionary = {} # hero_id -> UnitActor3D
 var _active_banners: Array = []
-var _active_floor_ring: MeshInstance3D = null
-var _active_floor_light: OmniLight3D = null
 var _floor1_current_trans: float = 0.0
 var _floor_trans_map: Dictionary = {}
-var _floor_isolation_tween: Tween = null
 var _panorama_mode: bool = false
 
 # Grid-Based Free Placement & Road System state
@@ -2060,8 +2057,8 @@ func _update_grid_ghost_preview(screen_pos: Vector2) -> void:
 	elif _grid_edit_mode == GridEditMode.MOVE_STRUCTURE:
 		size_cells = _get_structure_footprint_size(_moving_structure_id)
 		ignore_id = _moving_structure_id
-		cell.x -= int(size_cells.x / 2)
-		cell.y -= int(size_cells.y / 2)
+		cell.x -= int(float(size_cells.x) / 2.0)
+		cell.y -= int(float(size_cells.y) / 2.0)
 		_hover_valid = _is_footprint_valid(cell.x, cell.y, size_cells, ignore_id)
 		var d_name := _get_structure_display_name(_moving_structure_id)
 		label_txt = "✥ %s (%d°)\n[%s]" % [d_name, _placement_rot_deg, "Hợp lệ - Nhấn để Đặt" if _hover_valid else "Vị trí bị vướng"]
@@ -2858,7 +2855,7 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 			var req_wl := int(bt.get("requiredWorldLevel", 1))
 			var req_ml := int(bt.get("requiredMasterLevel", 1))
 			var unlocked := bool(bt.get("unlocked", true))
-			var max_w := int(bt.get("maxWorkers", 0))
+			var bt_max_w := int(bt.get("maxWorkers", 0))
 
 			var info_line := "📌 %s\n   • %s\n   • Giá xây: 🪙 %d Bạc | Cần WL %d%s | Tối đa %d Hero" % [
 				bname,
@@ -2866,7 +2863,7 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 				cost,
 				req_wl,
 				(" & Master Lv.%d" % req_ml) if req_ml > 1 else "",
-				max_w
+				bt_max_w
 			]
 			_add_inspector_info(info_line, Color(0.86, 0.95, 0.88) if unlocked else Color(0.68, 0.65, 0.65))
 
@@ -4532,5 +4529,3 @@ func _open_recovery_center_modal() -> void:
 	var modal = RecoveryCenterModalScript.new()
 	modal.name = "RecoveryCenterModal"
 	$HUD.add_child(modal)
-
-
