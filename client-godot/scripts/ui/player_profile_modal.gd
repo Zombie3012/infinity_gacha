@@ -60,6 +60,8 @@ func _update_fullscreen_layout() -> void:
 			_dimmer.size = vp_size
 		if _center_box != null:
 			_center_box.size = vp_size
+		if _avatar_picker_wrap != null:
+			_avatar_picker_wrap.size = vp_size
 
 func _init_audio_buses() -> void:
 	_audio_bus_master_idx = AudioServer.get_bus_index("Master")
@@ -1301,35 +1303,68 @@ func _render_support_tab() -> void:
 func _open_avatar_picker() -> void:
 	_close_avatar_picker()
 
+	var vp_size := get_viewport_rect().size
+
 	_avatar_picker_wrap = Control.new()
-	_avatar_picker_wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_avatar_picker_wrap.anchor_right = 1.0
-	_avatar_picker_wrap.anchor_bottom = 1.0
-	_avatar_picker_wrap.size = size
 	_avatar_picker_wrap.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_avatar_picker_wrap)
 
+	_avatar_picker_wrap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_avatar_picker_wrap.anchor_left = 0.0
+	_avatar_picker_wrap.anchor_top = 0.0
+	_avatar_picker_wrap.anchor_right = 1.0
+	_avatar_picker_wrap.anchor_bottom = 1.0
+	_avatar_picker_wrap.offset_left = 0.0
+	_avatar_picker_wrap.offset_top = 0.0
+	_avatar_picker_wrap.offset_right = 0.0
+	_avatar_picker_wrap.offset_bottom = 0.0
+	_avatar_picker_wrap.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_avatar_picker_wrap.grow_vertical = Control.GROW_DIRECTION_BOTH
+	if vp_size.x > 0 and vp_size.y > 0:
+		_avatar_picker_wrap.size = vp_size
+
 	var bg := ColorRect.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.anchor_right = 1.0
-	bg.anchor_bottom = 1.0
-	bg.color = Color(0, 0, 0, 0.6)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	bg.color = Color(0.02, 0.03, 0.06, 0.75)
 	bg.gui_input.connect(func(ev: InputEvent):
 		if ev is InputEventMouseButton and ev.pressed:
 			_close_avatar_picker()
 	)
 	_avatar_picker_wrap.add_child(bg)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.anchor_left = 0.0
+	bg.anchor_top = 0.0
+	bg.anchor_right = 1.0
+	bg.anchor_bottom = 1.0
+	bg.offset_left = 0.0
+	bg.offset_top = 0.0
+	bg.offset_right = 0.0
+	bg.offset_bottom = 0.0
+	bg.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	bg.grow_vertical = Control.GROW_DIRECTION_BOTH
+	if vp_size.x > 0 and vp_size.y > 0:
+		bg.size = vp_size
 
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.anchor_right = 1.0
-	center.anchor_bottom = 1.0
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_avatar_picker_wrap.add_child(center)
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.anchor_left = 0.0
+	center.anchor_top = 0.0
+	center.anchor_right = 1.0
+	center.anchor_bottom = 1.0
+	center.offset_left = 0.0
+	center.offset_top = 0.0
+	center.offset_right = 0.0
+	center.offset_bottom = 0.0
+	center.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	center.grow_vertical = Control.GROW_DIRECTION_BOTH
+	if vp_size.x > 0 and vp_size.y > 0:
+		center.size = vp_size
 
 	_avatar_picker_panel = PanelContainer.new()
-	_avatar_picker_panel.custom_minimum_size = Vector2(480, 340)
+	_avatar_picker_panel.custom_minimum_size = Vector2(500, 360)
+	_avatar_picker_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var p_style := StyleBoxFlat.new()
 	p_style.bg_color = Color(0.06, 0.08, 0.13, 0.98)
@@ -1342,7 +1377,8 @@ func _open_avatar_picker() -> void:
 	p_style.corner_radius_top_right = 8
 	p_style.corner_radius_bottom_left = 8
 	p_style.corner_radius_bottom_right = 8
-	p_style.shadow_size = 20
+	p_style.shadow_size = 24
+	p_style.shadow_color = Color(0, 0, 0, 0.8)
 	_avatar_picker_panel.add_theme_stylebox_override("panel", p_style)
 	center.add_child(_avatar_picker_panel)
 
