@@ -1855,11 +1855,46 @@ export function createApp() {
     }
   }));
 
+  app.post('/api/medical/treatments/batch', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const heroIds = Array.isArray(req.body?.heroIds) ? req.body.heroIds.map(String) : [];
+      return res.status(200).json(await medicalService.batchAdmit(master.id, heroIds));
+    } catch (error) {
+      if (medicalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.delete('/api/medical/treatments/:heroId', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await medicalService.cancelTreatment(master.id, String(req.params.heroId ?? '')));
+    } catch (error) {
+      if (medicalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
   app.post('/api/medical/emergency', requireAccount, asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
       return res.json(await medicalService.emergency(master.id, String(req.body?.heroId ?? '')));
+    } catch (error) {
+      if (medicalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/medical/emergency/batch', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const heroIds = Array.isArray(req.body?.heroIds) ? req.body.heroIds.map(String) : [];
+      return res.json(await medicalService.batchEmergency(master.id, heroIds));
     } catch (error) {
       if (medicalError(res, error)) return undefined;
       throw error;

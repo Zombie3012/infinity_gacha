@@ -14,7 +14,7 @@
 
 export type InjurySeverity = 'MINOR' | 'MODERATE' | 'SEVERE';
 export type TreatmentType = 'INJURY' | 'RESURRECTION';
-export type TreatmentStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+export type TreatmentStatus = 'ACTIVE' | 'QUEUED' | 'COMPLETED' | 'CANCELLED';
 
 export const RESURRECTION_CYCLE_DAYS = 30;
 export const RESURRECTION_BASE_SILVER = 10_000;

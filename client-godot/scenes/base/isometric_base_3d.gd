@@ -3050,11 +3050,14 @@ func _render_specialized_facility_section(building_id: String, b_code: String, b
 			_add_inspector_section_header("✚ RECOVERY CENTER – TRUNG TÂM HỒI PHỤC (Lv.%d/3)" % b_lvl, Color(0.55, 0.98, 0.78))
 			_add_inspector_info(
 				"• Hợp nhất toàn bộ Bệnh Xá thành 1 Công trình tự do duy nhất.\n" +
-				"• Nhân sự: 1 Hero phụ trách | Số giường chữa trị theo cấp: %d slot (Lv.1: 2 | Lv.2: 4 | Lv.3: 6).\n" % treat_slots +
-				"• Chữa trị thương tích, hồi phục HP và chăm sóc sinh tồn sau khi chinh phục Tháp.",
+				"• Nhân sự: 1 Hero phụ trách | Số giường chữa trị: %d slot (Lv.1: 2 | Lv.2: 4 | Lv.3: 6).\n" % treat_slots +
+				"• Quản lý danh sách hồi phục theo Card Hero Grid, Hàng chờ tự động và Quick Heal.",
 				Color(0.68, 0.98, 0.82)
 			)
-			_render_dormitory_rest_section(false)
+			_add_inspector_button(
+				"🏥 Mở Giao Diện Hồi Phục (Recovery Center UI)",
+				_open_recovery_center_modal
+			)
 
 func _render_dormitory_rest_section(is_mansion: bool) -> void:
 	var h := _get_or_pick_facility_hero()
@@ -3737,23 +3740,13 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 			_add_inspector_info(
 				"• Hợp nhất toàn bộ Bệnh Xá thành 1 công trình tự do duy nhất.\n" +
 				"• Cấu hình chuẩn: 3 Level | 1 Hero phụ trách | 2 / 4 / 6 slot chữa trị theo mỗi Level.\n" +
-				"• 🍖 Khẩu phần dự trữ: %d | 🌾 Lương thực thô: %d" % [
-					int(GameState.materials.get("RATION", 0)),
-					int(GameState.materials.get("RAW_FOOD", 0))
-				],
+				"• Quản lý danh sách hồi phục theo Card Hero Grid, Hàng chờ tự động và Quick Heal.",
 				Color(0.68, 0.98, 0.82)
 			)
-
-			for h in GameState.heroes:
-				var hid := str(h.get("id", ""))
-				var hname := str(h.get("name", "Hero"))
-				var hp := int(h.get("hp", 100))
-				var mhp := int(h.get("maxHp", 100))
-				_add_inspector_button(
-					"✚ Chữa Trị & Cấp Khẩu Phần cho %s (HP %d/%d)" % [hname, hp, mhp],
-					func(): _feed_hero(hid, hname),
-					int(GameState.materials.get("RATION", 0)) <= 0
-				)
+			_add_inspector_button(
+				"🏥 Mở Giao Diện Hồi Phục (Recovery Center UI)",
+				_open_recovery_center_modal
+			)
 
 func _open_hero_inspector(hero_actor: UnitActor3D, focus_cam: bool = true) -> void:
 	if _selected_plot != null and is_instance_valid(_selected_plot):
@@ -4527,5 +4520,17 @@ func _on_enter_pve_pressed() -> void:
 	await get_tree().create_timer(0.4).timeout
 	get_tree().change_scene_to_file("res://scenes/pve/isometric_pve_arena_3d.tscn")
 
+const RecoveryCenterModalScript = preload("res://scripts/ui/recovery_center_modal.gd")
+
 func _on_back_hub_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/hub/main_hub.tscn")
+
+func _open_recovery_center_modal() -> void:
+	var existing = $HUD.get_node_or_null("RecoveryCenterModal")
+	if existing != null:
+		existing.queue_free()
+	var modal = RecoveryCenterModalScript.new()
+	modal.name = "RecoveryCenterModal"
+	$HUD.add_child(modal)
+
+

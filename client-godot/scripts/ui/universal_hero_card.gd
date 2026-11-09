@@ -288,9 +288,16 @@ func _apply_context_rules() -> void:
 			set_status_bar(cur_hp, max_hp, "HP: %d%% (%d/%d)" % [int(round(hp_pct)), int(cur_hp), int(max_hp)], bar_col)
 
 			var state_str := str(hero_data.get("state", "HEALTHY")).to_upper()
-			if state_str == "INJURED" or hp_pct < 50.0:
+			var is_treating := bool(hero_data.get("isTreating", false))
+			var is_queued := bool(hero_data.get("isQueued", false))
+
+			if is_treating:
+				add_badge("🛏️ Đang hồi phục", Color(0.25, 0.65, 0.95, 0.9))
+			elif is_queued:
+				add_badge("⏳ Hàng chờ", Color(0.95, 0.70, 0.20, 0.9))
+			elif state_str == "INJURED" or hp_pct < 99.9:
 				add_badge("🩸 Bị thương", Color(0.85, 0.35, 0.15, 0.9))
-			elif hp_pct >= 99.9:
+			else:
 				add_badge("❤️ Đã khỏe", Color(0.20, 0.65, 0.35, 0.9))
 
 		ContextMode.DORMITORY:

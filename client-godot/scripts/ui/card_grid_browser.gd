@@ -1,6 +1,9 @@
 class_name CardGridBrowser
 extends VBoxContainer
 
+const UniversalHeroCardScript = preload("res://scripts/ui/universal_hero_card.gd")
+const UniversalItemCardScript = preload("res://scripts/ui/universal_item_card.gd")
+
 ## Reusable Card Grid Browser Component for Godot 4 Client
 ## Provides Header, Search Bar, Filter Pills, Sort Options, Multi-select,
 ## Auto-select, and Bottom Action Bar for any Facility or Inventory UI.
@@ -30,9 +33,9 @@ var current_sort_mode: int = 0
 var sort_ascending: bool = false
 var filter_pills: Array[String] = []
 
-# Context for hero cards
-var hero_context_mode: UniversalHeroCard.ContextMode = UniversalHeroCard.ContextMode.DEFAULT
-var item_context_mode: UniversalItemCard.ContextMode = UniversalItemCard.ContextMode.INVENTORY
+# Context for hero cards (int representing ContextMode enum)
+var hero_context_mode: int = 0
+var item_context_mode: int = 0
 
 # UI Node References
 var header_title_label: Label
@@ -114,6 +117,53 @@ func select_item_by_id(item_id: String) -> void:
 		_update_card_selection_visuals()
 		_update_action_bar()
 		selection_changed.emit(get_selected_items())
+
+func select_items_by_ids(ids: Array) -> void:
+	selected_item_ids.clear()
+	for id in ids:
+		var sid := str(id)
+		if selected_item_ids.size() < max_selection and not selected_item_ids.has(sid):
+			selected_item_ids.append(sid)
+	_update_card_selection_visuals()
+	_update_action_bar()
+	selection_changed.emit(get_selected_items())
+
+func auto_select_recovery_candidates(max_count: int) -> int:
+	var eligible: Array[Dictionary] = []
+	for it in all_items:
+		if not (it is Dictionary):
+			continue
+		var is_treating := bool(it.get("isTreating", false))
+		var is_queued := bool(it.get("isQueued", false))
+		if is_treating or is_queued:
+			continue
+		var cur_hp := float(it.get("hp", 100))
+		var max_hp := maxf(1.0, float(it.get("maxHp", 100)))
+		var is_injured := str(it.get("state", "")) == "INJURED"
+		if (cur_hp / max_hp) < 0.999 or is_injured:
+			eligible.append(it)
+
+	# Sort by lowest HP first, then highest rarity/level
+	eligible.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var hp_a: float = float(a.get("hp", 100)) / maxf(1.0, float(a.get("maxHp", 100)))
+		var hp_b: float = float(b.get("hp", 100)) / maxf(1.0, float(b.get("maxHp", 100)))
+		if absf(hp_a - hp_b) > 0.001:
+			return hp_a < hp_b
+		var r_a := int(a.get("rarity", 1))
+		var r_b := int(b.get("rarity", 1))
+		if r_a != r_b:
+			return r_a > r_b
+		return int(a.get("level", 1)) > int(b.get("level", 1))
+	)
+
+	var to_select: Array = []
+	var limit := mini(max_count, max_selection)
+	for i in range(mini(limit, eligible.size())):
+		to_select.append(str(eligible[i].get("id", "")))
+
+	select_items_by_ids(to_select)
+	return to_select.size()
+
 
 # ==============================================================================
 # COMPONENT LAYOUT BUILDER
@@ -399,7 +449,7 @@ func _render_cards() -> void:
 		var is_sel := selected_item_ids.has(iid)
 
 		if browser_type == BrowserType.HERO:
-			var hcard := UniversalHeroCard.new()
+			var hcard = UniversalHeroCardScript.new()
 			hcard.setup(it, hero_context_mode, card_selectable)
 			hcard.set_selected(is_sel)
 			hcard.selection_toggled.connect(_on_card_selection_toggled)
@@ -407,7 +457,7 @@ func _render_cards() -> void:
 			grid_container.add_child(hcard)
 			_card_nodes[iid] = hcard
 		else:
-			var icard := UniversalItemCard.new()
+			var icard = UniversalItemCardScript.new()
 			icard.setup(it, item_context_mode, card_selectable)
 			icard.set_selected(is_sel)
 			icard.selection_toggled.connect(_on_card_selection_toggled)

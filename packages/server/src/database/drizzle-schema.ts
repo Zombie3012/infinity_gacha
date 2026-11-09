@@ -691,7 +691,7 @@ export const heroTreatments = pgTable('hero_treatments', {
 }, (table) => [
   index('idx_hero_treatments_status').on(table.status, table.finishesAt),
   check('hero_treatments_type_check', sql`${table.treatmentType} IN ('INJURY', 'RESURRECTION')`),
-  check('hero_treatments_status_check', sql`${table.status} IN ('ACTIVE', 'COMPLETED', 'CANCELLED')`),
+  check('hero_treatments_status_check', sql`${table.status} IN ('ACTIVE', 'QUEUED', 'COMPLETED', 'CANCELLED')`),
 ]);
 
 export const heroResurrectionCycles = pgTable('hero_resurrection_cycles', {
