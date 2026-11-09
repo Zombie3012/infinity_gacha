@@ -287,7 +287,7 @@ func _on_auto_select_pressed() -> void:
 	else:
 		banner_label.text = "❤️ Toàn bộ Anh Hùng đều đang khỏe mạnh (100% HP) hoặc đang điều trị!"
 
-func _on_admit_selected_heroes(selected_items: Array[Dictionary]) -> void:
+func _on_admit_selected_heroes(selected_items: Array) -> void:
 	if selected_items.is_empty():
 		return
 

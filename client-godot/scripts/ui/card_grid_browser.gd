@@ -10,9 +10,9 @@ const UniversalItemCardScript = preload("res://scripts/ui/universal_item_card.gd
 
 signal item_selected(item: Dictionary)
 signal item_deselected(item: Dictionary)
-signal selection_changed(selected_items: Array[Dictionary])
-signal action_confirmed(selected_items: Array[Dictionary])
-signal quick_action_requested(action_code: String, selected_items: Array[Dictionary])
+signal selection_changed(selected_items: Array)
+signal action_confirmed(selected_items: Array)
+signal quick_action_requested(action_code: String, selected_items: Array)
 
 enum BrowserType { HERO, ITEM }
 
@@ -24,14 +24,14 @@ enum BrowserType { HERO, ITEM }
 
 var all_items: Array = []
 var filtered_items: Array = []
-var selected_item_ids: Array[String] = []
+var selected_item_ids: Array = []
 
 # Filter & Sort states
 var current_search_query: String = ""
 var current_filter_pill_idx: int = 0
 var current_sort_mode: int = 0
 var sort_ascending: bool = false
-var filter_pills: Array[String] = []
+var filter_pills: Array = []
 
 # Context for hero cards (int representing ContextMode enum)
 var hero_context_mode: int = 0
@@ -64,10 +64,12 @@ func _ready() -> void:
 # CONFIGURATION & INITIALIZATION API
 # ==============================================================================
 
-func configure_header(title: String, pills: Array[String] = []) -> void:
+func configure_header(title: String, pills: Array = []) -> void:
 	if header_title_label != null:
 		header_title_label.text = title
-	filter_pills = pills
+	filter_pills.clear()
+	for p in pills:
+		filter_pills.append(str(p))
 	_rebuild_filter_pills()
 
 func set_items(items: Array, preserve_selection: bool = false) -> void:
@@ -318,7 +320,7 @@ func _rebuild_filter_pills() -> void:
 	pills_row.visible = true
 
 	for i in range(filter_pills.size()):
-		var pill_text := filter_pills[i]
+		var pill_text: String = str(filter_pills[i])
 		var pbtn := Button.new()
 		pbtn.text = pill_text
 		pbtn.custom_minimum_size = Vector2(0, 30)
@@ -371,7 +373,7 @@ func _passes_pill_filter(it: Dictionary) -> bool:
 	if filter_pills.is_empty() or current_filter_pill_idx == 0:
 		return true
 
-	var pill_text := filter_pills[current_filter_pill_idx].to_lower()
+	var pill_text: String = str(filter_pills[current_filter_pill_idx]).to_lower()
 
 	# Specialized logic for Recovery Center filters
 	if "cần hồi phục" in pill_text:
