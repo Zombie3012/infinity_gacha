@@ -388,6 +388,17 @@ func _passes_pill_filter(it: Dictionary) -> bool:
 		var max_hp := maxf(1.0, float(it.get("maxHp", 100)))
 		return (cur_hp / max_hp) >= 0.999 and str(it.get("state", "")) != "INJURED"
 
+	# Survival / Kitchen filters
+	if "đang đói" in pill_text:
+		var hun := float(it.get("hunger", it.get("hungerScore", 0)))
+		return hun >= 40.0
+	elif "đói lả" in pill_text or "đói nặng" in pill_text or "cần ăn" in pill_text:
+		var hun := float(it.get("hunger", it.get("hungerScore", 0)))
+		return hun >= 60.0
+	elif "no nê" in pill_text:
+		var hun := float(it.get("hunger", it.get("hungerScore", 0)))
+		return hun < 40.0
+
 	# Floor Manager & Roster filters
 	if "đội" in pill_text or "party" in pill_text:
 		return GameState.active_party_ids.has(str(it.get("id", "")))

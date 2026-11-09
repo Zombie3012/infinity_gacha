@@ -19,6 +19,11 @@ const UniversalItemCardScript := preload("res://scripts/ui/universal_item_card.g
 const FloorHeroModalScript := preload("res://scripts/ui/floor_hero_modal.gd")
 const HeroPickerModalScript := preload("res://scripts/ui/hero_picker_modal.gd")
 const GearWarehouseModalScript := preload("res://scripts/ui/gear_warehouse_modal.gd")
+const BuildingActionBarScript := preload("res://scripts/ui/building_action_bar.gd")
+const BuildingInfoPopupScript := preload("res://scripts/ui/building_info_popup.gd")
+const BuildingUpgradePopupScript := preload("res://scripts/ui/building_upgrade_popup.gd")
+const BuildingConstructionModalScript := preload("res://scripts/ui/building_construction_modal.gd")
+const KitchenMessHallModalScript := preload("res://scripts/ui/kitchen_mess_hall_modal.gd")
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
@@ -96,6 +101,8 @@ func get_floor_terrace_center(floor_num: int) -> Vector3:
 @onready var inspector_subtitle_label: Label = %InspectorSubtitleLabel
 @onready var close_inspector_btn: Button = %CloseInspectorBtn
 @onready var inspector_action_container: VBoxContainer = %InspectorActionContainer
+
+var _building_action_bar = null
 
 var _current_lobby_floor: int = 1
 var _plot_nodes: Dictionary = {} # plot_index (1..48) -> BasePlot3D
@@ -193,6 +200,18 @@ func _ready() -> void:
 	expand_zone_btn.pressed.connect(_on_expand_zone_pressed)
 	collect_all_btn.pressed.connect(_on_collect_all_pressed)
 	enter_pve_btn.pressed.connect(_on_enter_pve_pressed)
+
+	_building_action_bar = BuildingActionBarScript.new()
+	_building_action_bar.visible = false
+	_building_action_bar.info_pressed.connect(_on_action_bar_info_pressed)
+	_building_action_bar.upgrade_pressed.connect(_on_action_bar_upgrade_pressed)
+	_building_action_bar.facility_action_pressed.connect(_on_action_bar_facility_pressed)
+	_building_action_bar.workers_pressed.connect(_on_action_bar_workers_pressed)
+	_building_action_bar.collect_pressed.connect(_on_action_bar_collect_pressed)
+	_building_action_bar.build_pressed.connect(_on_action_bar_build_pressed)
+	_building_action_bar.expand_zone_pressed.connect(_on_action_bar_expand_zone_pressed)
+	_building_action_bar.closed.connect(_on_action_bar_closed)
+	$HUD.add_child(_building_action_bar)
 
 	_apply_lighting_preset(0, false)
 	_refresh_hud()
@@ -2257,17 +2276,19 @@ func _on_left_mouse_up(screen_pos: Vector2) -> void:
 
 	var hit := _raycast_3d(screen_pos)
 	if hit.is_empty():
+		_close_inspector()
 		return
 
 	var collider: Object = hit.get("collider")
 	if not (collider is Node) or not collider.has_meta("interactable_type"):
+		_close_inspector()
 		return
 
 	var itype := str(collider.get_meta("interactable_type"))
 	match itype:
 		"PLOT":
 			var plot_node: BasePlot3D = collider.get_meta("plot_node")
-			if plot_node != null and not plot_node.building_data.is_empty():
+			if plot_node != null:
 				_current_lobby_floor = 2 if plot_node.global_position.x < -50.0 else 1
 				_refresh_hud()
 				_open_plot_inspector(plot_node)
@@ -2371,6 +2392,8 @@ func _raycast_3d(screen_pos: Vector2, exclude_rids: Array[RID] = []) -> Dictiona
 func _close_inspector() -> void:
 	inspector_panel.visible = false
 	_inspector_context.clear()
+	if _building_action_bar != null and _building_action_bar.visible:
+		_building_action_bar._close()
 	if _selected_plot != null and is_instance_valid(_selected_plot):
 		_selected_plot.set_selected(false)
 		_selected_plot = null
@@ -2587,7 +2610,10 @@ func _quick_unequip_hero(hero_id: String, hero_name: String) -> void:
 		status_banner_label.text = "ℹ️ Không có trang bị nào được tháo."
 
 func _re_render_inspector_if_open() -> void:
-	if not inspector_panel.visible or _inspector_context.is_empty():
+	var action_bar_open: bool = _building_action_bar != null and _building_action_bar.visible
+	if not inspector_panel.visible and not action_bar_open:
+		return
+	if _inspector_context.is_empty():
 		return
 	var ctype := str(_inspector_context.get("type", ""))
 	if ctype == "PLOT":
@@ -2810,76 +2836,124 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 		"type": "PLOT",
 		"plot_index": plot_node.plot_index
 	}
-	inspector_panel.visible = true
-	_clear_inspector_actions()
+	# Hide legacy text inspector panel
+	inspector_panel.visible = false
 
 	if focus_cam:
 		camera_rig.focus_action_unit(plot_node.global_position, 11.5, 0.35)
 
 	var req_master_lvl := 1 if plot_node.zone_index <= 1 else (plot_node.zone_index - 1) * MASTER_LEVELS_PER_FLOOR
 
-	# Case 1: Locked Floor / Plot
+	# Case 1: Locked Floor / Plot -> Show action bar with unlock button
 	if not plot_node.is_unlocked:
-		inspector_title_label.text = "🔒 Ô Công Trình #%d (Tầng %d)" % [plot_node.plot_index, plot_node.zone_index]
-		inspector_subtitle_label.text = "Tầng Sảnh Chờ #%d chưa được mở khóa." % plot_node.zone_index
-
 		var exp_info: Dictionary = GameState.base_overview.get("expansion", {})
-		var next_z := int(exp_info.get("nextZone", GameState.base_zones + 1))
 		var cost := int(exp_info.get("costSilver", 2000))
 		var req_wl := int(exp_info.get("requiredWorldLevel", maxi(1, plot_node.zone_index - 1)))
-
-		_add_inspector_info("• Quy tắc Sảnh Đa Tầng: Mỗi 15 cấp Master sẽ mở 1 tầng cao hơn.")
-		_add_inspector_info("• Điều kiện mở Tầng #%d: Master đạt cấp %d (Hiện tại: Lv.%d) hoặc World Level %d" % [
-			plot_node.zone_index, req_master_lvl, GameState.master_level, req_wl
-		], Color(1.0, 0.86, 0.38))
-		_add_inspector_button(
-			"🏗️ Mở Khóa Tầng #%d (🪙 %d Bạc)" % [next_z, cost],
-			_on_expand_zone_pressed,
-			(GameState.master_level < req_master_lvl and GameState.world_level < req_wl) or GameState.silver_coins < cost
-		)
+		var can_unlock := (GameState.master_level >= req_master_lvl or GameState.world_level >= req_wl) and GameState.silver_coins >= cost
+		if _building_action_bar != null:
+			_building_action_bar.show_locked_plot(plot_node.plot_index, plot_node.zone_index, cost, can_unlock)
 		return
 
-	# Case 2: Unlocked Empty Plot -> Show Authentic Pick Me Up Building Blueprints
+	# Case 2: Unlocked Empty Plot -> Show action bar with [🔨 Xây dựng]
 	if plot_node.building_data.is_empty():
-		inspector_title_label.text = "🟩 Ô Công Trình Trống #%d (Tầng %d)" % [plot_node.plot_index, plot_node.zone_index]
-		inspector_subtitle_label.text = "Chọn công trình chức năng để xây dựng tại Tầng %d:" % plot_node.zone_index
-
-		var b_types: Array = GameState.base_overview.get("buildingTypes", [])
-		if b_types.is_empty():
-			_add_inspector_info("Đang tải danh mục công trình từ máy chủ...")
-			return
-
-		for bt in b_types:
-			if not (bt is Dictionary):
-				continue
-			var code := str(bt.get("code", ""))
-			var bname := str(bt.get("name", code))
-			var desc_txt := str(bt.get("description", ""))
-			var cost := int(bt.get("buildCostSilver", 1000))
-			var req_wl := int(bt.get("requiredWorldLevel", 1))
-			var req_ml := int(bt.get("requiredMasterLevel", 1))
-			var unlocked := bool(bt.get("unlocked", true))
-			var bt_max_w := int(bt.get("maxWorkers", 0))
-
-			var info_line := "📌 %s\n   • %s\n   • Giá xây: 🪙 %d Bạc | Cần WL %d%s | Tối đa %d Hero" % [
-				bname,
-				desc_txt,
-				cost,
-				req_wl,
-				(" & Master Lv.%d" % req_ml) if req_ml > 1 else "",
-				bt_max_w
-			]
-			_add_inspector_info(info_line, Color(0.86, 0.95, 0.88) if unlocked else Color(0.68, 0.65, 0.65))
-
-			var p_idx := plot_node.plot_index
-			_add_inspector_button(
-				"🔨 Xây %s (🪙 %d)" % [bname, cost],
-				func(): _construct_building_on_plot(code, p_idx),
-				(not unlocked) or GameState.silver_coins < cost
-			)
+		if _building_action_bar != null:
+			_building_action_bar.show_empty_plot(plot_node.plot_index, plot_node.zone_index)
 		return
 
-	# Case 3: Constructed Building -> Specialized Facility Inspector + Upgrade/Workers/Demolish
+	# Case 3: Constructed Building -> Show Clash of Clans style Action Bar
+	if _building_action_bar != null:
+		_building_action_bar.show_building(plot_node.building_data)
+
+func _on_action_bar_info_pressed(b_data: Dictionary) -> void:
+	var popup = BuildingInfoPopupScript.new()
+	popup.setup(b_data)
+	popup.demolish_requested.connect(func(data):
+		var b_id := str(data.get("id", ""))
+		var b_name := str(data.get("typeName", "Công trình"))
+		_demolish_building(b_id, b_name)
+		if _building_action_bar != null:
+			_building_action_bar._close()
+	)
+	$HUD.add_child(popup)
+
+func _on_action_bar_upgrade_pressed(b_data: Dictionary) -> void:
+	var b_code := str(b_data.get("buildingType", ""))
+	var b_cost := _get_blueprint_build_cost(b_code)
+	var popup = BuildingUpgradePopupScript.new()
+	popup.setup(b_data, b_cost)
+	popup.upgrade_confirmed.connect(func(data):
+		var b_id := str(data.get("id", ""))
+		_upgrade_building(b_id)
+	)
+	$HUD.add_child(popup)
+
+func _on_action_bar_facility_pressed(b_data: Dictionary, action_code: String) -> void:
+	match action_code:
+		"KITCHEN":
+			_open_kitchen_modal(b_data)
+		"MEDICAL":
+			_open_recovery_center_modal()
+		"WAREHOUSE":
+			_open_gear_warehouse_modal()
+		_:
+			# Fallback for facilities where dedicated modal will be built
+			inspector_panel.visible = true
+			_clear_inspector_actions()
+			var b_id := str(b_data.get("id", ""))
+			var b_code := str(b_data.get("buildingType", ""))
+			var b_lvl := int(b_data.get("level", 1))
+			var b_status := str(b_data.get("status", "READY"))
+			inspector_title_label.text = "%s %s (Cấp %d/3)" % [_building_action_bar._get_building_icon(b_code), b_data.get("typeName", b_code), b_lvl]
+			inspector_subtitle_label.text = "Trạng thái: %s" % b_status
+			_render_specialized_facility_section(b_id, b_code, b_lvl, b_status)
+
+func _open_kitchen_modal(b_data: Dictionary) -> void:
+	var existing = $HUD.get_node_or_null("KitchenMessHallModal")
+	if existing != null:
+		existing.queue_free()
+	var modal = KitchenMessHallModalScript.new()
+	modal.name = "KitchenMessHallModal"
+	modal.setup(b_data)
+	modal.closed.connect(func():
+		await _sync_all_from_backend()
+	)
+	$HUD.add_child(modal)
+
+func _on_action_bar_workers_pressed(b_data: Dictionary) -> void:
+	var b_id := str(b_data.get("id", ""))
+	var b_name := str(b_data.get("typeName", "Công trình"))
+	var b_code := str(b_data.get("buildingType", ""))
+	var max_w := int(b_data.get("maxWorkers", 0))
+	var workers: Array = b_data.get("workers", [])
+	var remaining := maxi(1, max_w - workers.size())
+	_open_worker_assignment_modal(b_id, b_name, b_code, remaining)
+
+func _on_action_bar_collect_pressed(b_data: Dictionary) -> void:
+	var b_id := str(b_data.get("id", ""))
+	await _collect_building(b_id)
+	await _sync_all_from_backend()
+
+func _on_action_bar_build_pressed(p_data: Dictionary) -> void:
+	var p_idx := int(p_data.get("plot_index", -1))
+	var z_idx := int(p_data.get("zone_index", 1))
+	var modal = BuildingConstructionModalScript.new()
+	modal.setup(p_idx, z_idx)
+	modal.construction_requested.connect(func(b_code, plot_idx):
+		await _construct_building_on_plot(b_code, plot_idx)
+		if _building_action_bar != null:
+			_building_action_bar._close()
+	)
+	$HUD.add_child(modal)
+
+func _on_action_bar_expand_zone_pressed(_zone_idx: int) -> void:
+	_on_expand_zone_pressed()
+
+func _on_action_bar_closed() -> void:
+	if _selected_plot != null and is_instance_valid(_selected_plot):
+		_selected_plot.set_selected(false)
+		_selected_plot = null
+
+func _render_legacy_plot_inspector(plot_node: BasePlot3D) -> void:
 	var b: Dictionary = plot_node.building_data
 	var b_id := str(b.get("id", ""))
 	var b_code := str(b.get("buildingType", ""))

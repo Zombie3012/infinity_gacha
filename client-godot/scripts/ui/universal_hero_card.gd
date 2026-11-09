@@ -15,7 +15,8 @@ enum ContextMode {
 	TRAINING,      ## Training Center: 4 Base Stats (STR/AGI/INT/STA) & Skill tag
 	LIBRARY,       ## Library: EXP Bar, MAGE affinity badge, Study status
 	RESEARCH,      ## Research Lab: Awakening Rank, Class change readiness
-	EQUIPMENT      ## Equipment screen: Gear slots preview, equipped status
+	EQUIPMENT,     ## Equipment screen: Gear slots preview, equipped status
+	KITCHEN        ## Kitchen / Mess Hall: Fullness Bar, Starvation penalty warning, Feed status
 }
 
 var hero_data: Dictionary = {}
@@ -385,6 +386,27 @@ func _apply_context_rules() -> void:
 				_status_bar_vbox.visible = false
 			var eq_list: Array = hero_data.get("equippedGear", hero_data.get("equipment", []))
 			add_badge("🛡️ Trang bị (%d)" % eq_list.size(), Color(0.22, 0.55, 0.85, 0.9))
+
+		ContextMode.KITCHEN:
+			var hun: float = float(hero_data.get("hunger", hero_data.get("hungerScore", 0)))
+			var full_pct := clampi(int(100.0 - hun), 0, 100)
+			var bar_col := Color(0.35, 0.95, 0.45) # Green (Full)
+			if hun >= 100.0:
+				bar_col = Color(0.95, 0.2, 0.2) # Red Critical
+			elif hun >= 60.0:
+				bar_col = Color(0.95, 0.45, 0.2) # Orange Starving
+			elif hun >= 40.0:
+				bar_col = Color(0.95, 0.85, 0.3) # Yellow Hungry
+			set_status_bar(full_pct, 100.0, "Độ no: %d%%" % full_pct, bar_col)
+
+			if hun >= 100.0:
+				add_badge("☠️ Đói lả (Cấm đi)", Color(0.9, 0.2, 0.2, 0.95))
+			elif hun >= 60.0:
+				add_badge("⚠️ Đói nặng (-40% ATK)", Color(0.95, 0.5, 0.15, 0.95))
+			elif hun >= 40.0:
+				add_badge("🍖 Đang đói", Color(0.95, 0.75, 0.25, 0.9))
+			else:
+				add_badge("🥗 No nê", Color(0.2, 0.65, 0.35, 0.9))
 
 		ContextMode.DEFAULT, _:
 			var mhp: int = int(hero_data.get("maxHp", 100))
