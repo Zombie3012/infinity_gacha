@@ -388,6 +388,17 @@ func _passes_pill_filter(it: Dictionary) -> bool:
 		var max_hp := maxf(1.0, float(it.get("maxHp", 100)))
 		return (cur_hp / max_hp) >= 0.999 and str(it.get("state", "")) != "INJURED"
 
+	# Floor Manager & Roster filters
+	if "đội" in pill_text or "party" in pill_text:
+		return GameState.active_party_ids.has(str(it.get("id", "")))
+	elif "phân công" in pill_text or "làm việc" in pill_text:
+		var wmap: Dictionary = GameState.get_worker_assignment_map()
+		return wmap.has(str(it.get("id", "")))
+	elif "chưa xếp" in pill_text or "tự do" in pill_text:
+		var hid := str(it.get("id", ""))
+		var wmap: Dictionary = GameState.get_worker_assignment_map()
+		return not GameState.active_party_ids.has(hid) and not wmap.has(hid)
+
 	# General item/gear filters
 	if "vũ khí" in pill_text or "weapon" in pill_text:
 		return str(it.get("slot", "")).to_upper() == "WEAPON"
@@ -402,11 +413,17 @@ func _sort_filtered_items() -> void:
 	filtered_items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if browser_type == BrowserType.HERO:
 			match current_sort_mode:
-				0: # HP % (Lowest HP first by default)
-					var hp_a: float = float(a.get("hp", 100)) / maxf(1.0, float(a.get("maxHp", 100)))
-					var hp_b: float = float(b.get("hp", 100)) / maxf(1.0, float(b.get("maxHp", 100)))
-					if hp_a != hp_b:
-						return hp_a < hp_b if not sort_ascending else hp_a > hp_b
+				0: # Mode 0: If Recovery Center, HP%. Otherwise Combat Power (CP)
+					if hero_context_mode == 1: # RECOVERY
+						var hp_a: float = float(a.get("hp", 100)) / maxf(1.0, float(a.get("maxHp", 100)))
+						var hp_b: float = float(b.get("hp", 100)) / maxf(1.0, float(b.get("maxHp", 100)))
+						if hp_a != hp_b:
+							return hp_a < hp_b if not sort_ascending else hp_a > hp_b
+					else:
+						var cp_a := int(a.get("combatPower", 0))
+						var cp_b := int(b.get("combatPower", 0))
+						if cp_a != cp_b:
+							return cp_a > cp_b if not sort_ascending else cp_a < cp_b
 				1: # Stars / Rarity
 					var s_a := int(a.get("rarity", 1))
 					var s_b := int(b.get("rarity", 1))
@@ -518,6 +535,8 @@ func _on_search_text_changed(new_text: String) -> void:
 
 func _on_sort_toggle_pressed() -> void:
 	current_sort_mode = (current_sort_mode + 1) % 4
-	var sort_names := ["HP Thấp Nhất", "Độ Hiếm ★", "Cấp Độ Lv", "Tên A-Z"]
+	var sort_names := ["Lực Chiến", "Độ Hiếm ★", "Cấp Độ Lv", "Tên A-Z"]
+	if hero_context_mode == 1: # RECOVERY
+		sort_names[0] = "HP Thấp Nhất"
 	filter_btn.text = "%s 🎚️" % sort_names[current_sort_mode]
 	apply_filter_and_sort()

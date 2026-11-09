@@ -16,6 +16,7 @@ const UNIT_ACTOR_SCENE := preload("res://scenes/common/unit_actor_3d.tscn")
 const BASE_PLOT_SCENE := preload("res://scenes/base/base_plot_3d.tscn")
 const UniversalHeroCardScript := preload("res://scripts/ui/universal_hero_card.gd")
 const UniversalItemCardScript := preload("res://scripts/ui/universal_item_card.gd")
+const FloorHeroModalScript := preload("res://scripts/ui/floor_hero_modal.gd")
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
@@ -2662,141 +2663,20 @@ func _open_floor_hero_manager(target_floor: int) -> void:
 	if _selected_plot != null and is_instance_valid(_selected_plot):
 		_selected_plot.set_selected(false)
 		_selected_plot = null
+	_close_inspector()
 
-	var f_num := clampi(target_floor, 1, MAX_LOBBY_FLOORS)
-	_inspector_context = {
-		"type": "FLOOR_HERO_MANAGER",
-		"floor": f_num
-	}
-	inspector_panel.visible = true
-	_clear_inspector_actions()
+	var existing = $HUD.get_node_or_null("FloorHeroModal")
+	if existing != null:
+		existing.queue_free()
 
-	inspector_title_label.text = "👥 QUẢN LÝ TƯỚNG TẦNG #%d" % f_num
-	inspector_subtitle_label.text = "Chỉ định tối đa 6 Hero xuất hiện tại tầng này để giảm lag"
-
-	# Floor selection tabs row: allow switching between Floor 1..unlocked
-	var floor_tabs_row := HBoxContainer.new()
-	floor_tabs_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	for f in range(1, GameState.unlocked_lobby_floors + 1):
-		var f_tab_btn := Button.new()
-		f_tab_btn.text = "Tầng %d" % f
-		f_tab_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		if f == f_num:
-			f_tab_btn.modulate = Color(1.0, 0.88, 0.38)
-		var target_f := f
-		f_tab_btn.pressed.connect(func():
-			_open_floor_hero_manager(target_f)
-		)
-		floor_tabs_row.add_child(f_tab_btn)
-	inspector_action_container.add_child(floor_tabs_row)
-
-	# Working selection list for this floor
-	if not _editing_floor_hero_selection.has(f_num):
-		_editing_floor_hero_selection[f_num] = GameState.get_assigned_heroes_for_floor(f_num).duplicate()
-	var selected_ids: Array = _editing_floor_hero_selection[f_num]
-
-	var has_custom: bool = not GameState.get_assigned_heroes_for_floor(f_num).is_empty()
-	var status_text: String
-	if selected_ids.is_empty() and not has_custom:
-		status_text = "⚪ Trạng thái: TỰ ĐỘNG PHÂN BỔ (Mặc định)"
-	else:
-		status_text = "🟢 Trạng thái: ĐÃ CHỌN %d / %d HERO" % [selected_ids.size(), MAX_HEROES_PER_FLOOR]
-
-	_add_inspector_section_header("THIẾT LẬP HIỆN TẠI", Color(0.65, 0.92, 1.0))
-	_add_inspector_info(
-		"%s\n💡 Hero được chọn sẽ xuất hiện tại Tầng #%d.\nNếu để trống hoặc nhấn 'Tự Động', hệ thống sẽ tự xếp theo công việc/đội hình." % [
-			status_text,
-			f_num
-		],
-		Color(0.85, 0.95, 1.0)
-	)
-
-	# Action buttons row: [💾 Lưu & Áp Dụng] [🔄 Đặt Lại Tự Động]
-	var btn_row := HBoxContainer.new()
-	var save_btn := Button.new()
-	save_btn.text = "💾 Lưu & Áp Dụng"
-	save_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	save_btn.pressed.connect(func():
-		GameState.set_assigned_heroes_for_floor(f_num, selected_ids)
+	var modal = FloorHeroModalScript.new()
+	modal.name = "FloorHeroModal"
+	modal.setup(target_floor)
+	modal.floor_saved.connect(func(f_num, ids):
 		_spawn_resident_heroes()
-		status_banner_label.text = "✅ Đã lưu cấu hình %d Hero xuất hiện tại Tầng #%d!" % [selected_ids.size(), f_num]
-		_open_floor_hero_manager(f_num)
+		status_banner_label.text = "✅ Đã lưu cấu hình %d Hero xuất hiện tại Tầng #%d!" % [ids.size(), f_num]
 	)
-	btn_row.add_child(save_btn)
-
-	var reset_btn := Button.new()
-	reset_btn.text = "🔄 Đặt Lại Tự Động"
-	reset_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	reset_btn.pressed.connect(func():
-		_editing_floor_hero_selection[f_num] = []
-		GameState.clear_assigned_heroes_for_floor(f_num)
-		_spawn_resident_heroes()
-		status_banner_label.text = "🔄 Đã chuyển Tầng #%d về chế độ tự động phân bổ Hero!" % f_num
-		_open_floor_hero_manager(f_num)
-	)
-	btn_row.add_child(reset_btn)
-	inspector_action_container.add_child(btn_row)
-
-	_add_inspector_section_header("DANH SÁCH ANH HÙNG (%d Tướng)" % GameState.heroes.size(), Color(1.0, 0.88, 0.38))
-
-	var roster := GameState.heroes
-	if roster.is_empty():
-		_add_inspector_info("Chưa có Anh Hùng nào trong Doanh Trại.", Color(0.7, 0.7, 0.7))
-		return
-
-	for h in roster:
-		var hid := str(h.get("id", ""))
-		var hname := str(h.get("name", "Hero"))
-		var hstar := int(h.get("rarity", 1))
-		var hlvl := int(h.get("level", 1))
-		var hclass := str(h.get("classCode", h.get("heroClass", "WARRIOR")))
-		var is_selected := selected_ids.has(hid)
-
-		var card := PanelContainer.new()
-		var card_box := HBoxContainer.new()
-		card_box.alignment = BoxContainer.ALIGNMENT_CENTER
-
-		var info_box := VBoxContainer.new()
-		info_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-		var name_lbl := Label.new()
-		name_lbl.text = "%s %s (Lv.%d)" % ["★".repeat(clampi(hstar, 1, 7)), hname, hlvl]
-		name_lbl.add_theme_font_size_override("font_size", 13)
-		name_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.65) if is_selected else Color(0.9, 0.9, 0.95))
-		info_box.add_child(name_lbl)
-
-		var sub_lbl := Label.new()
-		var party_tag := " [⚔️ Party]" if GameState.active_party_ids.has(hid) else ""
-		sub_lbl.text = "[%s]%s" % [hclass, party_tag]
-		sub_lbl.add_theme_font_size_override("font_size", 11)
-		sub_lbl.add_theme_color_override("font_color", Color(0.65, 0.8, 1.0))
-		info_box.add_child(sub_lbl)
-		card_box.add_child(info_box)
-
-		var toggle_btn := Button.new()
-		toggle_btn.custom_minimum_size = Vector2(95, 32)
-		if is_selected:
-			toggle_btn.text = "✅ Đang Chọn"
-			toggle_btn.modulate = Color(0.45, 1.0, 0.55)
-		else:
-			toggle_btn.text = "➕ Chọn"
-			toggle_btn.modulate = Color(0.85, 0.88, 0.95)
-
-		toggle_btn.pressed.connect(func():
-			if selected_ids.has(hid):
-				selected_ids.erase(hid)
-				_open_floor_hero_manager(f_num)
-			else:
-				if selected_ids.size() >= MAX_HEROES_PER_FLOOR:
-					status_banner_label.text = "⚠️ Mỗi tầng chỉ tối đa %d Hero! Vui lòng bỏ bớt một Hero trước." % MAX_HEROES_PER_FLOOR
-				else:
-					selected_ids.append(hid)
-					_open_floor_hero_manager(f_num)
-		)
-		card_box.add_child(toggle_btn)
-
-		card.add_child(card_box)
-		inspector_action_container.add_child(card)
+	$HUD.add_child(modal)
 
 func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void:
 	if _selected_plot != null and is_instance_valid(_selected_plot):

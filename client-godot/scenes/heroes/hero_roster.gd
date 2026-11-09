@@ -211,7 +211,7 @@ func _setup_enhanced_layout() -> void:
 		_grid_view_container.add_child(grid_banner_row)
 
 		var index_title := Label.new()
-		index_title.text = "🏛️ DANH BẠ ANH HÙNG (HERO ROSTER)"
+		index_title.text = "🏛️ DANH SÁCH ANH HÙNG (HERO ROSTER)"
 		index_title.add_theme_font_size_override("font_size", 16)
 		index_title.add_theme_color_override("font_color", Color(0.9, 0.94, 1.0))
 		grid_banner_row.add_child(index_title)
