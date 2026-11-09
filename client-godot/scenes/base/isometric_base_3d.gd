@@ -213,6 +213,10 @@ func _ready() -> void:
 	_building_action_bar.collect_pressed.connect(_on_action_bar_collect_pressed)
 	_building_action_bar.build_pressed.connect(_on_action_bar_build_pressed)
 	_building_action_bar.expand_zone_pressed.connect(_on_action_bar_expand_zone_pressed)
+	_building_action_bar.timer_clicked.connect(func(_b_data):
+		status_banner_label.text = "⏳ Công trình đang trong quá trình nâng cấp..."
+		_poll_construction_progress()
+	)
 	_building_action_bar.closed.connect(_on_action_bar_closed)
 	$HUD.add_child(_building_action_bar)
 
@@ -2937,18 +2941,30 @@ func _open_forge_modal(b_data: Dictionary) -> void:
 	$HUD.add_child(modal)
 	modal.setup(b_data)
 	modal.craft_requested.connect(func(rcode, rname):
-		await _craft_equipment_recipe(rcode, rname)
+		var ok: bool = await _craft_equipment_recipe(rcode, rname)
 		if is_instance_valid(modal):
+			if ok:
+				modal.show_toast("⚒️ Rèn thành công trang bị [%s]!" % rname, true)
+			else:
+				modal.show_toast("❌ Không thể rèn trang bị [%s]!" % rname, false)
 			modal.refresh_all()
 	)
 	modal.enhance_requested.connect(func(eid, ename):
-		await _enhance_equipment_item(eid, ename)
+		var ok: bool = await _enhance_equipment_item(eid, ename)
 		if is_instance_valid(modal):
+			if ok:
+				modal.show_toast("✨ Cường hóa thành công [%s]!" % ename, true)
+			else:
+				modal.show_toast("❌ Cường hóa trang bị thất bại!", false)
 			modal.refresh_all()
 	)
 	modal.fuse_requested.connect(func(tcode, slvl, gname):
-		await _fuse_equipment_items(tcode, slvl, gname)
+		var ok: bool = await _fuse_equipment_items(tcode, slvl, gname)
 		if is_instance_valid(modal):
+			if ok:
+				modal.show_toast("🌟 Đột phá thành công [%s] lên %d★!" % [gname, slvl + 1], true)
+			else:
+				modal.show_toast("❌ Ghép sao trang bị thất bại!", false)
 			modal.refresh_all()
 	)
 	modal.closed.connect(func():
@@ -3945,6 +3961,11 @@ func _add_inspector_grid_placement_controls(structure_key: String) -> void:
 	inspector_action_container.add_child(row)
 	_add_inspector_info("📐 Tọa độ lưới hiện tại: Ô (%d, %d) • %s" % [gx, gz, tier_label], Color(0.75, 0.88, 0.98))
 
+func _on_landmark_move_clicked(landmark_code: String) -> void:
+	_start_moving_structure(landmark_code)
+	if _building_action_bar != null:
+		_building_action_bar._close()
+
 func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> void:
 	if _selected_plot != null and is_instance_valid(_selected_plot):
 		_selected_plot.set_selected(false)
@@ -3954,126 +3975,158 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 		"type": "LANDMARK",
 		"landmark_code": landmark_code
 	}
-	inspector_panel.visible = true
-	_clear_inspector_actions()
+	inspector_panel.visible = false
+
+	if _building_action_bar == null:
+		return
 
 	match landmark_code:
 		"SUMMON_ALTAR":
-			if focus_cam:
+			if focus_cam and summon_altar_mesh != null:
 				camera_rig.focus_action_unit(summon_altar_mesh.global_position, 11.0, 0.35)
-			inspector_title_label.text = "✨ ĐÀI TRIỆU HỒI ANH HÙNG"
-			inspector_subtitle_label.text = "Nghi thức triệu hồi Anh Hùng & Thiên Thư (Công trình tự do 4×4 ô trên lưới)"
-			_add_inspector_grid_placement_controls("SUMMON_ALTAR")
-			var banner_name := "Thiên Thư Thường (Standard Banner)"
-			if not _active_banners.is_empty() and _active_banners[0] is Dictionary:
-				banner_name = str(_active_banners[0].get("name", banner_name))
-			_add_inspector_section_header("🔮 BANNER HIỆN HÀNH: %s" % banner_name.to_upper(), Color(0.65, 0.92, 1.0))
-			_add_inspector_info(
-				"📜 Thiên Thư Thường hiện có: %s\n🪙 Vàng (Bạc) hiện có: %s\n💡 Tự động đổi Bạc sang Thiên Thư nếu thiếu khi nhấn Triệu hồi!" % [
-					_format_num(GameState.normal_scrolls),
-					_format_num(GameState.silver_coins)
-				],
-				Color(0.75, 0.94, 1.0)
-			)
-			_add_inspector_button(
-				"✨ Triệu Hồi 3D ×1 (Tốn 1 📜 Thiên Thư)",
-				func(): _perform_gacha_summon(1)
-			)
-			_add_inspector_button(
-				"🌟 Đại Nghi Thức Triệu Hồi 3D ×10 (Tốn 10 📜 Thiên Thư)",
-				func(): _perform_gacha_summon(10)
-			)
-			_add_inspector_section_header("🪙 ĐỔI THIÊN THƯ & QUẢN LÝ TƯỚNG", Color(1.0, 0.88, 0.45))
-			_add_inspector_button(
-				"🪙 Đổi 1 Thiên Thư Thường (10,000 Vàng)",
-				func(): _exchange_scrolls(1),
-				GameState.silver_coins < 10000
-			)
-			_add_inspector_button(
-				"🪙 Đổi 10 Thiên Thư Thường (100,000 Vàng)",
-				func(): _exchange_scrolls(10),
-				GameState.silver_coins < 100000
-			)
-			_add_inspector_button(
-				"🛡️ Mở Doanh Trại, Chi Tiết Tướng & Ghép Thăng Sao",
-				_on_barracks_pressed
+			_building_action_bar.show_landmark(
+				"SUMMON_ALTAR",
+				"✨ ĐÀI TRIỆU HỒI ANH HÙNG (SUMMON ALTAR)",
+				"• Thiên Thư: %s 📜 | Vàng: %s 🪙" % [_format_num(GameState.normal_scrolls), _format_num(GameState.silver_coins)],
+				[
+					{
+						"icon": "ℹ️", "label": "Thông tin", "color": Color(0.3, 0.75, 1.0),
+						"callback": func(): _show_landmark_info_popup("SUMMON_ALTAR")
+					},
+					{
+						"icon": "✨", "label": "Triệu Hồi ×1", "color": Color(0.4, 0.85, 1.0),
+						"callback": func(): _perform_gacha_summon(1)
+					},
+					{
+						"icon": "🌟", "label": "Đại Triệu Hồi ×10", "color": Color(1.0, 0.85, 0.35),
+						"callback": func(): _perform_gacha_summon(10)
+					},
+					{
+						"icon": "🪙", "label": "Đổi 10 Cuộn", "color": Color(0.9, 0.7, 0.4),
+						"callback": func(): _exchange_scrolls(10),
+						"disabled": GameState.silver_coins < 100000
+					},
+					{
+						"icon": "✥", "label": "Di Dời", "color": Color(0.85, 0.6, 1.0),
+						"callback": func(): _on_landmark_move_clicked("SUMMON_ALTAR")
+					}
+				]
 			)
 
 		"DUNGEON_PORTAL":
-			if focus_cam:
+			if focus_cam and dungeon_portal_mesh != null:
 				camera_rig.focus_action_unit(dungeon_portal_mesh.global_position, 12.0, 0.35)
-			inspector_title_label.text = "⛩️ CỔNG THÀNH ĐÔNG & CỔNG THÁP THỬ THÁCH"
-			inspector_subtitle_label.text = "Kiến trúc mặc định của Map (Nhóm 1) — Tầng %d (World Level %d)" % [GameState.current_floor, GameState.world_level]
-			_add_inspector_info("📌 Cổng thành phía Đông & Cổng Tháp Thử Thách dính liền là mặc định của Map.", Color(1.0, 0.88, 0.45))
-			_add_inspector_info("⚔️ Đội hình xuất kích (%d/5 Tướng):\n(Mẹo: Kéo-thả Tướng 3D vào Cổng Tháp hoặc nhấn nút bên dưới)" % GameState.active_party_ids.size(), Color(0.88, 0.72, 1.0))
-
-			for h in GameState.heroes:
-				var hid := str(h.get("id", ""))
-				var hname := str(h.get("name", "Hero"))
-				var hstar := int(h.get("rarity", 1))
-				var hlvl := int(h.get("level", 1))
-				var in_p := GameState.active_party_ids.has(hid)
-				var prefix := "✅ [Trong Đội] " if in_p else "➕ [Thêm vào Đội] "
-				_add_inspector_button(
-					"%s%s (%d★ Lv.%d)" % [prefix, hname, hstar, hlvl],
-					func(): _toggle_hero_in_party(hid, hname)
-				)
-
-			_add_inspector_button(
-				"⚔️ Tiến Vào Đấu Trường Tháp 3D Ngay!",
-				_on_enter_pve_pressed
+			_building_action_bar.show_landmark(
+				"DUNGEON_PORTAL",
+				"⛩️ CỔNG THÀNH ĐÔNG & THÁP THỬ THÁCH",
+				"• Đội hình: %d/5 Tướng | Tầng %d (World Level %d)" % [GameState.active_party_ids.size(), GameState.current_floor, GameState.world_level],
+				[
+					{
+						"icon": "ℹ️", "label": "Thông tin", "color": Color(0.3, 0.75, 1.0),
+						"callback": func(): _show_landmark_info_popup("DUNGEON_PORTAL")
+					},
+					{
+						"icon": "⚔️", "label": "Tiến Vào Tháp 3D", "color": Color(1.0, 0.45, 0.45),
+						"callback": _on_enter_pve_pressed
+					},
+					{
+						"icon": "🛡️", "label": "Đội Hình Xuất Trận", "color": Color(0.4, 0.85, 1.0),
+						"callback": _on_barracks_pressed
+					}
+				]
 			)
 
 		"BARRACKS":
-			if focus_cam:
+			if focus_cam and barracks_mesh != null:
 				camera_rig.focus_action_unit(barracks_mesh.global_position, 11.0, 0.35)
-			inspector_title_label.text = "🛡️ NHÀ CHIẾN LƯỢC (STRATEGIC HOUSE)"
-			inspector_subtitle_label.text = "Nhóm 1: Điều phối Tướng, Đội hình & Ghép Thăng Sao (3×3 ô trên lưới)"
-			_add_inspector_grid_placement_controls("BARRACKS")
-			_add_inspector_info("Tổng số Tướng sở hữu: %d Tướng" % GameState.heroes.size())
-			_add_inspector_button("👥 Quản Lý Hero Từng Tầng Sảnh Chờ", func(): _open_floor_hero_manager(_current_lobby_floor))
-			_add_inspector_button("🛡️ Mở Bảng Tướng & Ghép Thăng Sao", _on_barracks_pressed)
+			_building_action_bar.show_landmark(
+				"BARRACKS",
+				"🛡️ NHÀ CHIẾN LƯỢC (STRATEGIC HOUSE)",
+				"• Tổng số Tướng sở hữu: %d Tướng" % GameState.heroes.size(),
+				[
+					{
+						"icon": "ℹ️", "label": "Thông tin", "color": Color(0.3, 0.75, 1.0),
+						"callback": func(): _show_landmark_info_popup("BARRACKS")
+					},
+					{
+						"icon": "🛡️", "label": "Doanh Trại & Thăng Sao", "color": Color(1.0, 0.85, 0.4),
+						"callback": _on_barracks_pressed
+					},
+					{
+						"icon": "👥", "label": "Quản Lý Tầng", "color": Color(0.45, 0.95, 0.65),
+						"callback": func(): _open_floor_hero_manager(_current_lobby_floor)
+					},
+					{
+						"icon": "✥", "label": "Di Dời", "color": Color(0.85, 0.6, 1.0),
+						"callback": func(): _on_landmark_move_clicked("BARRACKS")
+					}
+				]
+			)
 
 		"FOUNTAIN", "BONFIRE":
 			var f_node := get_node_or_null("BaseArchitecture/CentralBonfire") as Node3D
 			if focus_cam and f_node != null:
 				camera_rig.focus_action_unit(f_node.global_position, 12.0, 0.35)
-			inspector_title_label.text = "⛲ ĐÀI PHUN NƯỚC (FOUNTAIN)"
-			inspector_subtitle_label.text = "Công trình tự do Nhóm 2 — Điểm tụ năng lượng linh hồn (4×4 ô trên lưới)"
-			_add_inspector_grid_placement_controls("FOUNTAIN")
-			_add_inspector_info("🍖 Khẩu phần dự trữ: %d | 🌾 Lương thực thô: %d" % [
-				int(GameState.materials.get("RATION", 0)),
-				int(GameState.materials.get("RAW_FOOD", 0))
-			])
-			_add_inspector_button("🌤️🌅🌙 Đổi Bầu Không Khí: Ngày / Hoàng Hôn / Đêm", _on_lighting_toggle_pressed)
-
-			for h in GameState.heroes:
-				var hid := str(h.get("id", ""))
-				var hname := str(h.get("name", "Hero"))
-				var hp := int(h.get("hp", 100))
-				var mhp := int(h.get("maxHp", 100))
-				_add_inspector_button(
-					"🍖 Cấp Khẩu Phần cho %s (HP %d/%d)" % [hname, hp, mhp],
-					func(): _feed_hero(hid, hname),
-					int(GameState.materials.get("RATION", 0)) <= 0
-				)
+			_building_action_bar.show_landmark(
+				"FOUNTAIN",
+				"⛲ ĐÀI PHUN NƯỚC (FOUNTAIN PLAZA)",
+				"• 🍖 Khẩu phần: %d | 🌾 Lương thực thô: %d" % [int(GameState.materials.get("RATION", 0)), int(GameState.materials.get("RAW_FOOD", 0))],
+				[
+					{
+						"icon": "ℹ️", "label": "Thông tin", "color": Color(0.3, 0.75, 1.0),
+						"callback": func(): _show_landmark_info_popup("FOUNTAIN")
+					},
+					{
+						"icon": "🌤️", "label": "Đổi Thời Tiết", "color": Color(1.0, 0.85, 0.4),
+						"callback": _on_lighting_toggle_pressed
+					},
+					{
+						"icon": "✥", "label": "Di Dời", "color": Color(0.85, 0.6, 1.0),
+						"callback": func(): _on_landmark_move_clicked("FOUNTAIN")
+					}
+				]
+			)
 
 		"INFIRMARY":
-			if focus_cam:
+			if focus_cam and infirmary_mesh != null:
 				camera_rig.focus_action_unit(infirmary_mesh.global_position, 11.0, 0.35)
-			inspector_title_label.text = "✚ RECOVERY CENTER – TRUNG TÂM HỒI PHỤC"
-			inspector_subtitle_label.text = "Công trình tự do Nhóm 2 (3 Level • 1 Hero • 2/4/6 Slot chữa trị theo Level)"
-			_add_inspector_grid_placement_controls("INFIRMARY")
-			_add_inspector_info(
-				"• Hợp nhất toàn bộ Bệnh Xá thành 1 công trình tự do duy nhất.\n" +
-				"• Cấu hình chuẩn: 3 Level | 1 Hero phụ trách | 2 / 4 / 6 slot chữa trị theo mỗi Level.\n" +
-				"• Quản lý danh sách hồi phục theo Card Hero Grid, Hàng chờ tự động và Quick Heal.",
-				Color(0.68, 0.98, 0.82)
+			_building_action_bar.show_landmark(
+				"INFIRMARY",
+				"✚ RECOVERY CENTER – TRUNG TÂM HỒI PHỤC",
+				"• Chữa trị & phục hồi sinh lực cho Anh Hùng",
+				[
+					{
+						"icon": "ℹ️", "label": "Thông tin", "color": Color(0.3, 0.75, 1.0),
+						"callback": func(): _show_landmark_info_popup("INFIRMARY")
+					},
+					{
+						"icon": "🏥", "label": "Hồi Phục Y Tế", "color": Color(0.4, 0.95, 0.7),
+						"callback": _open_recovery_center_modal
+					},
+					{
+						"icon": "✥", "label": "Di Dời", "color": Color(0.85, 0.6, 1.0),
+						"callback": func(): _on_landmark_move_clicked("INFIRMARY")
+					}
+				]
 			)
-			_add_inspector_button(
-				"🏥 Mở Giao Diện Hồi Phục (Recovery Center UI)",
-				_open_recovery_center_modal
-			)
+
+func _show_landmark_info_popup(landmark_code: String) -> void:
+	var popup = BuildingInfoPopupScript.new()
+	var b_name := "Công trình"
+	match landmark_code:
+		"SUMMON_ALTAR": b_name = "Đài Triệu Hồi Anh Hùng"
+		"BARRACKS": b_name = "Nhà Chiến Lược (Strategic House)"
+		"INFIRMARY": b_name = "Trung Tâm Hồi Phục (Recovery Center)"
+		"DUNGEON_PORTAL": b_name = "Cổng Thành Đông & Tháp Thử Thách"
+		"FOUNTAIN", "BONFIRE": b_name = "Đài Phun Nước Trung Tâm"
+	popup.setup({
+		"buildingType": landmark_code,
+		"typeName": b_name,
+		"level": 1,
+		"maxLevel": 1,
+		"is_landmark": true
+	})
+	$HUD.add_child(popup)
 
 func _open_hero_inspector(hero_actor: UnitActor3D, focus_cam: bool = true) -> void:
 	if _selected_plot != null and is_instance_valid(_selected_plot):
@@ -4166,27 +4219,31 @@ func _promote_house_to_party_mansion(building_id: String) -> void:
 	else:
 		status_banner_label.text = "❌ Không thể nâng cấp Party Mansion: " + str(res["error"])
 
-func _craft_equipment_recipe(recipe_code: String, target_name: String) -> void:
+func _craft_equipment_recipe(recipe_code: String, target_name: String) -> bool:
 	status_banner_label.text = "⚒️ Đang rèn [%s] tại Xưởng Rèn..." % target_name
 	var res := await ApiClient.post_req("/api/crafting/craft", { "recipeCode": recipe_code })
 	if res["ok"]:
 		camera_rig.shake(0.18, 0.2)
 		status_banner_label.text = "⚒️ Rèn thành công trang bị [%s]!" % target_name
 		await _sync_all_from_backend()
+		return true
 	else:
 		status_banner_label.text = "❌ Không thể rèn trang bị: " + str(res["error"])
+		return false
 
-func _enhance_equipment_item(equip_id: String, equip_name: String) -> void:
+func _enhance_equipment_item(equip_id: String, equip_name: String) -> bool:
 	var res := await ApiClient.post_req("/api/crafting/equipment/%s/enhance" % equip_id, {})
 	if res["ok"] and res["data"] is Dictionary:
 		var new_lvl := int(res["data"].get("enhanceLevel", 1))
 		camera_rig.shake(0.14, 0.16)
 		status_banner_label.text = "✨ Cường hóa thành công [%s] lên +%d!" % [equip_name, new_lvl]
 		await _sync_all_from_backend()
+		return true
 	else:
 		status_banner_label.text = "❌ Không thể cường hóa: " + str(res["error"])
+		return false
 
-func _fuse_equipment_items(template_code: String, star_level: int, equip_name: String) -> void:
+func _fuse_equipment_items(template_code: String, star_level: int, equip_name: String) -> bool:
 	status_banner_label.text = "🌟 Đang ghép 2 [%s (%d★)]..." % [equip_name, star_level]
 	var res := await ApiClient.post_req("/api/crafting/fuse", {
 		"templateCode": template_code,
@@ -4196,8 +4253,10 @@ func _fuse_equipment_items(template_code: String, star_level: int, equip_name: S
 		camera_rig.shake(0.2, 0.22)
 		status_banner_label.text = "🌟 Đột phá thành công [%s] lên %d★!" % [equip_name, star_level + 1]
 		await _sync_all_from_backend()
+		return true
 	else:
 		status_banner_label.text = "❌ Không thể ghép sao trang bị: " + str(res["error"])
+		return false
 
 func _equip_item_to_hero(item_id: String, item_name: String, hero_id: String, hero_name: String) -> void:
 	var res := await ApiClient.put_req("/api/equipment/%s/equip" % item_id, {

@@ -23,6 +23,9 @@ var current_tab: int = 0
 # UI Components
 var _title_label: Label
 var _status_pill: Label
+var _toast_panel: PanelContainer
+var _toast_label: Label
+var _toast_tween: Tween = null
 var _mat_labels: Dictionary = {}
 var _tab_buttons: Array[Button] = []
 var _tab_containers: Array[Control] = []
@@ -154,6 +157,36 @@ func _build_ui() -> void:
 	close_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	close_btn.pressed.connect(_on_close_pressed)
 	header_row.add_child(close_btn)
+
+	# Toast Notification Banner
+	_toast_panel = PanelContainer.new()
+	_toast_panel.visible = false
+	var tp_style := StyleBoxFlat.new()
+	tp_style.bg_color = Color(0.10, 0.38, 0.20, 0.95)
+	tp_style.border_width_left = 1
+	tp_style.border_width_top = 1
+	tp_style.border_width_right = 1
+	tp_style.border_width_bottom = 1
+	tp_style.border_color = Color(0.35, 1.0, 0.55)
+	tp_style.corner_radius_top_left = 6
+	tp_style.corner_radius_top_right = 6
+	tp_style.corner_radius_bottom_left = 6
+	tp_style.corner_radius_bottom_right = 6
+	_toast_panel.add_theme_stylebox_override("panel", tp_style)
+	root_vbox.add_child(_toast_panel)
+
+	var t_m := MarginContainer.new()
+	t_m.add_theme_constant_override("margin_left", 12)
+	t_m.add_theme_constant_override("margin_right", 12)
+	t_m.add_theme_constant_override("margin_top", 6)
+	t_m.add_theme_constant_override("margin_bottom", 6)
+	_toast_panel.add_child(t_m)
+
+	_toast_label = Label.new()
+	_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast_label.add_theme_font_size_override("font_size", 13)
+	_toast_label.add_theme_color_override("font_color", Color.WHITE)
+	t_m.add_child(_toast_label)
 
 	# Materials Dashboard Bar
 	var mat_panel := PanelContainer.new()
@@ -377,7 +410,44 @@ func _render_craft_tab() -> void:
 		empty_lbl.add_theme_color_override("font_color", Color(0.65, 0.72, 0.85))
 		_craft_recipes_container.add_child(empty_lbl)
 
-func _create_recipe_row(rec: Dictionary, rcode: String, rname: String, rslot: String, req_lvl: int, mats: Array, fee: int, ok_craft: bool, reason: String) -> PanelContainer:
+func show_toast(msg: String, is_success: bool = true) -> void:
+	if _toast_panel == null or _toast_label == null:
+		return
+	if _toast_tween != null and _toast_tween.is_valid():
+		_toast_tween.kill()
+
+	_toast_label.text = msg
+	var tp_style = _toast_panel.get_theme_stylebox("panel") as StyleBoxFlat
+	if tp_style != null:
+		if is_success:
+			tp_style.bg_color = Color(0.10, 0.38, 0.20, 0.95)
+			tp_style.border_color = Color(0.35, 1.0, 0.55)
+		else:
+			tp_style.bg_color = Color(0.45, 0.15, 0.15, 0.95)
+			tp_style.border_color = Color(1.0, 0.45, 0.45)
+
+	_toast_panel.visible = true
+	_toast_panel.modulate.a = 0.0
+	_toast_tween = create_tween()
+	_toast_tween.tween_property(_toast_panel, "modulate:a", 1.0, 0.15)
+	_toast_tween.tween_interval(3.0)
+	_toast_tween.tween_property(_toast_panel, "modulate:a", 0.0, 0.3)
+	_toast_tween.tween_callback(func(): _toast_panel.visible = false)
+
+func _format_craft_reason(reason: String, req_lvl: int) -> String:
+	match reason:
+		"ERR_CRAFT_FORGE_LEVEL":
+			return "Yêu cầu cấp độ Lò Rèn đạt Cấp %d mới có thể chế tạo!" % req_lvl
+		"ERR_INSUFFICIENT_MATERIALS":
+			return "Chưa đủ số lượng nguyên liệu chế tạo!"
+		"ERR_INSUFFICIENT_SILVER":
+			return "Không đủ Bạc để trả phí rèn!"
+		"ERR_FORGE_BUSY", "BUSY":
+			return "Lò Rèn đang trong trạng thái bận hoặc nâng cấp!"
+		_:
+			return reason
+
+func _create_recipe_row(_rec: Dictionary, rcode: String, rname: String, rslot: String, req_lvl: int, mats: Array, fee: int, ok_craft: bool, reason: String) -> PanelContainer:
 	var row := PanelContainer.new()
 	var r_style := StyleBoxFlat.new()
 	r_style.bg_color = Color(0.08, 0.11, 0.16, 0.95)
@@ -466,9 +536,9 @@ func _create_recipe_row(rec: Dictionary, rcode: String, rname: String, rslot: St
 
 	if not ok_craft and reason != "":
 		var reason_lbl := Label.new()
-		reason_lbl.text = "⚠️ " + reason
+		reason_lbl.text = "⚠️ " + _format_craft_reason(reason, req_lvl)
 		reason_lbl.add_theme_font_size_override("font_size", 11)
-		reason_lbl.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+		reason_lbl.add_theme_color_override("font_color", Color(1.0, 0.55, 0.55))
 		mid_vbox.add_child(reason_lbl)
 
 	# Right Action: Craft Button
@@ -648,10 +718,10 @@ func _update_enhance_preview(item: Dictionary) -> void:
 		"• 🪙 Bạc: %d/%d %s" % [GameState.silver_coins, silver_needed, "✅" if GameState.silver_coins >= silver_needed else "❌"]
 	)
 
-	var ready := can_afford and building_status == "READY"
-	_enh_confirm_btn.disabled = not ready
+	var can_enh := can_afford and building_status == "READY"
+	_enh_confirm_btn.disabled = not can_enh
 	_enh_confirm_btn.text = "✨ Nâng Lên +%d (🪙 %d)" % [next_enh, silver_needed]
-	_enh_confirm_btn.modulate = Color(0.4, 1.0, 0.6) if ready else Color(0.7, 0.7, 0.7)
+	_enh_confirm_btn.modulate = Color(0.4, 1.0, 0.6) if can_enh else Color(0.7, 0.7, 0.7)
 
 func _on_enhance_confirm_pressed() -> void:
 	if _selected_enh_item.is_empty():

@@ -171,19 +171,21 @@ func _build_ui() -> void:
 	vbox.add_child(hsep2)
 
 	# --- Danger Zone (Demolish) ---
-	var demo_row := HBoxContainer.new()
-	vbox.add_child(demo_row)
+	var is_landmark: bool = bool(building_data.get("is_landmark", false))
+	if not is_landmark:
+		var demo_row := HBoxContainer.new()
+		vbox.add_child(demo_row)
 
-	var demo_btn := Button.new()
-	demo_btn.text = "🏚️ Phá Dỡ Công Trình (Hoàn 50% Bạc)"
-	demo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	demo_btn.custom_minimum_size = Vector2(0, 36)
-	demo_btn.modulate = Color(1.0, 0.55, 0.55)
-	demo_btn.pressed.connect(func():
-		demolish_requested.emit(building_data)
-		_close()
-	)
-	demo_row.add_child(demo_btn)
+		var demo_btn := Button.new()
+		demo_btn.text = "🏚️ Phá Dỡ Công Trình (Hoàn 50% Bạc)"
+		demo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		demo_btn.custom_minimum_size = Vector2(0, 36)
+		demo_btn.modulate = Color(1.0, 0.55, 0.55)
+		demo_btn.pressed.connect(func():
+			demolish_requested.emit(building_data)
+			_close()
+		)
+		demo_row.add_child(demo_btn)
 
 func _close() -> void:
 	closed.emit()
@@ -192,7 +194,7 @@ func _close() -> void:
 func _get_building_icon(code: String) -> String:
 	match code:
 		"KITCHEN": return "🍖"
-		"MEDICAL": return "✚"
+		"MEDICAL", "INFIRMARY": return "✚"
 		"FORGE": return "⚒️"
 		"WAREHOUSE": return "📦"
 		"HOUSE": return "🏠"
@@ -202,10 +204,24 @@ func _get_building_icon(code: String) -> String:
 		"LIBRARY": return "📚"
 		"ALCHEMY_WORKSHOP": return "⚗️"
 		"MAGIC_RESEARCH_LAB": return "✨"
+		"SUMMON_ALTAR": return "✨"
+		"BARRACKS": return "🛡️"
+		"DUNGEON_PORTAL": return "⛩️"
+		"FOUNTAIN", "BONFIRE": return "⛲"
 		_: return "🏛️"
 
 func _get_player_lore_description(code: String) -> String:
 	match code:
+		"SUMMON_ALTAR":
+			return "Đài Triệu Hồi Linh Hồn Cổ Xưa. Nơi các vị Anh Hùng từ đa vũ trụ được triệu thỉnh thông qua năng lượng Thiên Thư Thường và Đại Nghi Thức 3D."
+		"BARRACKS":
+			return "Nhà Chiến Lược & Doanh Trại Quân Sự. Trung tâm chỉ huy, điều động quân lực, lập đội hình xuất kích và thăng hoa sao cho các Anh Hùng."
+		"INFIRMARY":
+			return "Trung Tâm Hồi Phục Y Tế Hoàng Gia. Nơi các Y Sĩ chuyên trách điều trị vết thương sau chiến trận, hồi máu cấp tốc và duy trì thể trạng sung mãn."
+		"DUNGEON_PORTAL":
+			return "Cổng Tháp Thử Thách Vô Tận. Con đường tiến vào các tầng tháp hiểm nguy để thu thập tài nguyên, chiến lợi phẩm và chứng minh sức mạnh."
+		"FOUNTAIN", "BONFIRE":
+			return "Đài Phun Nước Trung Tâm Thành Phố. Trái tim của vương quốc, nơi điều hòa khí hậu và tập trung nguồn sinh lực dồi dào."
 		"KITCHEN":
 			return "Nhà Bếp tự động nấu nướng và lưu trữ lương thực quân lương cho toàn bộ căn cứ. Bếp hoạt động liên tục đảm bảo anh hùng không bị suy giảm thể lực khi xuất trận."
 		"MEDICAL":
@@ -270,6 +286,28 @@ func _get_building_stats_display(code: String, lvl: int) -> Array[Dictionary]:
 			var rate := 15 if lvl <= 1 else (30 if lvl == 2 else 60)
 			list.append({"label": "Sản xuất Đá Cường Hóa:", "val": "+%d Viên / giờ" % rate, "col": Color(0.4, 0.95, 0.6)})
 			list.append({"label": "Dược sĩ phụ trách:", "val": "Tối đa 2 Hero", "col": Color(0.65, 0.85, 1.0)})
+		"SUMMON_ALTAR":
+			list.append({"label": "Thiên thư hiện có:", "val": "%s Cuốn" % _format_num(GameState.normal_scrolls), "col": Color(0.4, 0.95, 0.6)})
+			list.append({"label": "Vàng (Bạc) hiện có:", "val": "%s Bạc" % _format_num(GameState.silver_coins), "col": Color(1.0, 0.85, 0.4)})
+		"BARRACKS":
+			list.append({"label": "Tổng số Hero sở hữu:", "val": "%d Hero" % GameState.heroes.size(), "col": Color(0.4, 0.95, 0.6)})
+			list.append({"label": "Đội hình PVE xuất trận:", "val": "%d / 5 Hero" % GameState.active_party_ids.size(), "col": Color(1.0, 0.85, 0.4)})
+		"INFIRMARY":
+			list.append({"label": "Số giường chữa trị:", "val": "%d Giường" % (lvl * 2), "col": Color(0.4, 0.95, 0.6)})
+			list.append({"label": "Y sĩ phụ trách:", "val": "1 Hero", "col": Color(0.65, 0.85, 1.0)})
+		"DUNGEON_PORTAL":
+			list.append({"label": "Tầng tháp hiện tại:", "val": "Tầng %d" % GameState.current_floor, "col": Color(0.4, 0.95, 0.6)})
+			list.append({"label": "World Level:", "val": "Level %d" % GameState.world_level, "col": Color(1.0, 0.85, 0.4)})
+		"FOUNTAIN", "BONFIRE":
+			list.append({"label": "Khẩu phần dự trữ:", "val": "%d FOOD" % int(GameState.materials.get("RATION", 0)), "col": Color(0.4, 0.95, 0.6)})
+			list.append({"label": "Lương thực thô:", "val": "%d RAW_FOOD" % int(GameState.materials.get("RAW_FOOD", 0)), "col": Color(1.0, 0.85, 0.4)})
 		_:
 			list.append({"label": "Cấp công trình:", "val": "Cấp %d" % lvl, "col": Color(0.4, 0.95, 0.6)})
 	return list
+
+func _format_num(val: int) -> String:
+	if val >= 1_000_000:
+		return "%.1fM" % (float(val) / 1_000_000.0)
+	elif val >= 10_000:
+		return "%.1fK" % (float(val) / 1000.0)
+	return str(val)

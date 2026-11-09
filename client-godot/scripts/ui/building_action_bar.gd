@@ -13,6 +13,7 @@ signal workers_pressed(building_data: Dictionary)
 signal collect_pressed(building_data: Dictionary)
 signal build_pressed(plot_data: Dictionary)
 signal expand_zone_pressed(zone_index: int)
+signal timer_clicked(building_data: Dictionary)
 signal closed
 
 var current_data: Dictionary = {}
@@ -20,6 +21,11 @@ var is_plot_empty: bool = false
 var is_plot_locked: bool = false
 var plot_index: int = -1
 var zone_index: int = 1
+
+var _is_upgrading: bool = false
+var _upgrade_finishes_iso: String = ""
+var _timer_btn: Button = null
+var _timer_tick: float = 0.0
 
 var main_panel: PanelContainer
 var title_label: Label
@@ -126,14 +132,26 @@ func show_building(data: Dictionary) -> void:
 		info_pressed.emit(current_data)
 	)
 
-	# 2. [⬆️] Nâng cấp Button
-	if b_lvl < max_lvl:
-		var can_upg := status == "READY"
+	# 2. [⬆️] Nâng cấp / Bộ đếm thời gian Button (Clash of Clans Style)
+	if status == "UPGRADING" or status == "CONSTRUCTING":
+		_is_upgrading = true
+		_upgrade_finishes_iso = str(data.get("upgradeFinishesAt", ""))
+		var rem_text := _format_remaining_time()
+		_timer_btn = _add_action_button("⏳", rem_text, Color(0.45, 0.85, 1.0), func():
+			timer_clicked.emit(current_data)
+		)
+		subtitle_label.text = "• Đang nâng cấp (Còn %s)" % rem_text
+		subtitle_label.modulate = Color(0.45, 0.85, 1.0)
+	elif b_lvl < max_lvl:
+		_is_upgrading = false
+		_timer_btn = null
 		var upg_btn := _add_action_button("⬆️", "Nâng cấp", Color(0.95, 0.82, 0.35), func():
 			upgrade_pressed.emit(current_data)
 		)
-		upg_btn.disabled = not can_upg
+		upg_btn.disabled = (status != "READY")
 	else:
+		_is_upgrading = false
+		_timer_btn = null
 		var max_btn := _add_action_button("⭐", "Cấp Tối Đa", Color(0.7, 0.7, 0.7), func(): pass)
 		max_btn.disabled = true
 
@@ -305,7 +323,76 @@ func _add_action_button(icon_text: String, label_text: String, accent_color: Col
 	buttons_container.add_child(btn)
 	return btn
 
+func _process(delta: float) -> void:
+	if not _is_upgrading or _timer_btn == null or not is_instance_valid(_timer_btn):
+		return
+	_timer_tick += delta
+	if _timer_tick >= 0.5:
+		_timer_tick = 0.0
+		_update_upgrade_timer_display()
+
+func _update_upgrade_timer_display() -> void:
+	if _timer_btn == null or not is_instance_valid(_timer_btn):
+		return
+	var rem_str := _format_remaining_time()
+	var vb = _timer_btn.get_node_or_null("VBox")
+	if vb != null:
+		var lbl = vb.get_child(1) as Label
+		if lbl != null:
+			lbl.text = rem_str
+	if subtitle_label != null:
+		subtitle_label.text = "• Đang nâng cấp: còn %s" % rem_str
+
+func _format_remaining_time() -> String:
+	if _upgrade_finishes_iso.is_empty():
+		return "Đang nâng cấp..."
+	var finish_unix := _parse_iso_to_unix(_upgrade_finishes_iso)
+	var now_unix := Time.get_unix_time_from_system()
+	var diff := finish_unix - now_unix
+	if diff <= 0.0:
+		return "Hoàn thành!"
+	var total_sec := int(diff)
+	if total_sec >= 3600:
+		return "%02d:%02d:%02d" % [total_sec / 3600, (total_sec % 3600) / 60, total_sec % 60]
+	return "%02d:%02d" % [total_sec / 60, total_sec % 60]
+
+func _parse_iso_to_unix(iso_str: String) -> float:
+	var clean := iso_str.replace("Z", "")
+	var dt := Time.get_datetime_dict_from_datetime_string(clean, false)
+	return float(Time.get_unix_time_from_datetime_dict(dt))
+
+## Show action bar for major landmarks (Summon Altar, Barracks/Strategic House, Infirmary/Recovery Center, Fountain, East Gate)
+func show_landmark(code: String, title: String, subtitle: String, actions: Array[Dictionary]) -> void:
+	current_data = {"landmark_code": code, "typeName": title, "buildingType": code, "is_landmark": true}
+	is_plot_empty = false
+	is_plot_locked = false
+	_is_upgrading = false
+	_timer_btn = null
+
+	title_label.text = title
+	subtitle_label.text = subtitle
+	subtitle_label.modulate = Color(0.65, 0.9, 1.0)
+
+	_clear_buttons()
+
+	for act in actions:
+		var a_icon: String = str(act.get("icon", "⚡"))
+		var a_label: String = str(act.get("label", "Hành động"))
+		var a_col: Color = act.get("color", Color(0.3, 0.75, 1.0))
+		var a_call: Callable = act.get("callback", func(): pass)
+		var a_dis: bool = bool(act.get("disabled", false))
+		var btn := _add_action_button(a_icon, a_label, a_col, a_call)
+		btn.disabled = a_dis
+
+	_add_action_button("✕", "Đóng", Color(0.85, 0.65, 0.65), func():
+		_close()
+	)
+
+	_animate_open()
+
 func _clear_buttons() -> void:
+	_is_upgrading = false
+	_timer_btn = null
 	if buttons_container != null:
 		for c in buttons_container.get_children():
 			c.queue_free()
