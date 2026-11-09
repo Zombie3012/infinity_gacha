@@ -4243,8 +4243,10 @@ func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: in
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
 
+	var is_single_roll := (results.size() == 1)
+
 	var card_panel := PanelContainer.new()
-	card_panel.custom_minimum_size = Vector2(980, 560)
+	card_panel.custom_minimum_size = Vector2(460, 560) if is_single_roll else Vector2(980, 580)
 	var pstyle := StyleBoxFlat.new()
 	pstyle.bg_color = Color(0.07, 0.10, 0.16, 0.97)
 	pstyle.border_width_left = 2
@@ -4293,15 +4295,21 @@ func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: in
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(0, 320)
+	scroll.custom_minimum_size = Vector2(0, 340)
 	vbox.add_child(scroll)
+
+	var scroll_center := CenterContainer.new()
+	scroll_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(scroll_center)
 
 	var grid := GridContainer.new()
 	grid.columns = mini(5, maxi(1, results.size()))
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	grid.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	grid.add_theme_constant_override("h_separation", 12)
 	grid.add_theme_constant_override("v_separation", 12)
-	scroll.add_child(grid)
+	scroll_center.add_child(grid)
 
 	for r in results:
 		if not (r is Dictionary):
@@ -4331,6 +4339,11 @@ func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: in
 					hero_dict["name"] = rname
 
 			var card = UniversalHeroCardScript.new()
+			if is_single_roll:
+				card.custom_minimum_size = Vector2(230, 320)
+			else:
+				card.custom_minimum_size = Vector2(175, 260)
+			card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 			card.setup(hero_dict, UniversalHeroCardScript.ContextMode.DEFAULT, false)
 			if bool(r.get("isDuplicate", false)):
 				card.add_badge("🔄 Trùng (+1 Mảnh)", Color(0.85, 0.45, 0.15, 0.95))
@@ -4348,6 +4361,11 @@ func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: in
 				"slot": rtype
 			}
 			var icard = UniversalItemCardScript.new()
+			if is_single_roll:
+				icard.custom_minimum_size = Vector2(230, 270)
+			else:
+				icard.custom_minimum_size = Vector2(175, 210)
+			icard.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 			icard.setup(item_dict, UniversalItemCardScript.ContextMode.MATERIAL, false)
 			icard.add_badge("📦 VẬT PHẨM", Color(0.20, 0.35, 0.55, 0.95))
 			grid.add_child(icard)
