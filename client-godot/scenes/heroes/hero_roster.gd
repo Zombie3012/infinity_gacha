@@ -48,6 +48,10 @@ var _lock_toggle_btn: Button = null
 var _quick_level_for_promote_btn: Button = null
 var _auto_pick_fodder_btn: Button = null
 var _promote_modal_backdrop: ColorRect = null
+var _fodder_card_container: ScrollContainer = null
+var _fodder_grid: GridContainer = null
+var _fodder_card_nodes: Dictionary = {}
+var _fodder_empty_label: Label = null
 var _pedestal_equipment_overlay: MarginContainer = null
 var _pedestal_left_slots_vbox: VBoxContainer = null
 var _pedestal_right_slots_vbox: VBoxContainer = null
@@ -668,7 +672,7 @@ func _setup_enhanced_layout() -> void:
 
 		promote_panel.visible = true
 		promote_panel.clip_contents = true
-		promote_panel.custom_minimum_size = Vector2(560, 470)
+		promote_panel.custom_minimum_size = Vector2(740, 620)
 		var mstyle := StyleBoxFlat.new()
 		mstyle.bg_color = Color(0.08, 0.11, 0.17, 0.98)
 		mstyle.border_width_left = 2
@@ -686,7 +690,40 @@ func _setup_enhanced_layout() -> void:
 	promote_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	promote_info_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	promote_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	fodder_item_list.custom_minimum_size = Vector2(0, 110)
+	fodder_item_list.visible = false
+
+	# UniversalHeroCard grid container for fodder selection
+	_fodder_card_container = ScrollContainer.new()
+	_fodder_card_container.custom_minimum_size = Vector2(0, 260)
+	_fodder_card_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_fodder_card_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_fodder_card_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	promote_vbox.add_child(_fodder_card_container)
+	promote_vbox.move_child(_fodder_card_container, fodder_item_list.get_index() + 1)
+
+	var margin_c := MarginContainer.new()
+	margin_c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin_c.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin_c.add_theme_constant_override("margin_left", 6)
+	margin_c.add_theme_constant_override("margin_right", 6)
+	margin_c.add_theme_constant_override("margin_top", 6)
+	margin_c.add_theme_constant_override("margin_bottom", 6)
+	_fodder_card_container.add_child(margin_c)
+
+	_fodder_grid = GridContainer.new()
+	_fodder_grid.columns = 3
+	_fodder_grid.add_theme_constant_override("h_separation", 10)
+	_fodder_grid.add_theme_constant_override("v_separation", 10)
+	_fodder_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin_c.add_child(_fodder_grid)
+
+	_fodder_empty_label = Label.new()
+	_fodder_empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_fodder_empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_fodder_empty_label.add_theme_font_size_override("font_size", 13)
+	_fodder_empty_label.add_theme_color_override("font_color", Color(0.92, 0.72, 0.52))
+	_fodder_empty_label.visible = false
+	margin_c.add_child(_fodder_empty_label)
 
 	_auto_pick_fodder_btn = Button.new()
 	_auto_pick_fodder_btn.text = "⚡ Tự Động Chọn Đủ Phôi Hiến Tế"
@@ -695,7 +732,7 @@ func _setup_enhanced_layout() -> void:
 	_auto_pick_fodder_btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_auto_pick_fodder_btn.pressed.connect(_on_auto_pick_fodders_pressed)
 	promote_vbox.add_child(_auto_pick_fodder_btn)
-	promote_vbox.move_child(_auto_pick_fodder_btn, fodder_item_list.get_index() + 1)
+	promote_vbox.move_child(_auto_pick_fodder_btn, _fodder_card_container.get_index() + 1)
 
 	_quick_level_for_promote_btn = Button.new()
 	_quick_level_for_promote_btn.text = "📘 Đọc Sách EXP Để Đạt Cấp Tối Đa Ngay"
@@ -3334,6 +3371,10 @@ func _load_promote_preview() -> void:
 	_preview_data = res["data"]
 	_selected_fodder_ids.clear()
 	fodder_item_list.clear()
+	if _fodder_grid != null:
+		for c in _fodder_grid.get_children():
+			c.queue_free()
+	_fodder_card_nodes.clear()
 
 	var h_info: Dictionary = _preview_data.get("hero", {}) if _preview_data.get("hero") is Dictionary else {}
 	var reqs: Dictionary = _preview_data.get("requirements", {}) if _preview_data.get("requirements") is Dictionary else {}
@@ -3378,20 +3419,34 @@ func _load_promote_preview() -> void:
 		_quick_level_for_promote_btn.disabled = (total_exp_books <= 0)
 
 	if available_fodders.is_empty():
+		fodder_item_list.clear()
 		fodder_item_list.add_item("(Chưa có Tướng %d★ rảnh rỗi để hiến tế — Bấm Triệu Hồi Nhanh ở cột trái!)" % cur_star)
+		if _fodder_empty_label != null:
+			_fodder_empty_label.visible = true
+			_fodder_empty_label.text = "⚠️ Chưa có Tướng %d★ rảnh rỗi trong Doanh Trại để hiến tế.\n(Hãy bấm [Triệu Hồi Nhanh] ở cột trái hoặc phân giải phôi khác!)" % cur_star
 		confirm_promote_btn.disabled = true
 		if _auto_pick_fodder_btn != null:
 			_auto_pick_fodder_btn.disabled = true
 	else:
+		if _fodder_empty_label != null:
+			_fodder_empty_label.visible = false
 		for f in available_fodders:
 			if f is Dictionary:
-				var txt := "★%d %s (Lv.%d) — Hệ %s" % [
-					int(f.get("rarity", cur_star)),
-					str(f.get("name", "Hero")),
-					int(f.get("level", 1)),
-					str(f.get("heroClass", "UNCLASSIFIED"))
-				]
-				fodder_item_list.add_item(txt)
+				var fid := str(f.get("id", ""))
+				if _fodder_grid != null:
+					var fcard = UniversalHeroCardScript.new()
+					fcard.custom_minimum_size = Vector2(185, 230)
+					fcard.setup(f, UniversalHeroCardScript.ContextMode.DEFAULT, true)
+					fcard.set_selected(false)
+					fcard.selection_toggled.connect(func(_d, sel):
+						_on_fodder_card_toggled(fid, sel)
+					)
+					fcard.card_clicked.connect(func(_d):
+						_on_fodder_card_clicked(fid)
+					)
+					_fodder_grid.add_child(fcard)
+					_fodder_card_nodes[fid] = fcard
+
 		confirm_promote_btn.disabled = true
 		if _auto_pick_fodder_btn != null:
 			_auto_pick_fodder_btn.disabled = available_fodders.size() < req_fodder
@@ -3406,14 +3461,39 @@ func _on_auto_pick_fodders_pressed() -> void:
 		return
 
 	_selected_fodder_ids.clear()
-	fodder_item_list.deselect_all()
 	for i in range(req_fodder):
-		fodder_item_list.select(i, false)
 		var fid := str(available_fodders[i].get("id", ""))
 		if fid != "":
 			_selected_fodder_ids.append(fid)
 
+	_update_fodder_card_selection_visuals()
 	_update_confirm_promote_button_state()
+
+func _on_fodder_card_clicked(fid: String) -> void:
+	var is_sel := _selected_fodder_ids.has(fid)
+	_on_fodder_card_toggled(fid, not is_sel)
+
+func _on_fodder_card_toggled(fid: String, sel: bool) -> void:
+	var reqs: Dictionary = _preview_data.get("requirements", {}) if _preview_data.get("requirements") is Dictionary else {}
+	var req_fodder := int(reqs.get("requiredFodderCount", 1))
+
+	if sel:
+		if not _selected_fodder_ids.has(fid):
+			if _selected_fodder_ids.size() < req_fodder:
+				_selected_fodder_ids.append(fid)
+			else:
+				status_label.text = "⚠️ Đã chọn đủ %d phôi tướng! Hãy bỏ chọn bớt nếu muốn đổi tướng khác." % req_fodder
+	else:
+		_selected_fodder_ids.erase(fid)
+
+	_update_fodder_card_selection_visuals()
+	_update_confirm_promote_button_state()
+
+func _update_fodder_card_selection_visuals() -> void:
+	for fid in _fodder_card_nodes.keys():
+		var card = _fodder_card_nodes[fid]
+		if is_instance_valid(card) and card.has_method("set_selected"):
+			card.set_selected(_selected_fodder_ids.has(fid))
 
 func _on_fodder_selected(index: int, selected: bool) -> void:
 	var available_fodders: Array = _preview_data.get("availableFodders", []) if _preview_data.get("availableFodders") is Array else []
@@ -3421,13 +3501,7 @@ func _on_fodder_selected(index: int, selected: bool) -> void:
 		return
 
 	var f_id := str(available_fodders[index].get("id", ""))
-	if selected:
-		if not _selected_fodder_ids.has(f_id):
-			_selected_fodder_ids.append(f_id)
-	else:
-		_selected_fodder_ids.erase(f_id)
-
-	_update_confirm_promote_button_state()
+	_on_fodder_card_toggled(f_id, selected)
 
 func _update_confirm_promote_button_state() -> void:
 	var h_info: Dictionary = _preview_data.get("hero", {}) if _preview_data.get("hero") is Dictionary else {}
