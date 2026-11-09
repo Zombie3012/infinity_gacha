@@ -3173,39 +3173,55 @@ func _render_forge_facility(b_lvl: int, b_status: String) -> void:
 				)
 
 	elif tab_idx == 1:
-		var equips: Array = GameState.crafting_overview.get("equipment", [])
+		_add_inspector_info("💎 Sử dụng Đá Cường Hóa để gia tăng chỉ số Trang Bị (Tối đa +15).", Color(0.85, 0.92, 1.0))
+		var equips: Array = _get_all_equipment()
 		if equips.is_empty():
 			_add_inspector_info("ℹ️ Chưa có trang bị nào trong kho. Hãy chuyển sang tab [🔨 Rèn Trang Bị] để chế tạo!", Color(0.82, 0.86, 0.95))
-		for eq_item in equips:
-			if eq_item is Dictionary:
-				var eid := str(eq_item.get("id", ""))
-				var ename := str(eq_item.get("name", "Trang bị"))
-				var eslot := str(eq_item.get("slot", "EQ"))
-				var estar := int(eq_item.get("starLevel", 1))
-				var eenh := int(eq_item.get("enhanceLevel", 0))
-				var atk := int(eq_item.get("atkBonus", 0))
-				var def_b := int(eq_item.get("defBonus", 0))
-				var hp_b := int(eq_item.get("hpBonus", 0))
-				var eq_hero := str(eq_item.get("equippedHeroName", ""))
-				var owner_tag := (" [Đang mặc: %s]" % eq_hero) if eq_hero != "" else " [Trong Kho]"
-				_add_inspector_info(
-					"⚔️ %s (%d★ +%d)%s\n   [%s] +ATK %d | +DEF %d | +HP %d" % [
-						ename, estar, eenh, owner_tag, eslot, atk, def_b, hp_b
-					],
-					Color(0.75, 0.92, 1.0)
-				)
-				_add_inspector_button(
-					"✨ Cường Hóa %s Lên +%d" % [ename, eenh + 1],
-					func(): _enhance_equipment_item(eid, ename),
-					eenh >= 15 or b_status != "READY"
-				)
+		else:
+			var enh_grid := GridContainer.new()
+			enh_grid.columns = 2
+			enh_grid.add_theme_constant_override("h_separation", 6)
+			enh_grid.add_theme_constant_override("v_separation", 6)
+			enh_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+			for eq_item in equips:
+				if eq_item is Dictionary:
+					var item_box := VBoxContainer.new()
+					item_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					item_box.add_theme_constant_override("separation", 3)
+
+					var icard := UniversalItemCardScript.new()
+					icard.custom_minimum_size = Vector2(160, 185)
+					icard.setup(eq_item, UniversalItemCardScript.ContextMode.FORGE_ENHANCE, false)
+					item_box.add_child(icard)
+
+					var eenh := int(eq_item.get("enhanceLevel", 0))
+					var eid := str(eq_item.get("id", ""))
+					var ename := str(eq_item.get("name", "Trang bị"))
+
+					var enh_btn := Button.new()
+					enh_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					enh_btn.custom_minimum_size = Vector2(0, 28)
+					if eenh >= 15:
+						enh_btn.text = "✅ Đạt Cấp Trần (+15)"
+						enh_btn.disabled = true
+					else:
+						enh_btn.text = "✨ Nâng Lên +%d" % (eenh + 1)
+						enh_btn.modulate = Color(1.0, 0.88, 0.45)
+						enh_btn.disabled = (b_status != "READY")
+						enh_btn.pressed.connect(func(): _enhance_equipment_item(eid, ename))
+					item_box.add_child(enh_btn)
+
+					enh_grid.add_child(item_box)
+
+			inspector_action_container.add_child(enh_grid)
 
 	elif tab_idx == 2:
 		_add_inspector_info(
 			"🌟 Ghép 2 Trang Bị cùng loại & cùng cấp Sao (chưa mặc) để đột phá lên cấp Sao cao hơn!",
 			Color(1.0, 0.88, 0.45)
 		)
-		var equips: Array = GameState.crafting_overview.get("equipment", [])
+		var equips: Array = _get_all_equipment()
 		var groups: Dictionary = {}
 		for eq_item in equips:
 			if eq_item is Dictionary:
@@ -3222,6 +3238,10 @@ func _render_forge_facility(b_lvl: int, b_status: String) -> void:
 						"templateCode": tcode,
 						"name": str(eq_item.get("name", tcode)),
 						"starLevel": s_lvl,
+						"slot": str(eq_item.get("slot", "WEAPON")),
+						"atkBonus": int(eq_item.get("atkBonus", 0)),
+						"defBonus": int(eq_item.get("defBonus", 0)),
+						"hpBonus": int(eq_item.get("hpBonus", 0)),
 						"count": 0
 					}
 				groups[gkey]["count"] = int(groups[gkey]["count"]) + 1
@@ -3229,18 +3249,44 @@ func _render_forge_facility(b_lvl: int, b_status: String) -> void:
 		if groups.is_empty():
 			_add_inspector_info("ℹ️ Chưa có trang bị rảnh rỗi trong kho để ghép Sao.", Color(0.8, 0.84, 0.92))
 		else:
+			var fuse_grid := GridContainer.new()
+			fuse_grid.columns = 2
+			fuse_grid.add_theme_constant_override("h_separation", 6)
+			fuse_grid.add_theme_constant_override("v_separation", 6)
+			fuse_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
 			for gkey in groups.keys():
 				var g: Dictionary = groups[gkey]
+				var item_box := VBoxContainer.new()
+				item_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				item_box.add_theme_constant_override("separation", 3)
+
+				var icard := UniversalItemCardScript.new()
+				icard.custom_minimum_size = Vector2(160, 185)
+				icard.setup(g, UniversalItemCardScript.ContextMode.FORGE_FUSE, false)
+				item_box.add_child(icard)
+
+				var cnt := int(g["count"])
+				var slvl := int(g["starLevel"])
 				var tcode := str(g["templateCode"])
 				var gname := str(g["name"])
-				var slvl := int(g["starLevel"])
-				var cnt := int(g["count"])
 				var can_fuse := cnt >= 2 and b_status == "READY"
-				_add_inspector_button(
-					"🌟 Ghép %s (%d★ → %d★) [Hiện có: %d/2]" % [gname, slvl, slvl + 1, cnt],
-					func(): _fuse_equipment_items(tcode, slvl, gname),
-					not can_fuse
-				)
+
+				var fuse_btn := Button.new()
+				fuse_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				fuse_btn.custom_minimum_size = Vector2(0, 28)
+				if can_fuse:
+					fuse_btn.text = "🌟 Đột Phá Lên %d★" % (slvl + 1)
+					fuse_btn.modulate = Color(0.45, 0.95, 0.65)
+					fuse_btn.pressed.connect(func(): _fuse_equipment_items(tcode, slvl, gname))
+				else:
+					fuse_btn.text = "Thiếu 1 món (%d/2)" % cnt
+					fuse_btn.disabled = true
+				item_box.add_child(fuse_btn)
+
+				fuse_grid.add_child(item_box)
+
+			inspector_action_container.add_child(fuse_grid)
 
 func _render_training_center_facility(b_lvl: int, b_status: String) -> void:
 	var cap_heroes := 3 if b_lvl <= 1 else (5 if b_lvl == 2 else 7)

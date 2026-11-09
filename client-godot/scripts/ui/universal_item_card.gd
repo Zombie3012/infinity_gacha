@@ -204,8 +204,19 @@ func _apply_item_context() -> void:
 	var eq_hname := str(item_data.get("equippedHeroName", ""))
 	if eq_hname != "":
 		add_badge("🛡️ " + eq_hname, Color(0.20, 0.55, 0.85, 0.9))
-	elif int(item_data.get("count", 0)) >= 2 and context_mode == ContextMode.FORGE_FUSE:
-		add_badge("🌟 Đủ 2 món để Ghép", Color(0.85, 0.65, 0.20, 0.95), Color.BLACK)
+
+	var enh: int = int(item_data.get("enhanceLevel", 0))
+	if context_mode == ContextMode.FORGE_ENHANCE:
+		if enh >= 15:
+			add_badge("MAX +15", Color(0.95, 0.35, 0.35, 0.95), Color.WHITE)
+		else:
+			add_badge("✨ Nâng lên +%d" % (enh + 1), Color(0.85, 0.65, 0.20, 0.95), Color.BLACK)
+	elif context_mode == ContextMode.FORGE_FUSE:
+		var cnt := int(item_data.get("count", 1))
+		if cnt >= 2:
+			add_badge("🌟 Đủ 2/2 Ghép Sao", Color(0.20, 0.75, 0.45, 0.95), Color.BLACK)
+		else:
+			add_badge("Cần thêm 1 món (1/2)", Color(0.45, 0.50, 0.60, 0.90), Color.WHITE)
 
 func _refresh_badges() -> void:
 	if _badge_container == null:
