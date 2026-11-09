@@ -27,13 +27,16 @@ var _capacity_label: Label
 var _rate_label: Label
 var _ration_label: Label
 var _hero_browser: CardGridBrowser
+var _is_ui_built: bool = false
 
 func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func _ready() -> void:
-	_build_ui()
+	if not _is_ui_built:
+		_build_ui()
+	refresh_ui()
 
 func setup(b_data: Dictionary) -> void:
 	building_data = b_data
@@ -50,9 +53,13 @@ func setup(b_data: Dictionary) -> void:
 		mult_by_lvl = 1.0 if building_level <= 1 else (1.5 if building_level == 2 else 2.0)
 		fat_per_hr = 15.0 * mult_by_lvl
 
+	if not _is_ui_built:
+		_build_ui()
 	refresh_ui()
 
 func refresh_ui() -> void:
+	if not _is_ui_built:
+		return
 	var resting_count := 0
 	for h in GameState.heroes:
 		if h is Dictionary and str(h.get("state", "")) == "RESTING":
@@ -79,6 +86,9 @@ func refresh_ui() -> void:
 		_hero_browser.set_items(GameState.heroes, true)
 
 func _build_ui() -> void:
+	if _is_ui_built:
+		return
+	_is_ui_built = true
 	# 1. Dark Backdrop
 	var bg := ColorRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)

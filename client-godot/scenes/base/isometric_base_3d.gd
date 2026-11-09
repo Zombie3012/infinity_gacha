@@ -2934,6 +2934,7 @@ func _open_forge_modal(b_data: Dictionary) -> void:
 		existing.queue_free()
 	var modal = ForgeModalScript.new()
 	modal.name = "ForgeModal"
+	$HUD.add_child(modal)
 	modal.setup(b_data)
 	modal.craft_requested.connect(func(rcode, rname):
 		await _craft_equipment_recipe(rcode, rname)
@@ -2953,7 +2954,6 @@ func _open_forge_modal(b_data: Dictionary) -> void:
 	modal.closed.connect(func():
 		await _sync_all_from_backend()
 	)
-	$HUD.add_child(modal)
 
 func _open_dormitory_modal(b_data: Dictionary) -> void:
 	var existing = $HUD.get_node_or_null("DormitoryModal")
@@ -2961,6 +2961,7 @@ func _open_dormitory_modal(b_data: Dictionary) -> void:
 		existing.queue_free()
 	var modal = DormitoryModalScript.new()
 	modal.name = "DormitoryModal"
+	$HUD.add_child(modal)
 	modal.setup(b_data)
 	modal.hero_rest_toggled.connect(func(hid, hname, is_resting):
 		await _toggle_hero_rest(hid, hname, is_resting)
@@ -2986,7 +2987,6 @@ func _open_dormitory_modal(b_data: Dictionary) -> void:
 	modal.closed.connect(func():
 		await _sync_all_from_backend()
 	)
-	$HUD.add_child(modal)
 
 func _open_training_center_modal(b_data: Dictionary) -> void:
 	var existing = $HUD.get_node_or_null("TrainingCenterModal")
@@ -2994,6 +2994,7 @@ func _open_training_center_modal(b_data: Dictionary) -> void:
 		existing.queue_free()
 	var modal = TrainingCenterModalScript.new()
 	modal.name = "TrainingCenterModal"
+	$HUD.add_child(modal)
 	modal.setup(b_data)
 	modal.stat_train_requested.connect(func(hid, hname, scode):
 		await _train_hero_stat(hid, hname, scode)
@@ -3013,7 +3014,6 @@ func _open_training_center_modal(b_data: Dictionary) -> void:
 	modal.closed.connect(func():
 		await _sync_all_from_backend()
 	)
-	$HUD.add_child(modal)
 
 func _on_action_bar_workers_pressed(b_data: Dictionary) -> void:
 	var b_id := str(b_data.get("id", ""))

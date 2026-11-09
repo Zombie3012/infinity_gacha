@@ -31,21 +31,28 @@ var _profile_name_label: Label
 var _profile_stats_label: Label
 var _stat_buttons: Dictionary = {}
 var _skills_vbox: VBoxContainer
+var _is_ui_built: bool = false
 
 func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func _ready() -> void:
-	_build_ui()
+	if not _is_ui_built:
+		_build_ui()
+	refresh_ui()
 
 func setup(b_data: Dictionary) -> void:
 	building_data = b_data
 	building_level = int(b_data.get("level", 1))
 	building_status = str(b_data.get("status", "READY"))
+	if not _is_ui_built:
+		_build_ui()
 	refresh_ui()
 
 func refresh_ui() -> void:
+	if not _is_ui_built:
+		return
 	var cap_heroes := 3 if building_level <= 1 else (5 if building_level == 2 else 7)
 	if _title_label != null:
 		_title_label.text = "🥋 KHU HUẤN LUYỆN (TRAINING CENTER Lv.%d/3)" % building_level
@@ -71,6 +78,9 @@ func refresh_ui() -> void:
 		_update_workbench(selected_hero)
 
 func _build_ui() -> void:
+	if _is_ui_built:
+		return
+	_is_ui_built = true
 	# 1. Dark Backdrop
 	var bg := ColorRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)

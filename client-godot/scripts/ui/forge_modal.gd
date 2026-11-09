@@ -50,21 +50,28 @@ var _fuse_scroll: ScrollContainer
 var _fuse_container: VBoxContainer
 var _fuse_pills: HBoxContainer
 var _fuse_pill_idx: int = 0
+var _is_ui_built: bool = false
 
 func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func _ready() -> void:
-	_build_ui()
+	if not _is_ui_built:
+		_build_ui()
+	refresh_all()
 
 func setup(b_data: Dictionary) -> void:
 	building_data = b_data
 	building_level = int(b_data.get("level", 1))
 	building_status = str(b_data.get("status", "READY"))
+	if not _is_ui_built:
+		_build_ui()
 	refresh_all()
 
 func refresh_all() -> void:
+	if not _is_ui_built:
+		return
 	_refresh_header_and_materials()
 	match current_tab:
 		0: _render_craft_tab()
@@ -72,6 +79,9 @@ func refresh_all() -> void:
 		2: _render_fuse_tab()
 
 func _build_ui() -> void:
+	if _is_ui_built:
+		return
+	_is_ui_built = true
 	# 1. Dark Backdrop
 	var bg := ColorRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -311,6 +321,8 @@ func _update_craft_pills() -> void:
 			btn.modulate = Color(1.0, 0.85, 0.35) if is_sel else Color(0.7, 0.75, 0.85)
 
 func _render_craft_tab() -> void:
+	if _craft_recipes_container == null:
+		return
 	for c in _craft_recipes_container.get_children():
 		c.queue_free()
 
@@ -570,6 +582,8 @@ func _build_enhance_tab_ui(deck: Control) -> void:
 	db_vbox.add_child(_enh_confirm_btn)
 
 func _render_enhance_tab() -> void:
+	if _enh_browser == null:
+		return
 	var equips: Array = _get_all_equipment()
 	_enh_browser.set_items(equips, true)
 	if not _selected_enh_item.is_empty():
@@ -720,6 +734,8 @@ func _update_fuse_pills() -> void:
 			btn.modulate = Color(1.0, 0.85, 0.35) if is_sel else Color(0.7, 0.75, 0.85)
 
 func _render_fuse_tab() -> void:
+	if _fuse_container == null:
+		return
 	for c in _fuse_container.get_children():
 		c.queue_free()
 
