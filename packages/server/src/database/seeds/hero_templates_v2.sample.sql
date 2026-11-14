@@ -81,3 +81,13 @@ UPDATE hero_templates SET
   base_atk = round(2.5 * base_str + 0.5 * base_agi)::int,
   base_def = 15 + round(0.5 * base_sta)::int,
   base_spd = 60 + base_agi;
+
+-- Procedural Hero placeholder templates (used for random non-limited summons).
+INSERT INTO hero_templates (id, code, name, default_rarity, hero_class, element, base_hp, base_atk, base_def, base_spd, is_enabled)
+VALUES
+  ('procedural-1s', 'PROCEDURAL_1S', 'Procedural Hero 1★', 1, 'WARRIOR', 'FIRE', 200, 30, 15, 60, true),
+  ('procedural-2s', 'PROCEDURAL_2S', 'Procedural Hero 2★', 2, 'WARRIOR', 'FIRE', 200, 30, 15, 60, true),
+  ('procedural-3s', 'PROCEDURAL_3S', 'Procedural Hero 3★', 3, 'WARRIOR', 'FIRE', 200, 30, 15, 60, true),
+  ('procedural-4s', 'PROCEDURAL_4S', 'Procedural Hero 4★', 4, 'WARRIOR', 'FIRE', 200, 30, 15, 60, true),
+  ('procedural-5s', 'PROCEDURAL_5S', 'Procedural Hero 5★', 5, 'WARRIOR', 'FIRE', 200, 30, 15, 60, true)
+ON CONFLICT (code) DO NOTHING;

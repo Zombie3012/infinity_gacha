@@ -322,7 +322,7 @@ export function createApp() {
     return res.json(await combatService.getMasterSkills(master.id));
   }));
 
-  app.post('/api/master/init', requireAccount, asyncRoute(async (req, res) => {
+  app.post(['/api/master/init', '/api/masters/init'], requireAccount, asyncRoute(async (req, res) => {
     const masterName = typeof req.body.masterName === 'string' ? req.body.masterName.trim() : '';
     if (masterName.length < 1 || masterName.length > 50) return res.status(400).json({ error: 'Tên Master cần từ 1–50 ký tự.' });
     const id = uuidv4();
@@ -350,7 +350,8 @@ export function createApp() {
       });
       return res.status(201).json({ ...master, exp: master.exp.toString(), silverCoins: master.silverCoins.toString(), gems: master.gems.toString(), gemDebt: master.gemDebt.toString() });
     } catch (error) {
-      if ((error as { code?: string }).code === '23505') return res.status(409).json({ error: 'Tài khoản này đã có Master.' });
+      const pgCode = (error as { code?: string }).code ?? (error as { cause?: { code?: string } }).cause?.code;
+      if (pgCode === '23505') return res.status(409).json({ error: 'Tài khoản này đã có Master.' });
       throw error;
     }
   }));

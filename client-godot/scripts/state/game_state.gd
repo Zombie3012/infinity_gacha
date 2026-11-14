@@ -116,7 +116,7 @@ func ensure_demo_session() -> bool:
 	ApiClient.set_auth_token(token)
 	var profile_ok := await refresh_profile()
 	if not profile_ok or master_id.is_empty():
-		var init_res := await ApiClient.post_req("/api/masters/init", {
+		var init_res := await ApiClient.post_req("/api/master/init", {
 			"masterName": DEFAULT_DEMO_MASTER_NAME
 		})
 		if init_res["ok"]:

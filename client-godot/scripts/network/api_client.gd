@@ -7,7 +7,7 @@ class_name ApiClientSingleton
 signal unauthorized
 signal connection_error(message: String)
 
-var base_url: String = "http://localhost:3000"
+var base_url: String = "http://127.0.0.1:3000"
 var auth_token: String = ""
 
 func set_auth_token(token: String) -> void:

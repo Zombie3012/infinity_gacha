@@ -309,6 +309,13 @@
       "when": 1793911191027,
       "tag": "0043_lying_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794621389576,
+      "tag": "0044_messy_stryfe",
+      "breakpoints": true
     }
   ]
 }

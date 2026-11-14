@@ -68,7 +68,7 @@ func _on_login_pressed() -> void:
 		var m_name = master_name_input.text.strip_edges()
 		if m_name.is_empty():
 			m_name = username
-		var init_res = await ApiClient.post_req("/api/masters/init", {
+		var init_res = await ApiClient.post_req("/api/master/init", {
 			"masterName": m_name
 		})
 		if init_res["ok"]:
@@ -106,7 +106,7 @@ func _on_register_pressed() -> void:
 		var m_name = master_name_input.text.strip_edges()
 		if m_name.is_empty():
 			m_name = username
-		await ApiClient.post_req("/api/masters/init", {
+		await ApiClient.post_req("/api/master/init", {
 			"masterName": m_name
 		})
 		await GameState.refresh_profile()

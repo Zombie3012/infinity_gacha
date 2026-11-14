@@ -155,6 +155,21 @@ export class PersistentGachaService {
             const finalConfigId = isProcedural ? `PROCEDURAL_${build.star}S` : (template?.code ?? `PROCEDURAL_${build.star}S`);
             summonedRewardName = finalHeroName;
 
+            if (finalConfigId.startsWith('PROCEDURAL_')) {
+              await tx.insert(heroTemplates).values({
+                id: `procedural-${build.star}s`,
+                code: finalConfigId,
+                name: `Procedural Hero ${build.star}★`,
+                defaultRarity: build.star,
+                heroClass: 'WARRIOR',
+                element: 'FIRE',
+                baseHp: 200,
+                baseAttack: 30,
+                baseDefense: 15,
+                baseSpeed: 60,
+              }).onConflictDoNothing();
+            }
+
             await tx.insert(heroes).values({
               id: heroId, masterId, configId: finalConfigId, name: finalHeroName,
               rarity: build.star, category: origin, state: 'HEALTHY', level: 1,
