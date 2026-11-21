@@ -1,20 +1,20 @@
 import { randomInt } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { calculateFiveStarRate, GAME_CONSTANTS } from '@infiniti-gacha/shared';
-import { getPityRules } from '../admin/runtime-rules.js';
+import type { ElementAffinity } from '@infiniti-gacha/shared';
 import { db } from '../../database/db.js';
 import {
-  banners, heroes, heroElementAffinities, heroTemplates, masterBannerPity, masterItems,
+  currencyTransactions,
+  banners, heroes, heroElementAffinities, heroTemplates, masterItems,
   masterSummonInventory, masters, summonHistory, summonRewardPool, summonSessions,
 } from '../../database/drizzle-schema.js';
 import { affinityColumns, buildSummonedHero, HERO_STAR_LOCKED } from '../hero/hero-generation.js';
 
+export const SPECIAL_BANNER_GEM_COST_PER_ROLL = 100;
+
 export class SummonError extends Error {
   constructor(message: string, public readonly statusCode: number) { super(message); }
 }
-
-function secureRandom(): number { return randomInt(0, 1_000_000_000) / 1_000_000_000; }
 
 function weightedPick<T extends { weight: number }>(rows: T[]): T {
   const total = rows.reduce((sum, row) => sum + row.weight, 0);
@@ -38,13 +38,29 @@ function scrollForBanner(bannerType: string): 'NORMAL' | 'SPECIAL' | 'LIMITED' {
   return originForBanner(bannerType);
 }
 
+export interface SummonedHeroPayload {
+  id: string;
+  name: string;
+  rarity: number;
+  level: number;
+  classCode: string;
+  combatRole: string;
+  element: string;
+  baseStr: number;
+  baseInt: number;
+  baseSta: number;
+  baseAgi: number;
+  hp: number;
+  maxHp: number;
+  attack: number;
+  defense: number;
+  speed: number;
+  elementAffinities?: ElementAffinity | null;
+}
+
 export class PersistentGachaService {
   public async summon(masterId: string, bannerId: string, rollCount: 1 | 10, idempotencyKey: string) {
     if (!idempotencyKey || idempotencyKey.length > 80) throw new SummonError('Thiếu hoặc sai Idempotency-Key.', 400);
-
-    // Read the active pity configuration before opening the transaction so the
-    // admin plane is never queried while holding row locks.
-    const pityRules = await getPityRules();
 
     return db.transaction(async (tx) => {
       const [master] = await tx.select().from(masters).where(eq(masters.id, masterId)).for('update').limit(1);
@@ -54,7 +70,7 @@ export class PersistentGachaService {
         .where(and(eq(summonSessions.masterId, masterId), eq(summonSessions.idempotencyKey, idempotencyKey))).limit(1);
       if (existingSession) {
         const existingResults = await tx.select().from(summonHistory).where(eq(summonHistory.sessionId, existingSession.id)).orderBy(summonHistory.rollNumber);
-        return this.response(existingSession, existingResults);
+        return this.response(existingSession, existingResults, master.gems.toString());
       }
 
       const now = new Date();
@@ -64,66 +80,66 @@ export class PersistentGachaService {
         throw new SummonError('Banner không tồn tại hoặc hiện không hoạt động.', 404);
       }
 
+      const origin = originForBanner(banner.bannerType);
       const scrollType = scrollForBanner(banner.bannerType);
-      const [inventory] = await tx.select().from(masterSummonInventory)
-        .where(and(eq(masterSummonInventory.masterId, masterId), eq(masterSummonInventory.scrollType, scrollType)))
-        .for('update').limit(1);
-      if (!inventory || inventory.quantity < rollCount) throw new SummonError(`Không đủ Thiên Thư loại ${scrollType}.`, 409);
+      const isGemBanner = banner.bannerType === 'SPECIAL';
+      const costGems = BigInt(SPECIAL_BANNER_GEM_COST_PER_ROLL * rollCount);
+
+      let inventory: typeof masterSummonInventory.$inferSelect | undefined;
+      if (isGemBanner) {
+        if (master.gems < costGems) {
+          throw new SummonError(`Không đủ Đá Quý (cần ${costGems.toString()} Gem, hiện có ${master.gems.toString()} Gem).`, 409);
+        }
+      } else {
+        [inventory] = await tx.select().from(masterSummonInventory)
+          .where(and(eq(masterSummonInventory.masterId, masterId), eq(masterSummonInventory.scrollType, scrollType)))
+          .for('update').limit(1);
+        if (!inventory || inventory.quantity < rollCount) {
+          throw new SummonError(`Không đủ Thiên Thư loại ${scrollType}.`, 409);
+        }
+      }
 
       const poolRows = await tx.select().from(summonRewardPool)
         .where(and(eq(summonRewardPool.bannerId, bannerId), eq(summonRewardPool.isActive, true)));
-      const fiveStars = poolRows.filter(row => row.poolGroup === 'FIVE_STAR_HERO' && row.rewardType === 'HERO' && row.rarity === 5);
-      const otherHeroes = poolRows.filter(row => row.poolGroup === 'OTHER_HERO' && row.rewardType === 'HERO' && row.rarity !== null && row.rarity >= 1 && row.rarity <= 4);
-      const materials = poolRows.filter(row => row.poolGroup === 'MATERIAL' && row.rewardType === 'MATERIAL');
-      if (!fiveStars.length || !otherHeroes.length || !materials.length || [...fiveStars, ...otherHeroes, ...materials].some(row => row.weight <= 0)) {
-        throw new SummonError('Banner chưa được cấu hình đầy đủ pool 5 sao, Hero 1–4 sao và nguyên liệu.', 409);
+      const heroesPool = poolRows.filter(row => row.rewardType === 'HERO' && row.rarity !== null && row.rarity >= 1 && row.rarity <= 5);
+      const materialsPool = poolRows.filter(row => row.rewardType === 'MATERIAL');
+      if (!heroesPool.length || !materialsPool.length || poolRows.some(row => row.weight <= 0)) {
+        throw new SummonError('Banner chưa được cấu hình đầy đủ pool Hero và nguyên liệu.', 409);
       }
 
-      const [pity] = await tx.select().from(masterBannerPity)
-        .where(and(eq(masterBannerPity.masterId, masterId), eq(masterBannerPity.bannerId, bannerId))).for('update').limit(1);
-      let pityCounter = pity?.pityCounter ?? 0;
-      const pityBefore = pityCounter;
       const sessionId = uuidv4();
-      const origin = originForBanner(banner.bannerType);
       await tx.insert(summonSessions).values({
         id: sessionId, masterId, bannerId, scrollType, rollCount,
-        pityBefore, pityAfter: pityBefore, idempotencyKey, createdAt: now,
+        pityBefore: 0, pityAfter: 0, idempotencyKey, createdAt: now,
       });
-      const results = [];
+
+      const results: { row: typeof summonHistory.$inferSelect; hero?: SummonedHeroPayload }[] = [];
 
       for (let rollNumber = 1; rollNumber <= rollCount; rollNumber++) {
-        const pityNumber = pityCounter + 1;
-        const fiveStarRate = calculateFiveStarRate(pityNumber, pityRules);
-        const wasFiveStar = secureRandom() < fiveStarRate;
-        let picked;
-        if (wasFiveStar) {
-          picked = weightedPick(fiveStars);
-          pityCounter = 0;
-        } else {
-          // Keep the confirmed 49.6:50 ratio within the remaining non-five-star chance.
-          const heroShare = 49.6 / (49.6 + 50);
-          picked = secureRandom() < heroShare ? weightedPick(otherHeroes) : weightedPick(materials);
-          pityCounter = pityNumber;
-        }
+        // Pure flat-rate weighted random roll (no pity escalation).
+        const picked = weightedPick(poolRows);
+        const wasFiveStar = picked.rewardType === 'HERO' && picked.rarity === 5;
 
         let wasDuplicate = false;
         let thienMenhGranted = 0;
         let summonedRewardName = picked.rewardName;
+        let heroPayload: SummonedHeroPayload | undefined;
+
         if (picked.rewardType === 'HERO') {
           const pickedRarity = picked.rarity ?? 1;
           const templateCode = picked.heroTemplateCode;
-          // Quy tắc Thiên Mệnh: Chỉ áp dụng khi Hero từ 5★ trở lên VÀ thuộc Banner SPECIAL hoặc LIMITED
-          const isSpecialOrLimited5Star = (origin === 'SPECIAL' || origin === 'LIMITED') && pickedRarity >= 5;
+          const isProceduralPool = !templateCode || templateCode.startsWith('PROCEDURAL_');
+          const isFixedSpecial5Star = !isProceduralPool && (origin === 'SPECIAL' || origin === 'LIMITED') && pickedRarity >= 5;
 
           const [template] = templateCode
             ? await tx.select().from(heroTemplates).where(eq(heroTemplates.code, templateCode)).limit(1)
             : [undefined];
-          if (isSpecialOrLimited5Star && templateCode && (!template || template.defaultRarity !== pickedRarity)) {
+          if (isFixedSpecial5Star && templateCode && (!template || template.defaultRarity !== pickedRarity)) {
             throw new SummonError(`Hero template '${templateCode}' chưa có hoặc không khớp rarity.`, 409);
           }
 
           let owned = null;
-          if (isSpecialOrLimited5Star && templateCode) {
+          if (isFixedSpecial5Star && templateCode) {
             [owned] = await tx.select().from(heroes)
               .where(and(eq(heroes.masterId, masterId), eq(heroes.configId, templateCode))).for('update').limit(1);
           }
@@ -133,10 +149,27 @@ export class PersistentGachaService {
             thienMenhGranted = 1;
             summonedRewardName = owned.name;
             await tx.update(heroes).set({ thienMenh: sql`${heroes.thienMenh} + 1`, updatedAt: now }).where(eq(heroes.id, owned.id));
+            heroPayload = {
+              id: owned.id,
+              name: owned.name,
+              rarity: owned.rarity,
+              level: owned.level,
+              classCode: owned.classCode,
+              combatRole: owned.combatRole,
+              element: 'NEUTRAL',
+              baseStr: owned.baseStr,
+              baseInt: owned.baseInt,
+              baseSta: owned.baseSta,
+              baseAgi: owned.baseAgi,
+              hp: owned.hp,
+              maxHp: owned.maxHp,
+              attack: owned.attack,
+              defense: owned.defense,
+              speed: owned.speed,
+            };
           } else {
             const heroId = uuidv4();
-            // Tướng thường (hoặc <5★) sinh hoàn toàn ngẫu nhiên (tên Fantasy + thiên hướng chỉ số ngẫu nhiên theo số sao), không phụ thuộc template!
-            const isProcedural = !isSpecialOrLimited5Star;
+            const isProcedural = !isFixedSpecial5Star;
             let build;
             try {
               build = buildSummonedHero({
@@ -191,6 +224,30 @@ export class PersistentGachaService {
                 heroId, ...affinityColumns(build.elementAffinity), updatedAt: now,
               });
             }
+
+            const strongestElement = build.elementAffinity
+              ? Object.entries(build.elementAffinity).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] ?? 'NEUTRAL'
+              : 'NEUTRAL';
+
+            heroPayload = {
+              id: heroId,
+              name: finalHeroName,
+              rarity: build.star,
+              level: 1,
+              classCode: build.classCode,
+              combatRole: build.combatRole,
+              element: strongestElement,
+              baseStr: build.base.str,
+              baseInt: build.base.int,
+              baseSta: build.base.sta,
+              baseAgi: build.base.agi,
+              hp: build.derived.maxHp,
+              maxHp: build.derived.maxHp,
+              attack: build.derived.atk,
+              defense: build.derived.def,
+              speed: build.legacySpeed,
+              elementAffinities: build.elementAffinity,
+            };
           }
         } else {
           await tx.insert(masterItems).values({ id: uuidv4(), masterId, itemId: picked.rewardId, quantity: 1, updatedAt: now })
@@ -201,41 +258,82 @@ export class PersistentGachaService {
         }
 
         const [historyRow] = await tx.insert(summonHistory).values({
-          id: uuidv4(), sessionId, masterId, bannerId, rollNumber, pityNumber,
+          id: uuidv4(), sessionId, masterId, bannerId, rollNumber, pityNumber: 0,
           rewardType: picked.rewardType, rewardId: picked.rewardId, rewardName: summonedRewardName,
           rarity: picked.rarity ?? 0, wasFiveStar, wasDuplicate, thienMenhGranted,
           summonOrigin: picked.rewardType === 'HERO' ? origin : null, createdAt: now,
         }).returning();
-        results.push(historyRow);
+        results.push({ row: historyRow, hero: heroPayload });
       }
 
-      await tx.update(masterSummonInventory).set({ quantity: inventory.quantity - rollCount, updatedAt: now }).where(eq(masterSummonInventory.id, inventory.id));
-      if (pity) {
-        await tx.update(masterBannerPity).set({ pityCounter, updatedAt: now }).where(eq(masterBannerPity.id, pity.id));
-      } else {
-        await tx.insert(masterBannerPity).values({ id: uuidv4(), masterId, bannerId, pityCounter, updatedAt: now });
+      let remainingGems = master.gems.toString();
+      let remainingScrolls: number | undefined;
+      if (isGemBanner) {
+        const [updatedMaster] = await tx.update(masters)
+          .set({ gems: sql`${masters.gems} - ${costGems}`, updatedAt: now })
+          .where(eq(masters.id, masterId))
+          .returning({ gems: masters.gems });
+        remainingGems = updatedMaster.gems.toString();
+        await tx.insert(currencyTransactions).values({
+          id: uuidv4(),
+          masterId,
+          currencyType: 'GEMS',
+          amountDelta: -costGems,
+          transactionType: 'GACHA_SUMMON',
+          referenceId: sessionId,
+          createdAt: now,
+        });
+      } else if (inventory) {
+        remainingScrolls = inventory.quantity - rollCount;
+        await tx.update(masterSummonInventory)
+          .set({ quantity: remainingScrolls, updatedAt: now })
+          .where(eq(masterSummonInventory.id, inventory.id));
       }
 
-      await tx.update(summonSessions).set({ pityAfter: pityCounter }).where(eq(summonSessions.id, sessionId));
-      return { sessionId, pityBefore, finalPityCounter: pityCounter, scrollsConsumed: rollCount, results: results.map(row => this.formatResult(row)) };
+      return {
+        sessionId,
+        bannerId,
+        bannerType: banner.bannerType,
+        currencyType: isGemBanner ? 'GEMS' : 'SCROLL',
+        currencyConsumed: isGemBanner ? Number(costGems) : rollCount,
+        scrollsConsumed: isGemBanner ? 0 : rollCount,
+        remainingGems,
+        ...(remainingScrolls !== undefined ? { remainingScrolls } : {}),
+        results: results.map(item => this.formatResult(item.row, item.hero)),
+      };
     });
   }
 
-  private formatResult(row: typeof summonHistory.$inferSelect) {
+  private formatResult(row: typeof summonHistory.$inferSelect, hero?: SummonedHeroPayload) {
     return {
-      rollNumber: row.rollNumber, pityNumber: row.pityNumber, isFiveStar: row.wasFiveStar,
+      rollNumber: row.rollNumber,
+      isFiveStar: row.wasFiveStar,
       rewardType: row.rewardType,
-      itemType: row.rewardType, rewardId: row.rewardId, rewardName: row.rewardName,
-      rarity: row.rarity, isDuplicate: row.wasDuplicate,
+      itemType: row.rewardType,
+      rewardId: row.rewardId,
+      rewardName: row.rewardName,
+      rarity: row.rarity,
+      isDuplicate: row.wasDuplicate,
       duplicateBonus: row.thienMenhGranted ? { thienMenhGranted: row.thienMenhGranted } : undefined,
       summonOrigin: row.summonOrigin,
+      ...(hero ? { hero } : {}),
     };
   }
 
-  private response(session: typeof summonSessions.$inferSelect, rows: (typeof summonHistory.$inferSelect)[]) {
+  private response(
+    session: typeof summonSessions.$inferSelect,
+    rows: (typeof summonHistory.$inferSelect)[],
+    remainingGems: string,
+  ) {
+    const isGemBanner = session.scrollType === 'SPECIAL';
     return {
-      sessionId: session.id, pityBefore: session.pityBefore, finalPityCounter: session.pityAfter,
-      scrollsConsumed: session.rollCount, results: rows.map(row => this.formatResult(row)),
+      sessionId: session.id,
+      bannerId: session.bannerId,
+      currencyType: isGemBanner ? 'GEMS' : 'SCROLL',
+      currencyConsumed: isGemBanner ? SPECIAL_BANNER_GEM_COST_PER_ROLL * session.rollCount : session.rollCount,
+      scrollsConsumed: isGemBanner ? 0 : session.rollCount,
+      remainingGems,
+      results: rows.map(row => this.formatResult(row)),
     };
   }
 }

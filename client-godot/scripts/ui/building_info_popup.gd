@@ -213,7 +213,7 @@ func _get_building_icon(code: String) -> String:
 func _get_player_lore_description(code: String) -> String:
 	match code:
 		"SUMMON_ALTAR":
-			return "Đài Triệu Hồi Linh Hồn Cổ Xưa. Nơi các vị Anh Hùng từ đa vũ trụ được triệu thỉnh thông qua năng lượng Thiên Thư Thường và Đại Nghi Thức 3D."
+			return "Đài Triệu Hồi Linh Hồn Cổ Xưa. Nơi triệu thỉnh Anh Hùng theo tỉ lệ thuần (không Pity) với 2 loại Banner: Banner Thường (1★–3★ bằng Thiên Thư) và Banner Đặc Biệt (2★–5★ với 100 Gem/lần)."
 		"BARRACKS":
 			return "Nhà Chiến Lược & Doanh Trại Quân Sự. Trung tâm chỉ huy, điều động quân lực, lập đội hình xuất kích và thăng hoa sao cho các Anh Hùng."
 		"INFIRMARY":
@@ -288,7 +288,8 @@ func _get_building_stats_display(code: String, lvl: int) -> Array[Dictionary]:
 			list.append({"label": "Dược sĩ phụ trách:", "val": "Tối đa 2 Hero", "col": Color(0.65, 0.85, 1.0)})
 		"SUMMON_ALTAR":
 			list.append({"label": "Thiên thư hiện có:", "val": "%s Cuốn" % _format_num(GameState.normal_scrolls), "col": Color(0.4, 0.95, 0.6)})
-			list.append({"label": "Vàng (Bạc) hiện có:", "val": "%s Bạc" % _format_num(GameState.silver_coins), "col": Color(1.0, 0.85, 0.4)})
+			list.append({"label": "Đá Quý (Gems) hiện có:", "val": "%s Gem" % _format_num(GameState.gem_stones), "col": Color(0.55, 0.88, 1.0)})
+			list.append({"label": "Bạc hiện có:", "val": "%s Bạc" % _format_num(GameState.silver_coins), "col": Color(1.0, 0.85, 0.4)})
 		"BARRACKS":
 			list.append({"label": "Tổng số Hero sở hữu:", "val": "%d Hero" % GameState.heroes.size(), "col": Color(0.4, 0.95, 0.6)})
 			list.append({"label": "Đội hình PVE xuất trận:", "val": "%d / 5 Hero" % GameState.active_party_ids.size(), "col": Color(1.0, 0.85, 0.4)})

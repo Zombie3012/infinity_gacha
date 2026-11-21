@@ -28,6 +28,7 @@ const ForgeModalScript := preload("res://scripts/ui/forge_modal.gd")
 const DormitoryModalScript := preload("res://scripts/ui/dormitory_modal.gd")
 const TrainingCenterModalScript := preload("res://scripts/ui/training_center_modal.gd")
 const PlayerProfileModalScript := preload("res://scripts/ui/player_profile_modal.gd")
+const SummonBannerModalScript := preload("res://scripts/ui/summon_banner_modal.gd")
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
@@ -4141,24 +4142,15 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 			_building_action_bar.show_landmark(
 				"SUMMON_ALTAR",
 				"✨ ĐÀI TRIỆU HỒI ANH HÙNG (SUMMON ALTAR)",
-				"• Thiên Thư: %s 📜 | Vàng: %s 🪙" % [_format_num(GameState.normal_scrolls), _format_num(GameState.silver_coins)],
+				"• Thiên Thư: %s 📜 | Đá Quý: %s 💎 | Bạc: %s 🪙" % [_format_num(GameState.normal_scrolls), _format_num(GameState.gem_stones), _format_num(GameState.silver_coins)],
 				[
 					{
 						"icon": "ℹ️", "label": "Thông tin", "color": Color(0.3, 0.75, 1.0),
 						"callback": func(): _show_landmark_info_popup("SUMMON_ALTAR")
 					},
 					{
-						"icon": "✨", "label": "Triệu Hồi ×1", "color": Color(0.4, 0.85, 1.0),
-						"callback": func(): _perform_gacha_summon(1)
-					},
-					{
-						"icon": "🌟", "label": "Đại Triệu Hồi ×10", "color": Color(1.0, 0.85, 0.35),
-						"callback": func(): _perform_gacha_summon(10)
-					},
-					{
-						"icon": "🪙", "label": "Đổi 10 Cuộn", "color": Color(0.9, 0.7, 0.4),
-						"callback": func(): _exchange_scrolls(10),
-						"disabled": GameState.silver_coins < 100000
+						"icon": "✨", "label": "Triệu Hồi", "color": Color(1.0, 0.85, 0.35),
+						"callback": func(): _open_summon_banner_modal()
 					},
 					{
 						"icon": "✥", "label": "Di Dời", "color": Color(0.85, 0.6, 1.0),
@@ -4628,7 +4620,33 @@ func _exchange_scrolls(amount: int) -> void:
 	else:
 		status_banner_label.text = "❌ Không thể đổi Thiên Thư: " + str(res["error"])
 
-func _perform_gacha_summon(roll_count: int) -> void:
+func _open_summon_banner_modal() -> void:
+	var existing := $HUD.get_node_or_null("SummonBannerModal")
+	if existing != null:
+		existing.queue_free()
+
+	var b_res := await ApiClient.get_req("/api/gacha/banners")
+	if b_res["ok"] and b_res["data"] is Array:
+		_active_banners = b_res["data"]
+
+	if _active_banners.is_empty():
+		status_banner_label.text = "❌ Hiện không có Banner triệu hồi nào đang mở."
+		return
+
+	var modal := SummonBannerModalScript.new()
+	modal.name = "SummonBannerModal"
+	$HUD.add_child(modal)
+	modal.setup(_active_banners)
+	modal.summon_requested.connect(func(b_id: String, b_type: String, r_count: int):
+		_perform_gacha_summon(r_count, b_id, b_type)
+	)
+	modal.exchange_scrolls_requested.connect(func(amt: int):
+		await _exchange_scrolls(amt)
+		if is_instance_valid(modal):
+			modal.refresh_resources()
+	)
+
+func _perform_gacha_summon(roll_count: int, selected_banner_id: String = "", selected_banner_type: String = "NORMAL") -> void:
 	_switch_to_lobby_floor(1)
 	camera_rig.focus_action_unit(summon_altar_mesh.global_position, 8.8, 0.3)
 	status_banner_label.text = "✨ Đang kích hoạt Đại Nghi Thức Triệu Hồi 3D ×%d..." % roll_count
@@ -4638,15 +4656,26 @@ func _perform_gacha_summon(roll_count: int) -> void:
 		if b_res["ok"] and b_res["data"] is Array:
 			_active_banners = b_res["data"]
 
-	if _active_banners.is_empty():
+	if _active_banners.is_empty() and selected_banner_id.is_empty():
 		status_banner_label.text = "❌ Hiện không có Banner triệu hồi nào đang mở."
 		return
 
-	if GameState.normal_scrolls < roll_count and GameState.silver_coins >= roll_count * 10000:
-		var needed := roll_count - GameState.normal_scrolls
-		await ApiClient.post_req("/api/economy/exchange-scrolls", { "amount": needed })
+	var banner_id := selected_banner_id
+	var banner_type := selected_banner_type.to_upper()
+	if banner_id.is_empty():
+		banner_id = str(_active_banners[0].get("id", ""))
+		banner_type = str(_active_banners[0].get("bannerType", "NORMAL")).to_upper()
 
-	var banner_id := str(_active_banners[0].get("id", ""))
+	if banner_type == "SPECIAL":
+		var gem_cost := 100 * roll_count
+		if GameState.gem_stones < gem_cost:
+			status_banner_label.text = "❌ Không đủ Đá Quý (cần %s Gem, hiện có %s Gem)." % [_format_num(gem_cost), _format_num(GameState.gem_stones)]
+			return
+	else:
+		if GameState.normal_scrolls < roll_count and GameState.silver_coins >= (roll_count - GameState.normal_scrolls) * 10000:
+			var needed := roll_count - GameState.normal_scrolls
+			await ApiClient.post_req("/api/economy/exchange-scrolls", { "amount": needed })
+
 	var idem_key := "godot-summon-%d-%d" % [Time.get_unix_time_from_system(), randi()]
 	var res := await ApiClient.post_req(
 		"/api/gacha/summon",
@@ -4656,7 +4685,6 @@ func _perform_gacha_summon(roll_count: int) -> void:
 
 	if res["ok"] and res["data"] is Dictionary:
 		var results: Array = res["data"].get("results", [])
-		var pity_counter := int(res["data"].get("pityCounter", 0))
 		var highest_rarity := 1
 		var hero_names: Array[String] = []
 		var item_count := 0
@@ -4684,12 +4712,12 @@ func _perform_gacha_summon(roll_count: int) -> void:
 
 		await _sync_all_from_backend()
 		await get_tree().create_timer(0.45).timeout
-		_show_gacha_results_modal(roll_count, results, pity_counter, highest_rarity)
+		_show_gacha_results_modal(roll_count, results, highest_rarity, banner_id, banner_type)
 	else:
 		status_banner_label.text = "❌ Không thể triệu hồi: " + str(res["error"])
 
 func _play_3d_summon_ritual_vfx(highest_rarity: int) -> void:
-	if summon_altar_mesh == null or not is_instance_valid(summon_altar_mesh):
+	if not is_inside_tree() or summon_altar_mesh == null or not is_instance_valid(summon_altar_mesh) or not summon_altar_mesh.is_inside_tree():
 		return
 
 	var vfx_color := Color(0.28, 0.85, 1.0)
@@ -4700,8 +4728,8 @@ func _play_3d_summon_ritual_vfx(highest_rarity: int) -> void:
 
 	var vfx_root := Node3D.new()
 	vfx_root.name = "SummonRitualVfx3D"
-	vfx_root.global_position = summon_altar_mesh.global_position
 	add_child(vfx_root)
+	vfx_root.global_position = summon_altar_mesh.global_position
 
 	# 1. Sky Pillar Beam descending onto Summon Altar
 	var beam_node := MeshInstance3D.new()
@@ -4769,7 +4797,7 @@ func _play_3d_summon_ritual_vfx(highest_rarity: int) -> void:
 	tw.tween_property(flash_light, "light_energy", 0.0, 1.15)
 	tw.chain().tween_callback(vfx_root.queue_free)
 
-func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: int, highest_rarity: int) -> void:
+func _show_gacha_results_modal(roll_count: int, results: Array, highest_rarity: int, banner_id: String = "", banner_type: String = "NORMAL") -> void:
 	var existing := $HUD.get_node_or_null("GachaResultsOverlay")
 	if existing != null:
 		existing.queue_free()
@@ -4821,10 +4849,10 @@ func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: in
 	vbox.add_child(title)
 
 	var sub := Label.new()
-	sub.text = "📜 Thiên Thư còn lại: %s  |  🪙 Vàng: %s  |  🎯 Tích lũy Pity 5★: %d / 90" % [
+	sub.text = "📜 Thiên Thư còn lại: %s  |  💎 Đá Quý: %s  |  🪙 Bạc: %s" % [
 		_format_num(GameState.normal_scrolls),
+		_format_num(GameState.gem_stones),
 		_format_num(GameState.silver_coins),
-		pity_counter
 	]
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 13)
@@ -4916,21 +4944,25 @@ func _show_gacha_results_modal(roll_count: int, results: Array, pity_counter: in
 	btn_row.add_theme_constant_override("separation", 12)
 	vbox.add_child(btn_row)
 
+	var is_special_banner := (banner_type.to_upper() == "SPECIAL")
+
 	var again1_btn := Button.new()
-	again1_btn.text = "✨ Triệu Hồi Tiếp ×1"
-	again1_btn.custom_minimum_size = Vector2(165, 38)
+	again1_btn.text = "💎 Triệu Hồi Tiếp ×1 (100 Gem)" if is_special_banner else "📜 Triệu Hồi Tiếp ×1 (1 Thiên Thư)"
+	again1_btn.custom_minimum_size = Vector2(215, 38)
+	again1_btn.disabled = (GameState.gem_stones < 100) if is_special_banner else (GameState.normal_scrolls < 1 and GameState.silver_coins < 10000)
 	again1_btn.pressed.connect(func():
 		overlay.queue_free()
-		_perform_gacha_summon(1)
+		_perform_gacha_summon(1, banner_id, banner_type)
 	)
 	btn_row.add_child(again1_btn)
 
 	var again10_btn := Button.new()
-	again10_btn.text = "🌟 Triệu Hồi Tiếp ×10"
-	again10_btn.custom_minimum_size = Vector2(175, 38)
+	again10_btn.text = "🌟 Triệu Hồi Tiếp ×10 (1,000 Gem)" if is_special_banner else "🌟 Triệu Hồi Tiếp ×10 (10 Thiên Thư)"
+	again10_btn.custom_minimum_size = Vector2(235, 38)
+	again10_btn.disabled = (GameState.gem_stones < 1000) if is_special_banner else (GameState.normal_scrolls < 10 and GameState.silver_coins < (10 - GameState.normal_scrolls) * 10000)
 	again10_btn.pressed.connect(func():
 		overlay.queue_free()
-		_perform_gacha_summon(10)
+		_perform_gacha_summon(10, banner_id, banner_type)
 	)
 	btn_row.add_child(again10_btn)
 

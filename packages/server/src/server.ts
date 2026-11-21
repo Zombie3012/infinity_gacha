@@ -12,7 +12,7 @@ import { legacyClassFor } from './modules/hero/hero-generation.js';
 import { imprintSlotsFor } from './modules/hero/imprint-rules.js';
 import { heroPromotionService } from './modules/hero/hero-promotion.service.js';
 import { createAccessToken, hashPassword, readAccessToken, TOKEN_LIFETIME_SECONDS, verifyPassword } from './modules/auth/auth.js';
-import { PersistentGachaService, SummonError } from './modules/gacha/persistent-gacha.service.js';
+import { PersistentGachaService, SPECIAL_BANNER_GEM_COST_PER_ROLL, SummonError } from './modules/gacha/persistent-gacha.service.js';
 import { WorldSeedGenerator } from './modules/dungeon/world-seed.generator.js';
 import { dungeonConfigService } from './modules/dungeon/dungeon-config.service.js';
 import { worldSeedService } from './modules/dungeon/world-seed.service.js';
@@ -75,7 +75,8 @@ function bannerPoolIssue(rows: BannerPoolInput[]): string | undefined {
       if (row.rewardType !== 'MATERIAL' || row.rarity !== null || row.heroTemplateCode !== null) return 'MATERIAL rows cannot reference Hero templates or rarity.';
     } else return 'Unknown banner pool group.';
   }
-  if (!['FIVE_STAR_HERO', 'OTHER_HERO', 'MATERIAL'].every(group => groups.has(group))) return 'Pool requires 5-star Hero, 1–4 star Hero, and Material groups.';
+  const hasHero = groups.has('FIVE_STAR_HERO') || groups.has('OTHER_HERO');
+  if (!hasHero || !groups.has('MATERIAL')) return 'Pool requires at least one Hero group and a Material group.';
   return undefined;
 }
 
@@ -532,38 +533,76 @@ export function createApp() {
     return res.json(list);
   }));
 
+  const computePureBannerRates = (pool: { rewardType: string; rarity: number | null; weight: number }[]) => {
+    const totalWeight = pool.reduce((sum, row) => sum + Math.max(0, row.weight), 0);
+    const pct = (w: number) => (totalWeight > 0 ? Math.round((w / totalWeight) * 10000) / 100 : 0);
+    const heroRows = pool.filter(r => r.rewardType === 'HERO');
+    const matWeight = pool.filter(r => r.rewardType === 'MATERIAL').reduce((s, r) => s + r.weight, 0);
+    const weightByStar = (star: number) => heroRows.filter(r => r.rarity === star).reduce((s, r) => s + r.weight, 0);
+    const fiveW = weightByStar(5);
+    const fourW = weightByStar(4);
+    const threeW = weightByStar(3);
+    const twoW = weightByStar(2);
+    const oneW = weightByStar(1);
+    const heroTotalW = heroRows.reduce((s, r) => s + r.weight, 0);
+    return {
+      fiveStarHeroPercent: pct(fiveW),
+      fourStarHeroPercent: pct(fourW),
+      threeStarHeroPercent: pct(threeW),
+      twoStarHeroPercent: pct(twoW),
+      oneStarHeroPercent: pct(oneW),
+      heroTotalPercent: pct(heroTotalW),
+      otherHeroPercent: pct(heroTotalW - fiveW),
+      materialPercent: pct(matWeight),
+    };
+  };
+
   app.get('/api/gacha/banners', requireAccount, requireFeature('SUMMON'), asyncRoute(async (_req, res) => {
     const now = new Date();
-    const activeBanners = await db.select().from(banners).where(eq(banners.isActive, true));
-    return res.json(activeBanners.filter(banner => banner.startDate <= now && (!banner.endDate || banner.endDate > now)));
+    const activeBanners = await db.select().from(banners).where(eq(banners.isActive, true)).orderBy(asc(banners.id));
+    const live = activeBanners.filter(banner => banner.startDate <= now && (!banner.endDate || banner.endDate > now));
+    const allPools = live.length
+      ? await db.select({
+          bannerId: summonRewardPool.bannerId,
+          rewardType: summonRewardPool.rewardType,
+          rarity: summonRewardPool.rarity,
+          weight: summonRewardPool.weight,
+        }).from(summonRewardPool).where(and(inArray(summonRewardPool.bannerId, live.map(b => b.id)), eq(summonRewardPool.isActive, true)))
+      : [];
+    return res.json(live.map(banner => {
+      const pool = allPools.filter(row => row.bannerId === banner.id);
+      const isSpecial = banner.bannerType === 'SPECIAL';
+      const heroStars = pool.filter(r => r.rewardType === 'HERO' && r.rarity !== null).map(r => r.rarity!);
+      return {
+        ...banner,
+        costType: isSpecial ? 'GEMS' : 'SCROLL',
+        costPerRoll: isSpecial ? SPECIAL_BANNER_GEM_COST_PER_ROLL : 1,
+        minHeroRarity: heroStars.length ? Math.min(...heroStars) : 1,
+        maxHeroRarity: heroStars.length ? Math.max(...heroStars) : 3,
+        rates: computePureBannerRates(pool),
+      };
+    }));
   }));
 
   app.get('/api/gacha/banners/:bannerId', requireAccount, requireFeature('SUMMON'), asyncRoute(async (req, res) => {
     const now = new Date();
     const [banner] = await db.select().from(banners).where(and(eq(banners.id, String(req.params.bannerId)), eq(banners.isActive, true))).limit(1);
     if (!banner || banner.startDate > now || (banner.endDate && banner.endDate <= now)) return res.status(404).json({ error: 'Active banner not found.' });
-    const [master] = await db.select({ id: masters.id }).from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
-    const [pity] = master ? await db.select().from(masterBannerPity).where(and(
-      eq(masterBannerPity.masterId, master.id), eq(masterBannerPity.bannerId, banner.id),
-    )).limit(1) : [];
     const pool = await db.select({
       rewardId: summonRewardPool.rewardId, rewardName: summonRewardPool.rewardName,
       rewardType: summonRewardPool.rewardType, poolGroup: summonRewardPool.poolGroup,
       heroTemplateCode: summonRewardPool.heroTemplateCode, rarity: summonRewardPool.rarity,
+      weight: summonRewardPool.weight,
     }).from(summonRewardPool).where(and(eq(summonRewardPool.bannerId, banner.id), eq(summonRewardPool.isActive, true)));
-    const pityCount = pity?.pityCounter ?? 0;
-    const pityRules = await getPityRules();
-    const fiveStarChance = calculateFiveStarRate(pityCount + 1, pityRules);
-    const remainder = 1 - fiveStarChance;
+    const isSpecial = banner.bannerType === 'SPECIAL';
     return res.json({
-      banner, pool,
-      rates: {
-        fiveStarHeroPercent: fiveStarChance * 100,
-        otherHeroPercent: remainder * (49.6 / 99.6) * 100,
-        materialPercent: remainder * (50 / 99.6) * 100,
-        fiveStarBasePercent: pityRules.baseRate * 100,
+      banner: {
+        ...banner,
+        costType: isSpecial ? 'GEMS' : 'SCROLL',
+        costPerRoll: isSpecial ? SPECIAL_BANNER_GEM_COST_PER_ROLL : 1,
       },
-      pity: { currentCount: pityCount, nextRoll: pityCount + 1, hardPityAt: pityRules.guaranteeRoll },
+      pool,
+      rates: computePureBannerRates(pool),
     });
   }));
 

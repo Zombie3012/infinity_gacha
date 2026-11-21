@@ -1,7 +1,7 @@
-[gd_scene load_steps=23 format=3 uid="uid://b9m4w2p8k1x3c"]
+[gd_scene format=3 uid="uid://cam4w2p8k1x3c"]
 
-[ext_resource type="Script" path="res://scenes/base/isometric_base_3d.gd" id="1_basescript"]
-[ext_resource type="PackedScene" uid="uid://d3x9p2m7q4k1w" path="res://scenes/common/isometric_camera_rig.tscn" id="2_camrig"]
+[ext_resource type="Script" uid="uid://b0n6eipbyiih5" path="res://scenes/base/isometric_base_3d.gd" id="1_basescript"]
+[ext_resource type="PackedScene" uid="uid://d3yap2m7q4k1w" path="res://scenes/common/isometric_camera_rig.tscn" id="2_camrig"]
 
 [sub_resource type="Environment" id="Environment_base"]
 background_mode = 1
@@ -45,6 +45,10 @@ emission_enabled = true
 emission = Color(1, 0.45, 0.08, 1)
 emission_energy_multiplier = 2.2
 
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_bonfire"]
+height = 2.2
+radius = 1.5
+
 [sub_resource type="CylinderMesh" id="CylinderMesh_altar"]
 top_radius = 1.5
 bottom_radius = 1.85
@@ -54,6 +58,10 @@ height = 0.75
 albedo_color = Color(0.22, 0.62, 0.98, 1)
 emission_enabled = true
 emission = Color(0.12, 0.42, 0.85, 1)
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_landmark"]
+height = 3.0
+radius = 2.0
 
 [sub_resource type="TorusMesh" id="TorusMesh_portal"]
 inner_radius = 1.15
@@ -70,68 +78,60 @@ size = Vector3(2.8, 2.1, 2.4)
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_barracks"]
 albedo_color = Color(0.48, 0.36, 0.24, 1)
 
+[sub_resource type="BoxShape3D" id="BoxShape3D_building_landmark"]
+size = Vector3(3.1, 2.6, 2.7)
+
 [sub_resource type="BoxMesh" id="BoxMesh_infirmary"]
 size = Vector3(2.7, 1.9, 2.3)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_infirmary"]
 albedo_color = Color(0.24, 0.58, 0.46, 1)
 
-[sub_resource type="CylinderShape3D" id="CylinderShape3D_landmark"]
-height = 3.0
-radius = 2.0
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_building_landmark"]
-size = Vector3(3.1, 2.6, 2.7)
-
-[sub_resource type="CylinderShape3D" id="CylinderShape3D_bonfire"]
-height = 2.2
-radius = 1.5
-
-[node name="IsometricBase3D" type="Node3D"]
+[node name="IsometricBase3D" type="Node3D" unique_id=691238970]
 script = ExtResource("1_basescript")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=422690852]
 environment = SubResource("Environment_base")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=480703390]
 transform = Transform3D(0.866025, -0.383022, 0.321394, 0, 0.642788, 0.766044, -0.5, -0.663414, 0.55667, 0, 68, 0)
 shadow_enabled = true
 directional_shadow_max_distance = 120.0
 
-[node name="IsometricCameraRig" parent="." instance=ExtResource("2_camrig")]
+[node name="IsometricCameraRig" parent="." unique_id=1415279848 instance=ExtResource("2_camrig")]
 
-[node name="BaseArchitecture" type="Node3D" parent="."]
+[node name="BaseArchitecture" type="Node3D" parent="." unique_id=425345820]
 
-[node name="Ground" type="MeshInstance3D" parent="BaseArchitecture"]
+[node name="Ground" type="MeshInstance3D" parent="BaseArchitecture" unique_id=63118909]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
 mesh = SubResource("BoxMesh_ground")
 surface_material_override/0 = SubResource("StandardMaterial3D_ground")
 
-[node name="CentralPlazaDisc" type="MeshInstance3D" parent="BaseArchitecture"]
+[node name="CentralPlazaDisc" type="MeshInstance3D" parent="BaseArchitecture" unique_id=203210315]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
 mesh = SubResource("CylinderMesh_plaza")
 surface_material_override/0 = SubResource("StandardMaterial3D_plaza")
 
-[node name="CentralBonfire" type="Node3D" parent="BaseArchitecture"]
+[node name="CentralBonfire" type="Node3D" parent="BaseArchitecture" unique_id=891975272]
 
-[node name="FirepitMesh" type="MeshInstance3D" parent="BaseArchitecture/CentralBonfire"]
+[node name="FirepitMesh" type="MeshInstance3D" parent="BaseArchitecture/CentralBonfire" unique_id=1602988752]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.21, 0)
 mesh = SubResource("CylinderMesh_bonfire_ring")
 surface_material_override/0 = SubResource("StandardMaterial3D_bonfire_ring")
 
-[node name="FlameMesh" type="MeshInstance3D" parent="BaseArchitecture/CentralBonfire"]
+[node name="FlameMesh" type="MeshInstance3D" parent="BaseArchitecture/CentralBonfire" unique_id=122343092]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
 mesh = SubResource("CylinderMesh_flame")
 surface_material_override/0 = SubResource("StandardMaterial3D_flame")
 
-[node name="BonfireOmniLight3D" type="OmniLight3D" parent="BaseArchitecture/CentralBonfire"]
+[node name="BonfireOmniLight3D" type="OmniLight3D" parent="BaseArchitecture/CentralBonfire" unique_id=1970964128]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.85, 0)
 light_color = Color(1, 0.64, 0.24, 1)
 light_energy = 2.2
 omni_range = 15.0
 
-[node name="BonfireLabel" type="Label3D" parent="BaseArchitecture/CentralBonfire"]
+[node name="BonfireLabel" type="Label3D" parent="BaseArchitecture/CentralBonfire" unique_id=1530398344]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.35, 0)
 billboard = 1
 no_depth_test = true
@@ -140,18 +140,18 @@ text = "🔥 TRỤC LỬA TRUNG TÂM"
 font_size = 21
 outline_size = 6
 
-[node name="BonfireBody" type="StaticBody3D" parent="BaseArchitecture/CentralBonfire"]
+[node name="BonfireBody" type="StaticBody3D" parent="BaseArchitecture/CentralBonfire" unique_id=2122971318]
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/CentralBonfire/BonfireBody"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/CentralBonfire/BonfireBody" unique_id=786037151]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
 shape = SubResource("CylinderShape3D_bonfire")
 
-[node name="SummonAltar" type="MeshInstance3D" parent="BaseArchitecture"]
+[node name="SummonAltar" type="MeshInstance3D" parent="BaseArchitecture" unique_id=1007763690]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 0.38, -4.8)
 mesh = SubResource("CylinderMesh_altar")
 surface_material_override/0 = SubResource("StandardMaterial3D_altar")
 
-[node name="AltarLabel" type="Label3D" parent="BaseArchitecture/SummonAltar"]
+[node name="AltarLabel" type="Label3D" parent="BaseArchitecture/SummonAltar" unique_id=1177646498]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, 0)
 billboard = 1
 no_depth_test = true
@@ -160,7 +160,7 @@ text = "✨ ĐÀI TRIỆU HỒI"
 font_size = 25
 outline_size = 6
 
-[node name="AltarSubLabel" type="Label3D" parent="BaseArchitecture/SummonAltar"]
+[node name="AltarSubLabel" type="Label3D" parent="BaseArchitecture/SummonAltar" unique_id=267204795]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.48, 0)
 billboard = 1
 no_depth_test = true
@@ -169,18 +169,18 @@ text = "[Nhấn để Triệu Hồi Tướng]"
 font_size = 18
 outline_size = 5
 
-[node name="AltarBody" type="StaticBody3D" parent="BaseArchitecture/SummonAltar"]
+[node name="AltarBody" type="StaticBody3D" parent="BaseArchitecture/SummonAltar" unique_id=592021304]
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/SummonAltar/AltarBody"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/SummonAltar/AltarBody" unique_id=1689451958]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
 shape = SubResource("CylinderShape3D_landmark")
 
-[node name="DungeonPortal" type="MeshInstance3D" parent="BaseArchitecture"]
+[node name="DungeonPortal" type="MeshInstance3D" parent="BaseArchitecture" unique_id=1470046571]
 transform = Transform3D(0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 0, 0, 1, 5.5, 1.65, -4.8)
 mesh = SubResource("TorusMesh_portal")
 surface_material_override/0 = SubResource("StandardMaterial3D_portal")
 
-[node name="PortalLabel" type="Label3D" parent="BaseArchitecture"]
+[node name="PortalLabel" type="Label3D" parent="BaseArchitecture" unique_id=66281164]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 3.65, -4.8)
 billboard = 1
 no_depth_test = true
@@ -189,7 +189,7 @@ text = "🌀 CỔNG THÁP PvE"
 font_size = 25
 outline_size = 6
 
-[node name="PortalSubLabel" type="Label3D" parent="BaseArchitecture"]
+[node name="PortalSubLabel" type="Label3D" parent="BaseArchitecture" unique_id=1742437534]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 3.22, -4.8)
 billboard = 1
@@ -199,19 +199,19 @@ text = "[Kéo thả Tướng vào đây để lập Đội hình]"
 font_size = 18
 outline_size = 5
 
-[node name="PortalBody" type="StaticBody3D" parent="BaseArchitecture"]
+[node name="PortalBody" type="StaticBody3D" parent="BaseArchitecture" unique_id=790802570]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, -4.8)
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/PortalBody"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/PortalBody" unique_id=49974861]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 shape = SubResource("CylinderShape3D_landmark")
 
-[node name="Barracks" type="MeshInstance3D" parent="BaseArchitecture"]
+[node name="Barracks" type="MeshInstance3D" parent="BaseArchitecture" unique_id=558246585]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 1.05, 4.6)
 mesh = SubResource("BoxMesh_barracks")
 surface_material_override/0 = SubResource("StandardMaterial3D_barracks")
 
-[node name="BarracksLabel" type="Label3D" parent="BaseArchitecture/Barracks"]
+[node name="BarracksLabel" type="Label3D" parent="BaseArchitecture/Barracks" unique_id=633400809]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.85, 0)
 billboard = 1
 no_depth_test = true
@@ -220,17 +220,17 @@ text = "🛡️ NHÀ CHIẾN LƯỢC (STRATEGIC HOUSE)"
 font_size = 23
 outline_size = 6
 
-[node name="BarracksBody" type="StaticBody3D" parent="BaseArchitecture/Barracks"]
+[node name="BarracksBody" type="StaticBody3D" parent="BaseArchitecture/Barracks" unique_id=666081894]
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/Barracks/BarracksBody"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/Barracks/BarracksBody" unique_id=51805166]
 shape = SubResource("BoxShape3D_building_landmark")
 
-[node name="Infirmary" type="MeshInstance3D" parent="BaseArchitecture"]
+[node name="Infirmary" type="MeshInstance3D" parent="BaseArchitecture" unique_id=1835449010]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0.95, 4.6)
 mesh = SubResource("BoxMesh_infirmary")
 surface_material_override/0 = SubResource("StandardMaterial3D_infirmary")
 
-[node name="InfirmaryLabel" type="Label3D" parent="BaseArchitecture/Infirmary"]
+[node name="InfirmaryLabel" type="Label3D" parent="BaseArchitecture/Infirmary" unique_id=1141061043]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
 billboard = 1
 no_depth_test = true
@@ -239,20 +239,20 @@ text = "✚ RECOVERY CENTER – TRUNG TÂM HỒI PHỤC"
 font_size = 23
 outline_size = 6
 
-[node name="InfirmaryBody" type="StaticBody3D" parent="BaseArchitecture/Infirmary"]
+[node name="InfirmaryBody" type="StaticBody3D" parent="BaseArchitecture/Infirmary" unique_id=524550783]
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/Infirmary/InfirmaryBody"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BaseArchitecture/Infirmary/InfirmaryBody" unique_id=592866323]
 shape = SubResource("BoxShape3D_building_landmark")
 
-[node name="ZonesContainer" type="Node3D" parent="."]
+[node name="ZonesContainer" type="Node3D" parent="." unique_id=200970798]
 
-[node name="PlotsContainer" type="Node3D" parent="."]
+[node name="PlotsContainer" type="Node3D" parent="." unique_id=521501273]
 
-[node name="HeroesContainer" type="Node3D" parent="."]
+[node name="HeroesContainer" type="Node3D" parent="." unique_id=1581149448]
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1592382593]
 
-[node name="TopBar" type="MarginContainer" parent="HUD"]
+[node name="TopBar" type="MarginContainer" parent="HUD" unique_id=1271934601]
 anchors_preset = 10
 anchor_right = 1.0
 offset_left = 14.0
@@ -265,18 +265,18 @@ theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 2
 theme_override_constants/margin_bottom = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="HUD/TopBar"]
+[node name="HBoxContainer" type="HBoxContainer" parent="HUD/TopBar" unique_id=845095898]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="PlayerCardBtn" type="Button" parent="HUD/TopBar/HBoxContainer"]
+[node name="PlayerCardBtn" type="Button" parent="HUD/TopBar/HBoxContainer" unique_id=1087781417]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(260, 48)
 layout_mode = 2
 focus_mode = 0
 flat = true
 
-[node name="PlayerCardPanel" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn"]
+[node name="PlayerCardPanel" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn" unique_id=1111463330]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -286,7 +286,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="CardMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel"]
+[node name="CardMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel" unique_id=1606106197]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/margin_left = 8
@@ -294,179 +294,174 @@ theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 4
 
-[node name="CardHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin"]
+[node name="CardHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin" unique_id=372720894]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 10
 
-[node name="AvatarFrame" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox"]
+[node name="AvatarFrame" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox" unique_id=234510895]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="AvatarIconLabel" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/AvatarFrame"]
+[node name="AvatarIconLabel" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/AvatarFrame" unique_id=1914928045]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 20
 text = "🧙‍♂️"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="AvatarLevelBadge" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/AvatarFrame"]
+[node name="AvatarLevelBadge" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/AvatarFrame" unique_id=923187121]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.4, 1)
 theme_override_font_sizes/font_size = 9
 text = "Lv.30"
 horizontal_alignment = 1
 vertical_alignment = 2
 
-[node name="PlayerInfoVBox" type="VBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox"]
+[node name="PlayerInfoVBox" type="VBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox" unique_id=171407821]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 theme_override_constants/separation = 2
 alignment = 1
 
-[node name="NameAndCpRow" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox"]
+[node name="NameAndCpRow" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox" unique_id=947745816]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 8
 
-[node name="PlayerNameLabel" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/NameAndCpRow"]
+[node name="PlayerNameLabel" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/NameAndCpRow" unique_id=1517461935]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.95, 0.96, 1, 1)
 theme_override_font_sizes/font_size = 13
 text = "Demo Master"
 
-[node name="PlayerCpLabel" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/NameAndCpRow"]
+[node name="PlayerCpLabel" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/NameAndCpRow" unique_id=1079496218]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.82, 0.35, 1)
 theme_override_font_sizes/font_size = 11
 text = "⚔️ 45,200"
 
-[node name="ExpRow" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox"]
+[node name="ExpRow" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox" unique_id=2050500830]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 6
 
-[node name="PlayerExpBar" type="ProgressBar" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/ExpRow"]
+[node name="PlayerExpBar" type="ProgressBar" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/ExpRow" unique_id=673348110]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(110, 6)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
-show_percentage = false
 value = 50.0
+show_percentage = false
 
-[node name="PlayerExpText" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/ExpRow"]
+[node name="PlayerExpText" type="Label" parent="HUD/TopBar/HBoxContainer/PlayerCardBtn/PlayerCardPanel/CardMargin/CardHBox/PlayerInfoVBox/ExpRow" unique_id=13980520]
 unique_name_in_owner = true
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.65, 0.78, 0.92, 1)
 theme_override_font_sizes/font_size = 9
 text = "EXP: 50%"
 
-[node name="TopSpacer" type="Control" parent="HUD/TopBar/HBoxContainer"]
+[node name="TopSpacer" type="Control" parent="HUD/TopBar/HBoxContainer" unique_id=1043927225]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="ResourceHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer"]
+[node name="ResourceHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer" unique_id=1149927589]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="GemsPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox"]
+[node name="GemsPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox" unique_id=1334681445]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 
-[node name="GemsMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill"]
+[node name="GemsMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill" unique_id=635165189]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 2
 
-[node name="GemsHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill/GemsMargin"]
+[node name="GemsHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill/GemsMargin" unique_id=1916086381]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="GemsIcon" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill/GemsMargin/GemsHBox"]
+[node name="GemsIcon" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill/GemsMargin/GemsHBox" unique_id=1974304874]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "💎"
 
-[node name="GemsValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill/GemsMargin/GemsHBox"]
+[node name="GemsValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill/GemsMargin/GemsHBox" unique_id=117019537]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 13
 text = "0"
 
-[node name="GoldPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox"]
+[node name="GoldPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox" unique_id=395344038]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 
-[node name="GoldMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill"]
+[node name="GoldMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill" unique_id=796509283]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 2
 
-[node name="GoldHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill/GoldMargin"]
+[node name="GoldHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill/GoldMargin" unique_id=2001877899]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="GoldIcon" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill/GoldMargin/GoldHBox"]
+[node name="GoldIcon" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill/GoldMargin/GoldHBox" unique_id=2058302716]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "🪙"
 
-[node name="GoldValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill/GoldMargin/GoldHBox"]
+[node name="GoldValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill/GoldMargin/GoldHBox" unique_id=654520723]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.88, 0.4, 1)
 theme_override_font_sizes/font_size = 13
 text = "0"
 
-[node name="RationPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox"]
+[node name="RationPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox" unique_id=203846468]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 
-[node name="RationMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill"]
+[node name="RationMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill" unique_id=1523534550]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 2
 
-[node name="RationHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill/RationMargin"]
+[node name="RationHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill/RationMargin" unique_id=972640680]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="RationIcon" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill/RationMargin/RationHBox"]
+[node name="RationIcon" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill/RationMargin/RationHBox" unique_id=1370068277]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "🍖"
 
-[node name="RationValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill/RationMargin/RationHBox"]
+[node name="RationValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill/RationMargin/RationHBox" unique_id=1704800044]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.68, 0.45, 1)
 theme_override_font_sizes/font_size = 13
 text = "0"
 
-[node name="FloorElevatorPanel" type="PanelContainer" parent="HUD"]
+[node name="FloorElevatorPanel" type="PanelContainer" parent="HUD" unique_id=1379900271]
 anchors_preset = 4
 anchor_top = 0.5
 anchor_bottom = 0.5
@@ -476,31 +471,31 @@ offset_right = 198.0
 offset_bottom = 175.0
 grow_vertical = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="HUD/FloorElevatorPanel"]
+[node name="MarginContainer" type="MarginContainer" parent="HUD/FloorElevatorPanel" unique_id=1058012503]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="VBoxContainer" type="VBoxContainer" parent="HUD/FloorElevatorPanel/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/FloorElevatorPanel/MarginContainer" unique_id=149407258]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="FloorHeaderLabel" type="Label" parent="HUD/FloorElevatorPanel/MarginContainer/VBoxContainer"]
+[node name="FloorHeaderLabel" type="Label" parent="HUD/FloorElevatorPanel/MarginContainer/VBoxContainer" unique_id=1484527425]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.88, 0.38, 1)
 theme_override_font_sizes/font_size = 13
 text = "🛗 SẢNH ĐA TẦNG (Q/E)"
 horizontal_alignment = 1
 
-[node name="FloorButtonsContainer" type="VBoxContainer" parent="HUD/FloorElevatorPanel/MarginContainer/VBoxContainer"]
+[node name="FloorButtonsContainer" type="VBoxContainer" parent="HUD/FloorElevatorPanel/MarginContainer/VBoxContainer" unique_id=733627323]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 5
 
-[node name="InspectorPanel" type="PanelContainer" parent="HUD"]
+[node name="InspectorPanel" type="PanelContainer" parent="HUD" unique_id=2069834822]
 unique_name_in_owner = true
 visible = false
 anchors_preset = 11
@@ -514,21 +509,21 @@ offset_bottom = -104.0
 grow_horizontal = 0
 grow_vertical = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="HUD/InspectorPanel"]
+[node name="MarginContainer" type="MarginContainer" parent="HUD/InspectorPanel" unique_id=2025520456]
 layout_mode = 2
 theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 14
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 14
 
-[node name="VBoxContainer" type="VBoxContainer" parent="HUD/InspectorPanel/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/InspectorPanel/MarginContainer" unique_id=1510373032]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="HeaderRow" type="HBoxContainer" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer"]
+[node name="HeaderRow" type="HBoxContainer" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer" unique_id=58302532]
 layout_mode = 2
 
-[node name="InspectorTitleLabel" type="Label" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer/HeaderRow"]
+[node name="InspectorTitleLabel" type="Label" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer/HeaderRow" unique_id=34319477]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -537,13 +532,13 @@ theme_override_font_sizes/font_size = 17
 text = "Chi Tiết Công Trình"
 autowrap_mode = 3
 
-[node name="CloseInspectorBtn" type="Button" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer/HeaderRow"]
+[node name="CloseInspectorBtn" type="Button" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer/HeaderRow" unique_id=116816941]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(36, 30)
 layout_mode = 2
 text = "✖"
 
-[node name="InspectorSubtitleLabel" type="Label" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer"]
+[node name="InspectorSubtitleLabel" type="Label" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer" unique_id=1932992986]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
@@ -551,20 +546,20 @@ theme_override_font_sizes/font_size = 13
 text = "Thông tin trạng thái"
 autowrap_mode = 3
 
-[node name="HSeparator" type="HSeparator" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer"]
+[node name="HSeparator" type="HSeparator" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer" unique_id=574476373]
 layout_mode = 2
 
-[node name="ScrollContainer" type="ScrollContainer" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer" unique_id=289825246]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="InspectorActionContainer" type="VBoxContainer" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer/ScrollContainer"]
+[node name="InspectorActionContainer" type="VBoxContainer" parent="HUD/InspectorPanel/MarginContainer/VBoxContainer/ScrollContainer" unique_id=1843831423]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="BottomBar" type="PanelContainer" parent="HUD"]
+[node name="BottomBar" type="PanelContainer" parent="HUD" unique_id=482116610]
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
@@ -576,18 +571,18 @@ offset_bottom = -12.0
 grow_horizontal = 2
 grow_vertical = 0
 
-[node name="MarginContainer" type="MarginContainer" parent="HUD/BottomBar"]
+[node name="MarginContainer" type="MarginContainer" parent="HUD/BottomBar" unique_id=1942465764]
 layout_mode = 2
 theme_override_constants/margin_left = 14
 theme_override_constants/margin_top = 6
 theme_override_constants/margin_right = 14
 theme_override_constants/margin_bottom = 6
 
-[node name="VBoxContainer" type="VBoxContainer" parent="HUD/BottomBar/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="HUD/BottomBar/MarginContainer" unique_id=1136567119]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="StatusBannerLabel" type="Label" parent="HUD/BottomBar/MarginContainer/VBoxContainer"]
+[node name="StatusBannerLabel" type="Label" parent="HUD/BottomBar/MarginContainer/VBoxContainer" unique_id=1495223834]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.85, 0.45, 1)
@@ -596,40 +591,40 @@ text = "💡 Sảnh Đa Tầng (Ruộng Bậc Thang): Dùng Q/E để đổi t�
 horizontal_alignment = 1
 text_overrun_behavior = 3
 
-[node name="ActionRow" type="HBoxContainer" parent="HUD/BottomBar/MarginContainer/VBoxContainer"]
+[node name="ActionRow" type="HBoxContainer" parent="HUD/BottomBar/MarginContainer/VBoxContainer" unique_id=96146990]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 10
+alignment = 1
 
-[node name="SummonAltarBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+[node name="SummonAltarBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=972825704]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "✨ Triệu Hồi"
 
-[node name="BarracksBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+[node name="BarracksBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=311322450]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "🛡️ Nhà Chiến Lược"
 
-[node name="ExpandZoneBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+[node name="ExpandZoneBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=1703011992]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "🏗️ Mở Tầng Kế"
 
-[node name="CollectAllBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+[node name="CollectAllBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=655900079]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 text = "🌾 Thu Hoạch"
 
-[node name="EnterPveBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow"]
+[node name="EnterPveBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=1584409842]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2

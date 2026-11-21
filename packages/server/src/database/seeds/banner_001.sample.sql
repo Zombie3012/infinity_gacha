@@ -1,42 +1,56 @@
--- Sample standard banner and reward pool for development.
--- Roster assumption: use the first seeded Hero(s) by rarity, since no specific codes were selected.
--- The server applies 0.4% base 5-star chance and splits the remaining rate using 49.6:50.
--- Equal weights within each group make selected Heroes/materials equally likely within that group.
--- Banner runs for 14 days from the first application of this seed.
+-- Dual-banner pure-rate procedural summon configuration (no pity):
+--   1. banner-001 (NORMAL):  1 Normal Scroll/roll, Heroes 1★–3★ (50%) + Materials (50%)
+--   2. banner-002 (SPECIAL): 100 Gems/roll, Heroes 2★–5★ (50%, 5★ = 0.4%) + Materials (50%)
 
 BEGIN;
 
 INSERT INTO hero_templates
     (id, code, name, default_rarity, hero_class, element, base_hp, base_atk, base_def, base_spd)
 VALUES
-    ('hero-3s-001', 'HERO_3S_BLADE', 'Earthbreaker', 3, 'WARRIOR', 'EARTH', 820, 88, 48, 105),
-    ('hero-3s-002', 'HERO_3S_ARCHER', 'Tempest Archer', 3, 'ARCHER', 'WIND', 780, 102, 40, 120),
-    ('hero-3s-003', 'HERO_3S_MAGE', 'Abyssal Mage', 3, 'MAGE', 'WATER', 750, 112, 38, 110),
-    ('hero-4s-001', 'HERO_4S_BLADE', 'Dragon Slayer', 4, 'WARRIOR', 'EARTH', 1040, 112, 62, 112),
-    ('hero-4s-002', 'HERO_4S_ARCHER', 'Phantom Ranger', 4, 'ARCHER', 'WIND', 990, 130, 52, 128),
-    ('hero-5s-001', 'HERO_5S_BLADE', 'Worldbreaker', 5, 'WARRIOR', 'EARTH', 1320, 145, 78, 120)
+    ('procedural-1s', 'PROCEDURAL_1S', 'Procedural Hero 1★', 1, 'UNCLASSIFIED', 'NEUTRAL', 200, 30, 15, 60),
+    ('procedural-2s', 'PROCEDURAL_2S', 'Procedural Hero 2★', 2, 'UNCLASSIFIED', 'NEUTRAL', 260, 40, 20, 65),
+    ('procedural-3s', 'PROCEDURAL_3S', 'Procedural Hero 3★', 3, 'WARRIOR', 'FIRE', 340, 52, 26, 70),
+    ('procedural-4s', 'PROCEDURAL_4S', 'Procedural Hero 4★', 4, 'WARRIOR', 'FIRE', 440, 68, 34, 75),
+    ('procedural-5s', 'PROCEDURAL_5S', 'Procedural Hero 5★', 5, 'WARRIOR', 'FIRE', 560, 86, 44, 80)
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO banners (id, name, banner_type, is_active, start_date, end_date)
-VALUES ('banner-001', 'Banner 001', 'NORMAL', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '14 days')
-ON CONFLICT (id) DO NOTHING;
+VALUES
+    ('banner-001', 'Triệu Hồi Thường – Khế Ước Phàm Trần', 'NORMAL', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '30 days'),
+    ('banner-002', 'Triệu Hồi Đặc Biệt – Khế Ước Tinh Tú', 'SPECIAL', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '30 days')
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    banner_type = EXCLUDED.banner_type,
+    is_active = EXCLUDED.is_active,
+    start_date = EXCLUDED.start_date,
+    end_date = EXCLUDED.end_date;
+
+DELETE FROM summon_reward_pool WHERE banner_id IN ('banner-001', 'banner-002');
 
 INSERT INTO summon_reward_pool
     (id, banner_id, reward_id, reward_name, reward_type, pool_group, hero_template_code, rarity, weight, is_active)
 VALUES
-    ('banner-001-hero-5s-001', 'banner-001', 'HERO_5S_BLADE', 'Worldbreaker', 'HERO', 'FIVE_STAR_HERO', 'HERO_5S_BLADE', 5, 1, TRUE),
-    ('banner-001-hero-4s-001', 'banner-001', 'HERO_4S_BLADE', 'Dragon Slayer', 'HERO', 'OTHER_HERO', 'HERO_4S_BLADE', 4, 1, TRUE),
-    ('banner-001-hero-4s-002', 'banner-001', 'HERO_4S_ARCHER', 'Phantom Ranger', 'HERO', 'OTHER_HERO', 'HERO_4S_ARCHER', 4, 1, TRUE),
-    ('banner-001-hero-3s-001', 'banner-001', 'HERO_3S_BLADE', 'Earthbreaker', 'HERO', 'OTHER_HERO', 'HERO_3S_BLADE', 3, 1, TRUE),
-    ('banner-001-hero-3s-002', 'banner-001', 'HERO_3S_ARCHER', 'Tempest Archer', 'HERO', 'OTHER_HERO', 'HERO_3S_ARCHER', 3, 1, TRUE),
-    ('banner-001-hero-3s-003', 'banner-001', 'HERO_3S_MAGE', 'Abyssal Mage', 'HERO', 'OTHER_HERO', 'HERO_3S_MAGE', 3, 1, TRUE),
-    ('banner-001-material-001', 'banner-001', 'SAMPLE_TRASH_BROKEN_CHARM', 'Broken charm shard (sample)', 'MATERIAL', 'MATERIAL', NULL, NULL, 1, TRUE),
-    ('banner-001-material-002', 'banner-001', 'SAMPLE_TRASH_DULL_SHARD', 'Dull crystal shard (sample)', 'MATERIAL', 'MATERIAL', NULL, NULL, 1, TRUE),
-    ('banner-001-material-003', 'banner-001', 'SAMPLE_TRASH_TORN_SCROLL', 'Torn talisman paper (sample)', 'MATERIAL', 'MATERIAL', NULL, NULL, 1, TRUE),
-    ('banner-001-material-004', 'banner-001', 'SAMPLE_HERO_EXP_100', 'Hero EXP Book · +100 EXP (sample)', 'MATERIAL', 'MATERIAL', NULL, NULL, 1, TRUE),
-    ('banner-001-material-005', 'banner-001', 'SAMPLE_HERO_PROMOTION_SEAL', 'Hero Promotion Seal (sample)', 'MATERIAL', 'MATERIAL', NULL, NULL, 1, TRUE),
-    ('banner-001-material-006', 'banner-001', 'SAMPLE_HERO_AWAKENING_CORE', 'Hero Awakening Core (sample)', 'MATERIAL', 'MATERIAL', NULL, NULL, 1, TRUE),
-    ('banner-001-material-007', 'banner-001', 'SAMPLE_HERO_SKILL_BOOK', 'Hero Skill Book (sample)', 'MATERIAL', 'MATERIAL', NULL, NULL, 1, TRUE)
+    -- Banner 001 (NORMAL): 1★-3★ Heroes (500/1000 = 50%) + Materials (500/1000 = 50%)
+    ('banner-001-hero-3s', 'banner-001', 'PROCEDURAL_3S', 'Anh Hùng 3★ (Ngẫu Nhiên)', 'HERO', 'OTHER_HERO', 'PROCEDURAL_3S', 3, 50, TRUE),
+    ('banner-001-hero-2s', 'banner-001', 'PROCEDURAL_2S', 'Anh Hùng 2★ (Ngẫu Nhiên)', 'HERO', 'OTHER_HERO', 'PROCEDURAL_2S', 2, 180, TRUE),
+    ('banner-001-hero-1s', 'banner-001', 'PROCEDURAL_1S', 'Anh Hùng 1★ (Ngẫu Nhiên)', 'HERO', 'OTHER_HERO', 'PROCEDURAL_1S', 1, 270, TRUE),
+    ('banner-001-mat-exp', 'banner-001', 'SAMPLE_HERO_EXP_100', 'Sách Kinh Nghiệm +100 EXP', 'MATERIAL', 'MATERIAL', NULL, NULL, 150, TRUE),
+    ('banner-001-mat-promo', 'banner-001', 'SAMPLE_HERO_PROMOTION_SEAL', 'Ấn Thăng Cấp Anh Hùng', 'MATERIAL', 'MATERIAL', NULL, NULL, 80, TRUE),
+    ('banner-001-mat-skill', 'banner-001', 'SAMPLE_HERO_SKILL_BOOK', 'Sách Kỹ Năng Anh Hùng', 'MATERIAL', 'MATERIAL', NULL, NULL, 60, TRUE),
+    ('banner-001-mat-awaken', 'banner-001', 'SAMPLE_HERO_AWAKENING_CORE', 'Lõi Thức Tỉnh Anh Hùng', 'MATERIAL', 'MATERIAL', NULL, NULL, 50, TRUE),
+    ('banner-001-mat-charm', 'banner-001', 'SAMPLE_TRASH_BROKEN_CHARM', 'Mảnh Bùa Vỡ', 'MATERIAL', 'MATERIAL', NULL, NULL, 60, TRUE),
+    ('banner-001-mat-shard', 'banner-001', 'SAMPLE_TRASH_DULL_SHARD', 'Đá Pha Lê Mờ', 'MATERIAL', 'MATERIAL', NULL, NULL, 50, TRUE),
+    ('banner-001-mat-scroll', 'banner-001', 'SAMPLE_TRASH_TORN_SCROLL', 'Giấy Bùa Rách', 'MATERIAL', 'MATERIAL', NULL, NULL, 50, TRUE),
+
+    -- Banner 002 (SPECIAL): 2★-5★ Heroes (500/1000 = 50%, 5★ = 0.4%) + Materials (500/1000 = 50%)
+    ('banner-002-hero-5s', 'banner-002', 'PROCEDURAL_5S', 'Anh Hùng 5★ (Ngẫu Nhiên)', 'HERO', 'FIVE_STAR_HERO', 'PROCEDURAL_5S', 5, 4, TRUE),
+    ('banner-002-hero-4s', 'banner-002', 'PROCEDURAL_4S', 'Anh Hùng 4★ (Ngẫu Nhiên)', 'HERO', 'OTHER_HERO', 'PROCEDURAL_4S', 4, 36, TRUE),
+    ('banner-002-hero-3s', 'banner-002', 'PROCEDURAL_3S', 'Anh Hùng 3★ (Ngẫu Nhiên)', 'HERO', 'OTHER_HERO', 'PROCEDURAL_3S', 3, 160, TRUE),
+    ('banner-002-hero-2s', 'banner-002', 'PROCEDURAL_2S', 'Anh Hùng 2★ (Ngẫu Nhiên)', 'HERO', 'OTHER_HERO', 'PROCEDURAL_2S', 2, 300, TRUE),
+    ('banner-002-mat-exp', 'banner-002', 'SAMPLE_HERO_EXP_100', 'Sách Kinh Nghiệm +100 EXP', 'MATERIAL', 'MATERIAL', NULL, NULL, 160, TRUE),
+    ('banner-002-mat-promo', 'banner-002', 'SAMPLE_HERO_PROMOTION_SEAL', 'Ấn Thăng Cấp Anh Hùng', 'MATERIAL', 'MATERIAL', NULL, NULL, 120, TRUE),
+    ('banner-002-mat-skill', 'banner-002', 'SAMPLE_HERO_SKILL_BOOK', 'Sách Kỹ Năng Anh Hùng', 'MATERIAL', 'MATERIAL', NULL, NULL, 110, TRUE),
+    ('banner-002-mat-awaken', 'banner-002', 'SAMPLE_HERO_AWAKENING_CORE', 'Lõi Thức Tỉnh Anh Hùng', 'MATERIAL', 'MATERIAL', NULL, NULL, 110, TRUE)
 ON CONFLICT (banner_id, reward_id, pool_group) DO UPDATE SET
     reward_name = EXCLUDED.reward_name,
     reward_type = EXCLUDED.reward_type,
