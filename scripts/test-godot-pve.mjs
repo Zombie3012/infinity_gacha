@@ -4,8 +4,10 @@ import { existsSync } from 'node:fs';
 
 const binary = process.env.GODOT_BIN || 'godot';
 const project = resolve('client-godot');
-const integration = process.argv.includes('--integration');
-const scene = integration ? 'res://tests/pve_network_test.tscn' : 'res://tests/pve_ui_test.tscn';
+const exploration = process.argv.includes('--exploration');
+const lifecycle = process.argv.includes('--lifecycle');
+const integration = process.argv.includes('--integration') || exploration;
+const scene = lifecycle ? 'res://tests/hero_lifecycle_ui_test.tscn' : exploration ? 'res://tests/pve_exploration_network_test.tscn' : integration ? 'res://tests/pve_network_test.tscn' : 'res://tests/pve_ui_test.tscn';
 const environment = { ...process.env };
 let cleanup = async () => {};
 let inspectFailure = async () => {};
@@ -34,7 +36,7 @@ try {
       console.error('[pve-godot] failure state:', JSON.stringify({ squads: squads.rows, commands: commands.rows }));
     };
     await sql('update worlds set difficulty_multiplier=1 where master_id=$1', [master.masterId]);
-    await grantItems(master.masterId, { FOOD: 1000, WOOD: 0 });
+    await grantItems(master.masterId, { FOOD: 1000, WOOD: 0, ...(exploration ? { TELEPORT_STONE: 1 } : {}) });
     const heroes = [];
     for (let index = 0; index < 2; index++) heroes.push(await createHero(master.masterId, {
       name: `Engine Vanguard ${index}`, hp: 90000, maxHp: 90000, attack: 8000, defense: 3000, speed: 200,
@@ -43,11 +45,29 @@ try {
     if (entered.status !== 201) throw new Error(`Could not prepare map: ${JSON.stringify(entered.body)}`);
     const mapId = entered.body.mapId;
     const map = (await sql('select layout from pve_maps where id=$1', [mapId])).rows[0];
-    for (const [index, kind] of [[1, 'RESOURCE'], [2, 'ENEMY'], [3, 'BOSS']]) {
-      map.layout.tiles[index].kind = kind;
-      if (index === 1) map.layout.tiles[index].resource = { itemId: 'WOOD', quantity: 23 };
+    if (exploration) {
+      const { materializePveArea } = await import('@infiniti-gacha/shared');
+      const world = (await sql('select exploration from pve_maps where id=$1', [mapId])).rows[0].exploration;
+      const main = world.buildings.find(b => b.main); main.parentTileId = 0; main.door = { x: 1, y: 0 };
+      const region = materializePveArea(world, 'region:0');
+      const inside = materializePveArea(world, main.areaId);
+      for (const area of Object.values(world.areas)) {
+        for (const t of area.tiles) { t.kind = 'EMPTY'; delete t.resource; }
+        area.discovered = area.tiles.map(t => t.id);
+      }
+      inside.tiles[1].kind = 'RESOURCE'; inside.tiles[1].resource = { itemId: 'WOOD', quantity: 23 };
+      const boss = world.enemies.find(e => e.id === world.objective.targetId);
+      Object.assign(boss, { x: 2, y: 0, home: { areaId: inside.id, x: 2, y: 0 } }); world.enemies = [boss];
+      await sql('update pve_maps set exploration=$2::jsonb where id=$1', [mapId, JSON.stringify(world)]);
+    } else {
+      for (const [index, kind] of [[1, 'RESOURCE'], [2, 'ENEMY'], [3, 'BOSS']]) {
+        map.layout.tiles[index].kind = kind;
+        if (index === 1) map.layout.tiles[index].resource = { itemId: 'WOOD', quantity: 23 };
+      }
+      // Historical fixed-node fixture; the exploration suite covers new v2 floors.
+      map.layout.algorithmVersion = 1;
+      await sql('update pve_maps set exploration=null, layout=$2::jsonb, discovered=$3::jsonb where id=$1', [mapId, JSON.stringify(map.layout), '[0,1,12]']);
     }
-    await sql('update pve_maps set layout=$2::jsonb where id=$1', [mapId, JSON.stringify(map.layout)]);
     Object.assign(environment, {
       PVE_TEST_API_URL: harness.base,
       PVE_TEST_ACCESS_TOKEN: master.token,
@@ -71,7 +91,7 @@ try {
     child.on('exit', code => {
       clearTimeout(timeout);
       // Some Godot script errors leave a zero process exit; require the test's completion marker too.
-      const marker = integration ? 'PVE_NETWORK_TESTS:' : 'PVE_UI_TESTS:';
+      const marker = lifecycle ? 'HERO_LIFECYCLE_UI_TESTS:' : exploration ? 'PVE_EXPLORATION_NETWORK_TESTS:' : integration ? 'PVE_NETWORK_TESTS:' : 'PVE_UI_TESTS:';
       resolveExit(code === 0 && output.includes(marker) && !/SCRIPT ERROR:|^ERROR:/m.test(errorOutput) ? 0 : 1);
     });
   });

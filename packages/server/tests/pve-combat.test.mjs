@@ -12,6 +12,18 @@ function unit(id, side, overrides = {}) {
 const options = { maxRounds: 1, random: () => 0.5, timeoutIsDraw: true };
 const damageSkill = code => ({ code, multiplier: 1, cooldownRounds: 3, effectType: 'DAMAGE_SINGLE', effectValue: 1 });
 
+test('ambush opens with exactly one AGI-ordered action per enemy, then normal turns', () => {
+  const heroes = [unit('hero', 'HERO', { agi: 1000 })];
+  const enemies = [unit('slow', 'ENEMY', { agi: 5 }), unit('fast', 'ENEMY', { agi: 50 })];
+  const report = resolveBattleV2(heroes, enemies, { ...options, ambush: true });
+  assert.equal(report.ambush, true);
+  assert.deepEqual(report.log.filter(e => e.round === 0).map(e => e.actorId), ['fast', 'slow']);
+  assert.equal(report.log.find(e => e.round === 1).actorId, 'hero');
+  assert.equal(report.initialUnits[0].hp, heroes[0].stats.maxHp);
+  assert.deepEqual(resolveBattleV2(heroes, enemies, { ...options, ambush: true }), report);
+  assert.equal(resolveBattleV2(heroes, enemies, options).log[0].round, 1);
+});
+
 test('PvE pre-battle policies select frontline, weakest or strongest targets deterministically', () => {
   const enemies = [unit('back-weak', 'ENEMY', { formationSlot: 8, initialHp: 100 }),
     unit('front', 'ENEMY', { formationSlot: 2 }), unit('strong', 'ENEMY', { formationSlot: 4, stats: { atk: 500 } })];

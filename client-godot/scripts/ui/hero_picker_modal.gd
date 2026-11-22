@@ -33,6 +33,7 @@ func _init() -> void:
 
 func _ready() -> void:
 	_build_ui()
+	EventBus.heroes_updated.connect(func(_heroes: Array): _populate_browser())
 	_populate_browser()
 
 ## Setup configuration before adding to scene tree
@@ -176,7 +177,7 @@ func _populate_browser() -> void:
 
 	var candidates: Array = []
 	for h in GameState.heroes:
-		if not (h is Dictionary):
+		if not (h is Dictionary) or not GameState.is_hero_alive(h):
 			continue
 		var hid := str(h.get("id", ""))
 		if excluded_hero_ids.has(hid):

@@ -35,6 +35,7 @@ func _init() -> void:
 func _ready() -> void:
 	max_floors = maxi(1, GameState.unlocked_lobby_floors)
 	_build_ui()
+	EventBus.heroes_updated.connect(func(_heroes: Array): _load_floor_selection(current_floor))
 	_load_floor_selection(current_floor)
 
 func setup(floor_num: int = 1) -> void:
@@ -237,7 +238,7 @@ func _load_floor_selection(floor_num: int) -> void:
 
 	var cur_selected: Array = _editing_selections[floor_num]
 	if browser != null:
-		browser.set_items(GameState.heroes, true)
+		browser.set_items(GameState.heroes.filter(func(h): return h is Dictionary and GameState.is_hero_available(h)), true)
 		browser.select_items_by_ids(cur_selected)
 		browser.set_action_button("💾 Lưu Cấu Hình Tầng #%d" % current_floor, "Lưu")
 

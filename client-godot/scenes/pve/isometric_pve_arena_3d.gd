@@ -48,10 +48,19 @@ func _ready() -> void:
 		return
 	_battle = response["data"]
 	_report = _battle.get("report", {})
+	if bool(_report.get("ambush", false)):
+		_append_log("[color=#ffb49a]Bị phục kích: quái hành động trong pha mở màn trước hiệp 1.[/color]")
 	if not _valid_report(_report):
 		turn_banner_label.text = "Chiến báo chưa đủ dữ liệu để phát lại. Kết quả vẫn được giữ trên server."
 		return
 	_setup_actors()
+	if bool(_battle.get("live", false)):
+		var live = preload("res://scripts/ui/pve_live_battle_modal.gd").new()
+		live.battle_id = PveState.selected_battle_id
+		live.battle = _battle
+		live.closed.connect(func(): get_tree().change_scene_to_file(MAP_SCENE))
+		$HUD.add_child(live)
+		return
 	start_battle_btn.disabled = false
 	_show_summary()
 
@@ -114,6 +123,8 @@ func _on_start_battle_pressed() -> void:
 	_is_replaying = true
 	start_battle_btn.disabled = true
 	combat_log_label.clear()
+	if bool(_report.get("ambush", false)):
+		_append_log("[color=#ffb49a]Bị phục kích: quái hành động trước hiệp 1.[/color]")
 	_setup_actors()
 	for entry_value in _report.get("log", []):
 		if _cancelled:
@@ -131,7 +142,10 @@ func _on_start_battle_pressed() -> void:
 		var hp_after := int(entry.get("targetHp", 0))
 		var actor_name := str(entry.get("actorName", actor.unit_name if is_instance_valid(actor) else "Hero"))
 		var target_name := str(entry.get("targetName", target.unit_name if is_instance_valid(target) else "Mục tiêu"))
-		if action == "REVIVE":
+		if str(entry.get("actionType", "")) == "ITEM":
+			if is_instance_valid(actor): actor.set_combat_resources(hp_after, int(entry.get("actorMp", actor.current_mp)))
+			_append_log("%s used %s" % [_escape(actor_name), action])
+		elif action == "REVIVE":
 			turn_banner_label.text = "Hiệp %d · %s hồi sinh" % [round_number, actor_name]
 			if is_instance_valid(actor):
 				actor.play_revive_feedback(hp_after)
@@ -140,7 +154,7 @@ func _on_start_battle_pressed() -> void:
 					camera_rig.focus_action_unit(actor.global_position, 8.2, 0.2 / _playback_speed)
 			_append_log("[color=#ffc873]%s hồi sinh: +%d HP[/color]" % [_escape(actor_name), heal])
 		else:
-			turn_banner_label.text = "Hiệp %d · %s → %s" % [round_number, actor_name, target_name]
+			turn_banner_label.text = "Phục kích · %s → %s" % [actor_name, target_name] if round_number == 0 else "Hiệp %d · %s → %s" % [round_number, actor_name, target_name]
 			if heal > 0:
 				if is_instance_valid(target):
 					target.apply_heal_feedback(heal, hp_after)
@@ -191,7 +205,7 @@ func _show_summary() -> void:
 		_append_log("[color=#8ce6b8]Boss đã bị hạ. Đã mở tầng %d; các đội đã rời map.[/color]" % int(settlement.get("nextFloor", 1)))
 	for death in settlement.get("deaths", []):
 		_append_log("[color=#ffad98]%s · %s[/color]" % [_escape(str(death.get("name", "Hero"))),
-			"Tử vong vĩnh viễn; trang bị rơi tại tầng này" if str(death.get("state", "")) == "DEAD" else "Vô hiệu hóa; giữ trang bị để hồi phục"])
+			"Tử trận; trang bị rơi. Hồi sinh tại Sử Điện bằng Ngọc hồi sinh 7★."])
 	_append_log("Kết quả đã được lưu. Bạn có thể trở về map bất cứ lúc nào.")
 
 static func _escape(value: String) -> String:

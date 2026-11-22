@@ -63,13 +63,14 @@ test('HTTP medical: injuries, treatment and Divine Grace', { skip: skipReason },
     assert.equal(overview.body.injuries.length, 0);
   });
 
-  await t.test('Normal Heroes are refused resurrection', async () => {
+  await t.test('All Heroes can resurrect with one seven-star gem', async () => {
     await sql(`update heroes set state = 'DISABLED', category = 'NORMAL', hp = 0 where id = $1`, [hero.id]);
-    await grantItems(master.masterId, { DIVINE_TEAR: 3 });
+    await grantItems(master.masterId, { RESURRECTION_GEM_7: 1 });
     const refused = await harness.request('/api/medical/resurrect', {
       method: 'POST', token: master.token, body: { heroId: hero.id },
     });
-    assert.equal(refused.status, 409);
-    assert.equal(refused.body.error, 'ERR_RESURRECTION_NORMAL_PERMADEATH');
+    assert.equal(refused.status, 200);
+    assert.equal(refused.body.gemsUsed, 1);
+    assert.equal(refused.body.silverSpent, 0);
   });
 });

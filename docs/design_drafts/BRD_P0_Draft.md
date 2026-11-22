@@ -1,3 +1,5 @@
+> Updated contract (2026-11-22): [Hero Chronicle, mortality and 1-7 star rarity](../HERO_CHRONICLE.md) supersedes the legacy origin-based death/duplicate rules and Divine Grace sections below. All Heroes die as DEAD and drop equipped gear; one RESURRECTION_GEM_7 revives to full HP with no Silver fee or escalating cycle. NORMAL/SPECIAL/LIMITED remain payment/banner types only.
+
 # Business Requirements Document (BRD) - P0
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -61,7 +63,7 @@ Define the P0 business scope and trace its 164 functions in the current P0 draft
 | BR-02-003 | Gacha | Quy tắc Summon Origin |
 | BR-03-001 | Hero | Quy tắc tạo Hero Instance |
 | BR-03-002 | Hero | Quy tắc phát triển Hero |
-| BR-04-001 | Hero Death | Hero Normal tử trận vĩnh viễn; trang bị đang mặc rơi ra, tài nguyên đã dùng để nâng cấp/huấn luyện không được hoàn trả. |
+| BR-04-001 | Hero Death | Mọi Hero tử trận chuyển DEAD và rơi trang bị; Sử Điện giữ hồ sơ. Dùng 1 Ngọc hồi sinh 7★ để trở lại 100% HP, không phí thêm. Tài nguyên phát triển không hoàn trả. |
 | BR-04-002 | Hero Death | Special/Limited Hero Disabled |
 | BR-05-001 | Party | Điều kiện Hero tham gia đội hình |
 | BR-06-001 | Combat | Auto Battle |
@@ -74,7 +76,7 @@ Define the P0 business scope and trace its 164 functions in the current P0 draft
 | BR-14-001 | Administration | Quyền quản trị |
 | BR-14-002 | Administration | Audit Log |
 | BR-14-003 | Administration | Configuration Versioning |
-| BR-02-004 | Gacha | Chỉ Hero từ 5★ trở lên thuộc banner Limited/Special khi trùng mới chuyển đổi thành 1 Thiên Mệnh trên chính Hero đã sở hữu; Banner Normal và toàn bộ Hero <5★ khi triệu hồi luôn tạo cá thể Hero mới với chỉ số gốc ngẫu nhiên phục vụ thăng sao (Pick Me Up style) và tùy biến lối chơi. |
+| BR-02-004 | Gacha | Mỗi phần thưởng Hero tạo cá thể riêng, kể cả trùng template cố định. Bỏ phân loại/đặc quyền theo nguồn; giữ phương thức triệu hồi. Hero và vật liệu dùng độ hiếm 1–7★. |
 | BR-04-005 | Hero Death | Hero Normal tử trận làm rơi trang bị đang mặc; không hoàn trả tài nguyên nâng cấp/huấn luyện. |
 | BR-06-004 | Combat | Cooldown thay Tactical Buff cố định 15 giây. |
 | BR-07-004 | Dungeon | Seed phải duy nhất trên toàn game; sử dụng định danh UUID/GUID chuẩn toàn cầu khi khởi tạo World, không trùng lặp và không đổi khi thất bại. |

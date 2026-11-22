@@ -65,7 +65,7 @@ test('Combat v2 - Star Promotion (Pick Me Up style)', async (t) => {
       'ERR_HERO_PERMANENTLY_DEAD',
     );
     assert.equal(
-      checkStarPromotionEligibility({ currentStar: 5, currentLevel: 50 }).reason,
+      checkStarPromotionEligibility({ currentStar: 7, currentLevel: 70 }).reason,
       'ERR_HERO_MAX_STAR',
     );
   });

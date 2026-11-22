@@ -15,8 +15,6 @@ export const MAX_BASE_ZONES = 6;
 export const MASTER_LEVELS_PER_FLOOR = 15;
 export const PARTY_MANSION_REQUIRED_MASTER_LEVEL = 30;
 export const PARTY_MANSION_UPGRADE_COST_SILVER = 5000;
-export const CONSTRUCTION_SECONDS = 20;
-export const UPGRADE_SECONDS_PER_LEVEL = 15;
 export const DEMOLISH_REFUND_RATIO = 0.5;
 
 /** World level follows PvE progress: every 3 cleared floors raise it by one. */
@@ -100,14 +98,6 @@ export function upgradeMaterials(targetLevel: number): { itemId: string; quantit
 export function demolishRefundSilver(buildCostSilver: number, currentLevel: number): number {
   const invested = buildCostSilver + (currentLevel > 1 ? upgradeCostSilver(buildCostSilver, currentLevel) : 0);
   return Math.floor(invested * DEMOLISH_REFUND_RATIO);
-}
-
-export function constructionSeconds(level = 1): number {
-  return CONSTRUCTION_SECONDS + Math.max(0, level - 1) * 10;
-}
-
-export function upgradeSeconds(targetLevel: number): number {
-  return Math.max(2, Math.floor(targetLevel)) * UPGRADE_SECONDS_PER_LEVEL;
 }
 
 /**

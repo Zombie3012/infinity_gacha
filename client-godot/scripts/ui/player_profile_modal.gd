@@ -500,7 +500,7 @@ func _render_profile_tab() -> void:
 	root_vbox.add_child(stats_grid)
 
 	var party_cp := GameState.get_party_combat_power()
-	var total_heroes := GameState.heroes.size()
+	var total_heroes := GameState.owned_hero_count()
 	var cur_flr := GameState.current_floor
 	var w_lvl := GameState.world_level
 
@@ -555,8 +555,8 @@ func _render_profile_tab() -> void:
 			var h: Dictionary = party_heroes[i]
 			var h_name: String = str(h.get("name", "Anh Hùng"))
 			var h_lvl: int = int(h.get("level", 1))
-			var h_star: int = int(h.get("star", 1))
-			var h_rarity: String = str(h.get("rarity", "SR")).to_upper()
+			var h_star: int = int(h.get("rarity", 1))
+			var h_rarity: String = str(clampi(int(h.get("rarity", 1)), 1, 7))
 			var h_elem: String = str(h.get("element", "NEUTRAL")).to_upper()
 			var h_cp: int = GameStateSingleton.calculate_hero_cp(h)
 
@@ -650,11 +650,11 @@ func _get_active_or_top_party_heroes() -> Array:
 	if GameState.active_party_ids.size() > 0:
 		for hid in GameState.active_party_ids:
 			for h in GameState.heroes:
-				if h is Dictionary and str(h.get("id", "")) == str(hid):
+				if h is Dictionary and GameState.is_hero_alive(h) and str(h.get("id", "")) == str(hid):
 					result.append(h)
 					break
 	if result.size() == 0:
-		var sorted := GameState.heroes.duplicate()
+		var sorted := GameState.heroes.filter(func(h): return h is Dictionary and GameState.is_hero_alive(h))
 		sorted.sort_custom(func(a, b):
 			return GameStateSingleton.calculate_hero_cp(a) > GameStateSingleton.calculate_hero_cp(b)
 		)
@@ -663,19 +663,15 @@ func _get_active_or_top_party_heroes() -> Array:
 	return result
 
 func _get_hero_rarity_summary() -> String:
-	var ssr := 0
-	var sr := 0
-	var r := 0
+	var counts: Dictionary = {}
 	for h in GameState.heroes:
-		if h is Dictionary:
-			var rar := str(h.get("rarity", "SR")).to_upper()
-			if rar.contains("SSR") or rar.contains("UR"):
-				ssr += 1
-			elif rar.contains("SR"):
-				sr += 1
-			else:
-				r += 1
-	return "%d SSR · %d SR · %d R" % [ssr, sr, r]
+		if h is Dictionary and GameState.is_hero_alive(h):
+			var star := clampi(int(h.get("rarity", 1)), 1, 7)
+			counts[star] = int(counts.get(star, 0)) + 1
+	var parts := PackedStringArray()
+	for star in range(7, 0, -1):
+		if counts.has(star): parts.append("%d\u2605: %d" % [star, counts[star]])
+	return " | ".join(parts)
 
 func _get_avatar_icon() -> String:
 	if GameState.selected_avatar_hero_id != "":
@@ -1431,7 +1427,7 @@ func _open_avatar_picker() -> void:
 	grid.add_child(def_btn)
 
 	for h in GameState.heroes:
-		if h is Dictionary:
+		if h is Dictionary and GameState.is_hero_alive(h):
 			var hid := str(h.get("id", ""))
 			var hname := str(h.get("name", "Anh Hùng"))
 			var elem := str(h.get("element", "NEUTRAL"))
@@ -1535,11 +1531,12 @@ func _format_number(val: int) -> String:
 	return ("-" if val < 0 else "") + res
 
 func _get_rarity_color(rarity: String) -> Color:
-	match rarity:
-		"SSR", "UR": return Color(1.0, 0.85, 0.25)
-		"SR": return Color(0.75, 0.45, 1.0)
-		"R": return Color(0.35, 0.75, 1.0)
-		_: return Color(0.65, 0.75, 0.85)
+	var star := clampi(int(rarity), 1, 7)
+	if star >= 6: return Color(1.0, 0.45, 0.65)
+	if star == 5: return Color(1.0, 0.85, 0.25)
+	if star == 4: return Color(0.75, 0.45, 1.0)
+	if star == 3: return Color(0.35, 0.75, 1.0)
+	return Color(0.65, 0.75, 0.85)
 
 func _get_element_emoji(elem: String) -> String:
 	match elem:

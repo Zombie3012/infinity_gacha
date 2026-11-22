@@ -1,3 +1,5 @@
+> Updated contract (2026-11-22): [Hero Chronicle, mortality and 1-7 star rarity](../HERO_CHRONICLE.md) supersedes the legacy origin-based death/duplicate rules and Divine Grace sections below. All Heroes die as DEAD and drop equipped gear; one RESURRECTION_GEM_7 revives to full HP with no Silver fee or escalating cycle. NORMAL/SPECIAL/LIMITED remain payment/banner types only.
+
 # P0 Data Model & Entity-Relationship Specification
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -18,11 +20,9 @@ The P0 Data Model defines all database entities, relationships, constraints, and
 
 ### Fundamental Architectural Constraints:
 1. **Single Master Guarantee:** Exactly 1 Master per Account (`accounts.id 1:1 masters.account_id`).
-2. **Immutable Summon Origin:** Every Hero Instance permanently records its origin (`NORMAL`, `SPECIAL`, `LIMITED`) upon creation, dictating death and duplicate behaviors.
-3. **Duplicate Handling:** A duplicate of any origin (`NORMAL`, `SPECIAL`, `LIMITED`) does not create a second instance and increments the owned Hero's `thien_menh_count` by 1.
-4. **Permadeath vs. Disabled Isolation:**
-   - Normal Hero death sets `status = 'DEAD'` and drops equipment (`hero_death_records`).
-   - Special/Limited Hero death sets `status = 'DISABLED'`, retaining gear and state.
+2. **Summon Payment History:** NORMAL/SPECIAL/LIMITED describe banners and payment only; Hero category is uniformly HERO.
+3. **Duplicate Handling:** Every Hero reward creates a distinct instance, including fixed-template duplicates.
+4. **Unified Mortality:** All zero-HP casualties become DEAD, drop equipped gear and retain a separate Chronicle record. One RESURRECTION_GEM_7 restores an existing deceased instance to full HP without Silver costs or pricing cycles.
 5. **Deterministic Global World Seed:** `private_worlds.world_seed` is a globally unique UUID/GUID generated once upon World creation. All procedural floor generations (`dungeon_instances`) deterministically branch from this seed.
 6. **Per-Banner Isolated Pity:** `player_banner_pity` maintains independent counters with the confirmed $k=4$ polynomial curve; no counter ever carries over.
 7. **Strict Currency Transaction Auditing:** All coin and scroll adjustments pass through `currency_transactions` with append-only ledger semantics.

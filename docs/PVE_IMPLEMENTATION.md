@@ -2,7 +2,64 @@
 
 Approved from `thaoluan.md` and the implementation plan, 2026-11-22 (UTC+7). The loop is **explore → command several squads → auto battle → collect → defeat boss → enter next floor**.
 
-## Rules implemented
+## Exploration v2: objectives, buildings and ambush
+
+New floors use layout version 2. Existing floors with `exploration = null` keep the v1 behavior below until cleared. Migration 0049 adds the exploration snapshot and squad area/portal fields without rewriting existing layouts or progress.
+
+- A floor objective stores type, target ID, progress and status. Only `DEFEAT_BOSS` is implemented. Defeating that enemy anywhere completes the floor once; another boss-shaped encounter cannot complete it. Item search and escort remain future objective types.
+- Three scales: floor 12x12 at 1000m/cell; lazy region 20x20 at 50m/cell; interior 8x8 at 5m/cell. Buildings have their own ID, footprint (40m), entrance and interior. Two optional buildings share one floor cell; a main building contains the designated boss. No nested buildings.
+- Regions are generated only when traversed. Generation and enemy identity are independent of building entry order. Walls and rocks block movement and supercover line of sight; generation preserves access to all doors, resources and enemies. The existing 18-resource/18-normal-enemy budget is split between the floor and three buildings, plus one boss.
+- All squad steps, including door transitions, take 1000ms at every scale. Enemy steps take 1500ms. Travel time is compressed for gameplay. The three-squad limit covers the entire floor.
+- Enemy radar is a circular four-cell radius in its current area, requiring line of sight. States: IDLE, CHASE, INVESTIGATE (last observed cell), RETURN, DEAD. Enemies follow witnessed door crossings and return through real portals; they cannot track unseen current positions through walls or between areas.
+- Contact triggers combat. Visibility is captured before the arriving step reveals the contact cell. An enemy unseen by that squad gets an ambush opening: each living enemy acts once in AGI order at round 0, then normal Combat v2 begins. The opening does not tick cooldowns or regeneration. Reports and server snapshots retain ambush context for replay/retry.
+- Auto explores optional buildings before the main objective, avoids visible normal-enemy radar and seeks cover when pursued. It remembers a boss's last observed position to navigate around walls without using concealed coordinates. No safe path pauses Auto with a notification. A failed encounter pauses Auto and the enemy disengages from that stationary survivor until the squad moves, preventing endless offline rematches.
+- Recall follows the floor/teleport-point rules below. Completing the objective stops every route, pending portal and pursuit across all areas, then releases surviving squads.
+- `pve_maps.exploration` is the authoritative JSON snapshot for areas, buildings, enemies, sightings and objective, protected by the existing Master row lock. Squads retain authoritative positions/routes in `pve_squads`. Settlement processes up to 512 due events per batch in chronological order; `catchupPending` asks the client to keep polling. A mutation cannot overtake the backlog: it commits catch-up progress, returns 503 `ERR_PVE_CATCHUP_PENDING` and leaves its key unused. Idle enemies require no background ticks. Rewards, combat, objective progress and world advancement commit together.
+- Godot follows the selected squad through areas and displays parent navigation, objective, leader portraits, visible enemy radar and detection/ambush warnings. Clicking a squad returns to its area. Browsing an ancestor cannot send movement commands into that other area.
+
+Relevant checks only; do not run the full suite without an explicit request:
+
+```powershell
+npm run build
+node --test --test-concurrency=1 packages/shared/tests/pve-exploration.test.mjs packages/server/tests/pve-combat.test.mjs packages/server/tests/http.pve-exploration.test.mjs
+node scripts/test-godot-pve.mjs
+node scripts/test-godot-pve.mjs --exploration
+```
+
+Older fixed-node HTTP/Godot fixtures explicitly use v1 layouts as compatibility tests. Earlier full-suite and soak results below are historical v1 evidence, not verification of v2. New Godot checks run headlessly; graphical appearance still needs interactive playtesting.
+
+V2 verification on 2026-11-22: TypeScript build, OpenAPI validation and encoding checks passed. Targeted tests cover deterministic generation (including reversed entry order), all generated entrances/rewards reachable across 12 seeds, radar/corners, lost-target return, portal pursuit, knowledge-limited Auto, ten full Auto navigation seeds, AGI ambush, PostgreSQL resource/enemy collisions, objective completion outside buildings, transaction rollback/retry, bounded offline catch-up and v1 compatibility. Godot 4.7.2 headless passed 56 UI checks, 21 new multi-area HTTP checks, 31 legacy gameplay checks and 20 recovery checks. No full suite or new soak run was executed.
+
+## Hero lifecycle and casualty visibility
+
+- All Heroes reach DEAD at zero HP, regardless of summon/payment source. Zero HP is never a surviving injury. Resurrection uses one RESURRECTION_GEM_7 and restores 100% HP without Silver fees. See [Hero Chronicle](HERO_CHRONICLE.md).
+- Default barracks filters show living Heroes. Separate **Chờ hồi sinh** and **Tử trận** filters retain read-only profiles; reports and API history remain intact. Facility/party selectors, equipment targets, kitchen, dormitory, training and base residents exclude casualties. Open views react to Hero updates and drop stale selections. Owned counts exclude permanent deaths.
+- Both combat flows close injuries/treatments, release work/rest and party membership after death. Ordinary medical timers cannot revive casualties. All DEAD instances can use the same resurrection gem; concurrent requests consume it once.
+- Medical admission, emergency care and worker assignment serialize Master-before-Hero with combat. Quick Heal revalidates the locked Hero and item stock so simultaneous requests restore/charge once. Feeding/resting and EXP/fodder actions reject casualties and zero HP. Positive fractional HP rounds to at least one when computing progression; terminal derived HP stays zero.
+- Migration 0053 backfills Hero Chronicle records and normalizes legacy DISABLED and zero-HP Heroes to DEAD without reviving players. Historical reports and equipment locations are preserved.
+
+Focused lifecycle checks: `node scripts/test-godot-pve.mjs --lifecycle` and `node --test packages/server/tests/http.hero-lifecycle.test.mjs`. Godot headless covers live death updates across facilities, archive filters, labels and action removal. Do not run the full test suite without an explicit request.
+
+## Recall rules, teleport stones and developer reset
+
+New floor entry snapshots `recallPolicy`: the default is `UNTIL_COMPLETE` on floors divisible by five, otherwise `FREE`. An explicit `pve_floor_rules` row overrides this default. Existing maps retain their stored policy; migration 0050 defaults older maps to FREE rather than trapping deployed squads after the upgrade.
+
+- A locked floor rejects manual recall and stone placement until its objective completes. A point never overrides a floor lock. Objective completion still withdraws surviving squads automatically.
+- On an ordinary floor, recalling away from a point is blocked during CHASE/INVESTIGATE. A squad on a placed point may recall while pursued; its pursuers return home. No recall is allowed during FIGHTING.
+- `POST /api/pve/squads/:id/recall-point` accepts the squad's current `areaId,x,y` while IDLE and atomically spends one TELEPORT_STONE. Points are shared by all squads on the same map, scoped by area and coordinates, and do not carry into a new floor/run. Duplicate placement and retries cannot spend twice.
+- The map shows stone inventory, placement controls, point markers, recall eligibility/reasons and locked-floor warnings. The item is used from the map, not the generic inventory Use action. Migrations 0051-0052 add its catalogue/shop entry; the new [Airship Shop](SHOP_AIRSHIP.md) temporarily sells it for 1 Silver without a daily limit, superseding the original 800-Silver/three-per-day sample price.
+- The DEV reset button appears only in debug clients when the server advertises the capability. The server independently restricts `POST /api/pve/dev/reset-tower` to development/test (`PVE_DEV_TOOLS=0` disables it there too); production always rejects it. Confirmation and Idempotency-Key are required. It skips catch-up, archives the active map, cancels all squad routes/pursuits and reservations, increments `worlds.pve_run`, then returns to floor 1. Inventory, Heroes, completed maps and reports remain. Unique map identity is now World/floor/run, so floor 1 can be played again without deleting history.
+
+Configure a particular floor before entry, for example:
+
+```sql
+INSERT INTO pve_floor_rules (floor, recall_policy) VALUES (7, 'UNTIL_COMPLETE')
+ON CONFLICT (floor) DO UPDATE SET recall_policy = EXCLUDED.recall_policy;
+```
+
+Targeted checks: `node --test packages/server/tests/http.pve-recall.test.mjs`, Godot UI and the multi-area HTTP scenario (`node scripts/test-godot-pve.mjs --exploration`). Do not run a full suite unless explicitly requested. No reset was performed on an existing player account during verification.
+
+## Legacy v1 rules (persisted older floors)
 
 - Private, persisted 12×12 map per World/floor. Algorithm `pve:v1` uses the existing World Seed in a separate namespace. Legacy dungeon/PvP generation and expedition travel times remain independent.
 - Camp, ordinary cells, 18 resource nodes, 18 enemy nodes and one boss. No impassable terrain in v1: every boss is reachable. The first two steps from camp are safe.
@@ -13,7 +70,7 @@ Approved from `thaoluan.md` and the implementation plan, 2026-11-22 (UTC+7). The
 - Tactics: FRONTLINE (default), LOWEST_HP (HP percentage), HIGHEST_ATK (greater physical/magic attack), and per-Hero skill preferences. Unready skills are skipped; healing skips when no ally needs HP. Evaded skills still consume MP/cooldown; basic attacks restore MP even when evaded.
 - Deployment freezes membership, positions and tactics. Full Hero/enemy combat inputs, combat version and RNG seed are captured server-side when an encounter starts. Clients cannot supply enemies, seeds or results.
 - AGI-ordered combat has a 30-round PvE limit. Both sides surviving means DRAW. Reports include initial/final HP/MP and positions; lethal damage precedes revival.
-- Normal Heroes die permanently and drop equipped gear on the actual floor. Special/Limited become DISABLED and keep gear. Death removes party membership and the fallen Hero's reservation. Survivors retain HP/MP, EXP and existing level caps.
+- All casualties drop equipped gear on the actual floor. Death removes party membership and reservations. Hero Chronicle preserves the biography and life events; resurrection never recreates dropped equipment.
 - Deployment atomically charges 10 FOOD/Hero and refuses insufficient stock. Exhaustion pauses that squad. Recall releases Heroes; redeployment incurs a new ration charge.
 - Only boss victory clears the map and advances the World floor once. Remaining nodes need not be cleared. Surviving squads are withdrawn and routes cancelled. The player explicitly enters the next floor.
 
@@ -34,9 +91,9 @@ stateDiagram-v2
     DEFEATED --> [*]
 ```
 
-`FIGHTING` is transaction-local in this prototype: the engine settles the full encounter immediately. Replay duration does not prolong combat, pause other squads or determine rewards. Commands wait for the short database transaction, not the animation.
+Auto encounters settle immediately. Manual squads persist `FIGHTING` and a private `PVE_LIVE` combat session while waiting for input, with server-owned ten-second Hero turns. Replay of a completed battle remains read-only and never prolongs combat. Other squads keep moving/fighting. See [Alchemy and PvE consumables](ALCHEMY_PVE_CONSUMABLES.md) for loadouts, item limits, manual controls, AI fallback and atomic final settlement.
 
-Every command/map read locks the Master first, reads PostgreSQL time and settles due arrivals chronologically by arrival time then squad ID. Routes and timestamps persist in PostgreSQL. Offline progress settles on the next read/command without Redis or background timers. A complete catch-up is bounded by three simple paths through 144 cells.
+Every command/map read locks the Master first, reads PostgreSQL time and settles due arrivals chronologically, with stable entity-ID tie breaking. Routes and timestamps persist in PostgreSQL. Offline progress settles on the next read/command without Redis or background timers. V1 processes fixed-node routes; v2 also processes enemy movement and transitions across areas.
 
 Encounter report, wallet/ledger, EXP/levels, HP/MP, death/gear drops, injuries, node clearance, quest/event progress and boss advancement share one transaction. A failed reward write rolls the encounter back; a later read retries it. Two API processes use the same database locks.
 
@@ -131,4 +188,4 @@ After the 1-second auto/leader update, the full suite passed **425 server and 69
 
 ## Prototype limits
 
-No cross-squad combos, ambushes, new morale, PvP redesign, Redis or new economy. Balance and visuals are prototype content. Headless tests verify actual scene execution and interactions; visual quality, camera comfort, audio, exports and player balance need graphical playtesting. Old dungeon and private map progression cannot run concurrently. Offline notifications appear when a client reads state again.
+No cross-squad combos, escort/item-search objectives, nested buildings, new morale, PvP redesign, Redis or new economy. Balance and visuals are prototype content. Headless tests verify scene execution and interactions; visual quality, camera comfort, audio, exports and balance need graphical playtesting. Old dungeon and private map progression cannot run concurrently. Offline notifications appear when a client reads state again.

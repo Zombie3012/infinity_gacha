@@ -114,7 +114,7 @@ func _rebuild_ui() -> void:
 	vbox.add_child(header_row)
 
 	_star_label = Label.new()
-	_star_label.text = "★".repeat(clampi(star, 1, 6))
+	_star_label.text = "★".repeat(clampi(star, 1, 7))
 	_star_label.add_theme_font_size_override("font_size", 10)
 	_star_label.add_theme_color_override("font_color", rarity_col)
 	header_row.add_child(_star_label)
@@ -313,6 +313,8 @@ func _on_mouse_exited() -> void:
 	tw.tween_property(self, "scale", Vector2(1.0, 1.0), 0.08)
 
 func _get_rarity_color(star: int) -> Color:
+	if star >= 7: return Color(1.0, 0.45, 0.95, 1.0)
+	if star == 6: return Color(0.95, 0.22, 0.28, 1.0)
 	if star >= 5: return Color(1.0, 0.82, 0.24, 0.95)
 	elif star == 4: return Color(0.78, 0.48, 0.95, 0.95)
 	elif star == 3: return Color(0.32, 0.72, 0.95, 0.90)

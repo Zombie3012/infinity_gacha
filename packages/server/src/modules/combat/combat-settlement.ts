@@ -4,6 +4,7 @@ import { heroEffectiveMaxLevel, type HeroClass, type StarRating } from '@infinit
 import type { GameTransaction } from '../../database/transaction.js';
 import {
   combatPartySlots, currencyTransactions, equipmentInstances, heroDeathRecords, heroLevelConfigs,
+  heroInjuries, heroTreatments, buildingWorkerAssignments, heroSurvivalStates,
   heroes, masterLevelConfigs, masters,
 } from '../../database/drizzle-schema.js';
 import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.js';
@@ -23,6 +24,16 @@ export interface CombatSettlementInput {
   now: Date;
 }
 
+/** Shared with the retained combat flow: ordinary facilities cannot retain a casualty. */
+export async function clearCasualtyActivities(tx: GameTransaction, heroId: string, now: Date) {
+  await tx.update(heroTreatments).set({ status: 'CANCELLED', completedAt: now })
+    .where(and(eq(heroTreatments.heroId, heroId), sql`${heroTreatments.status} IN ('ACTIVE', 'QUEUED')`));
+  await tx.update(heroInjuries).set({ healedAt: now, healedBy: 'DEATH' })
+    .where(and(eq(heroInjuries.heroId, heroId), sql`${heroInjuries.healedAt} IS NULL`));
+  await tx.delete(buildingWorkerAssignments).where(eq(buildingWorkerAssignments.heroInstanceId, heroId));
+  await tx.update(heroSurvivalStates).set({ isResting: false }).where(eq(heroSurvivalStates.heroId, heroId));
+}
+
 /** All effects share the caller's transaction; a report is never completed with partially paid rewards. */
 export async function settleCombat(tx: GameTransaction, input: CombatSettlementInput) {
   const { masterId, sessionId, worldId, floor, report, now } = input;
@@ -38,19 +49,19 @@ export async function settleCombat(tx: GameTransaction, input: CombatSettlementI
     const [hero] = await tx.select().from(heroes).where(and(eq(heroes.id, unit.id), eq(heroes.masterId, masterId))).for('update');
     if (!hero) throw new Error('Combat settlement lost a participating Hero.');
     if (hero.state === 'DEAD' || hero.state === 'DISABLED') throw new Error('Combat Hero was changed while resolving.');
-    if (!unit.alive) {
-      const permanent = hero.category === 'NORMAL';
-      const state = permanent ? 'DEAD' : 'DISABLED';
-      const gear = permanent ? await tx.select().from(equipmentInstances)
-        .where(and(eq(equipmentInstances.equippedHeroId, hero.id), eq(equipmentInstances.location, 'EQUIPPED'))) : [];
+    if (!unit.alive || unit.hp <= 0) {
+      const state = 'DEAD';
+      const gear = await tx.select().from(equipmentInstances)
+        .where(and(eq(equipmentInstances.equippedHeroId, hero.id), eq(equipmentInstances.location, 'EQUIPPED')));
       for (const item of gear) await tx.update(equipmentInstances).set({
         equippedHeroId: null, location: 'FLOOR_DROP', dropWorldId: worldId, dropFloor: floor, droppedAt: now,
       }).where(eq(equipmentInstances.id, item.id));
       await tx.update(heroes).set({ state, hp: 0, currentHpPct: 0, mp: unit.mp,
         currentMpPct: unit.maxMp > 0 ? unit.mp / unit.maxMp : 0, updatedAt: now }).where(eq(heroes.id, hero.id));
+      await clearCasualtyActivities(tx, hero.id, now);
       await tx.insert(heroDeathRecords).values({
         id: uuid(), heroId: hero.id, masterId, combatSessionId: sessionId, summonOrigin: hero.category,
-        deathType: permanent ? 'PERMANENT' : 'DISABLED',
+        deathType: 'DEATH',
         droppedEquipment: gear.map(item => ({ id: item.id, templateCode: item.templateCode })),
         cause: input.transactionType, recordedAt: now,
       });
@@ -105,7 +116,7 @@ export async function settleCombat(tx: GameTransaction, input: CombatSettlementI
     id: uuid(), masterId, currencyType: 'SILVER', amountDelta: BigInt(silverReward),
     transactionType: input.transactionType, referenceId: sessionId, createdAt: now,
   });
-  const survivors = report.units.filter(unit => unit.side === 'HERO' && unit.alive)
+  const survivors = report.units.filter(unit => unit.side === 'HERO' && unit.alive && unit.hp > 0)
     .map(unit => ({ id: unit.id, hp: unit.hp, maxHp: unit.maxHp }));
   await medicalService.recordBattleInjuries(masterId, survivors, tx, now);
   return { silverReward, heroExpReward, masterExpReward, deaths, heroProgress,

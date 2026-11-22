@@ -154,6 +154,11 @@ func refresh_heroes() -> bool:
 		
 	if res["data"] is Array:
 		heroes = res["data"]
+		if not selected_avatar_hero_id.is_empty() and not is_hero_alive(get_hero_by_id(selected_avatar_hero_id)):
+			selected_avatar_hero_id = ""
+		active_party_ids = active_party_ids.filter(func(id): return is_hero_alive(get_hero_by_id(str(id))))
+		for floor_num in floor_assigned_hero_ids:
+			floor_assigned_hero_ids[floor_num] = get_assigned_heroes_for_floor(int(floor_num)).filter(func(id): return is_hero_alive(get_hero_by_id(str(id))))
 		EventBus.heroes_updated.emit(heroes)
 		return true
 		
@@ -202,6 +207,7 @@ func refresh_inventory() -> bool:
 		return false
 		
 	var data: Dictionary = res["data"]
+	materials.clear()
 	materials["WOOD"] = 0
 	materials["STONE"] = 0
 	materials["RATION"] = 0
@@ -209,6 +215,7 @@ func refresh_inventory() -> bool:
 	materials["FOOD"] = 0
 	materials["FOOD_RAW"] = 0
 	materials["IRON"] = 0
+	materials["MEDICINE"] = 0
 	materials["SAMPLE_HERO_EXP_100"] = 0
 	materials["SAMPLE_HERO_EXP_1000"] = 0
 	materials["SAMPLE_HERO_EXP_10000"] = 0
@@ -262,6 +269,21 @@ func get_hero_by_id(id: String) -> Dictionary:
 			return h
 	return {}
 
+static func is_hero_alive(hero: Dictionary) -> bool:
+	return not hero.is_empty() and str(hero.get("state", "")).to_upper() not in ["DEAD", "DISABLED"] and float(hero.get("hp", 1)) > 0
+
+static func is_hero_available(hero: Dictionary) -> bool:
+	return is_hero_alive(hero) and not is_hero_pve_deployed(hero)
+
+static func hero_life_label(hero: Dictionary) -> String:
+	match str(hero.get("state", "")).to_upper():
+		"DEAD": return "TỬ TRẬN"
+		"DISABLED": return "TỬ TRẬN"
+	return "" if is_hero_alive(hero) else "KHÔNG THỂ HOẠT ĐỘNG"
+
+func owned_hero_count() -> int:
+	return heroes.filter(func(h): return h is Dictionary and str(h.get("state", "")) != "DEAD").size()
+
 static func is_hero_pve_deployed(hero: Dictionary) -> bool:
 	var deployment: Variant = hero.get("pveDeployment")
 	return deployment is Dictionary and not deployment.is_empty()
@@ -299,7 +321,7 @@ func get_eligible_fodders_for(target_hero_id: String, star: int) -> Array:
 		var hid := str(h.get("id", ""))
 		if hid == target_hero_id:
 			continue
-		if int(h.get("rarity", 1)) == star and str(h.get("state", "IDLE")) != "DEAD" and str(h.get("state", "IDLE")) != "DISABLED":
+		if int(h.get("rarity", 1)) == star and is_hero_available(h):
 			result.append(h)
 	return result
 
@@ -313,7 +335,7 @@ func set_assigned_heroes_for_floor(floor_num: int, hero_ids: Array) -> void:
 	var clean_ids: Array = []
 	for hid in hero_ids:
 		var s := str(hid)
-		if s != "" and not clean_ids.has(s) and clean_ids.size() < 6:
+		if s != "" and is_hero_available(get_hero_by_id(s)) and not clean_ids.has(s) and clean_ids.size() < 6:
 			clean_ids.append(s)
 	floor_assigned_hero_ids[floor_num] = clean_ids
 	_save_floor_assignments()

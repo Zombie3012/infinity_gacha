@@ -1,3 +1,5 @@
+> Updated contract (2026-11-22): [Hero Chronicle, mortality and 1-7 star rarity](../HERO_CHRONICLE.md) supersedes the legacy origin-based death/duplicate rules and Divine Grace sections below. All Heroes die as DEAD and drop equipped gear; one RESURRECTION_GEM_7 revives to full HP with no Silver fee or escalating cycle. NORMAL/SPECIAL/LIMITED remain payment/banner types only.
+
 # P0 Implementation Checklist
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -11,7 +13,7 @@
 - Domain 01 (Authentication & Authorization): Done
 - Domain 02 (Master System & Profile): Done
 - Domain 03 (Hero System): Done (Levels 1–20, EXP table, Promotion & Awakening stats/caps, Skill instances & leveling, Lock/Unlock)
-- Domain 04 (Permadeath & Survival): Done (Normal permadeath with floor drop, Special/Limited disable, Death records)
+- Domain 04 (Permadeath & Survival): Done (Unified Hero death with floor drop, Hero Chronicle records and seven-star gem revival)
 - Domain 05 (Formation & Party Management): Done (Parties CRUD, default party, formation slot assignment, order reordering, active hero validations)
 - Domain 06 (Combat & Battle Mechanics): Done (MOD-06-01 to MOD-06-05 complete: initialization, AI auto battle, assist strikes, mechanics, buffs, target priorities, retreat, battle report, casualties, reward distribution)
 - Domain 07 (World & Dungeon System): Done (MOD-07-01 to MOD-07-06 complete: dungeon templates, floor configurations, unlock requirements, base & first-clear rewards, deterministic World Seed generation, algorithmic versioning, procedural room layouts, encounters & events, floor progression, and reward distribution)

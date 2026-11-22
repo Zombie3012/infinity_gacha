@@ -32,22 +32,23 @@ func _init() -> void:
 
 func _ready() -> void:
 	_build_ui()
+	EventBus.heroes_updated.connect(func(_heroes: Array): setup(target_hero_id))
 	_populate_browser()
 
 func setup(hero_id: String = "") -> void:
 	target_hero_id = hero_id
-	if target_hero_id.is_empty() and not GameState.heroes.is_empty():
-		var first: Dictionary = GameState.heroes[0]
-		target_hero_id = str(first.get("id", ""))
-		target_hero_name = str(first.get("name", "Hero"))
-	else:
-		var found := GameState.get_hero_by_id(target_hero_id)
-		if not found.is_empty():
-			target_hero_name = str(found.get("name", "Hero"))
+	var found := GameState.get_hero_by_id(target_hero_id)
+	if not GameState.is_hero_available(found):
+		var candidates: Array = GameState.heroes.filter(func(h): return h is Dictionary and GameState.is_hero_available(h))
+		found = candidates[0] if not candidates.is_empty() else {}
+	target_hero_id = str(found.get("id", ""))
+	target_hero_name = str(found.get("name", "Chưa chọn Hero"))
 
 	if is_inside_tree():
 		_update_hero_header()
 		_populate_browser()
+		if not selected_item_data.is_empty():
+			_on_item_clicked(selected_item_data)
 
 func _build_ui() -> void:
 	for c in get_children():

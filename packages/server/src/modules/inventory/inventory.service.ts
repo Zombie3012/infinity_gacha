@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
@@ -9,6 +9,7 @@ import {
   heroLevelConfigs,
   heroDevelopmentConfigs,
   currencyTransactions,
+  itemTemplates,
 } from '../../database/drizzle-schema.js';
 
 export class InventoryError extends Error {
@@ -31,6 +32,16 @@ export type ItemMetadata = {
 };
 
 export const KNOWN_ITEM_DEFINITIONS: Record<string, ItemMetadata> = {
+  RESURRECTION_GEM_7: {
+    itemId: 'RESURRECTION_GEM_7', name: 'Ngọc hồi sinh 7★',
+    description: 'Dùng tại Sử Điện Anh Hùng để hồi sinh một Hero tử trận. Không khôi phục trang bị đã rơi.',
+    category: 'CONSUMABLE', rarity: 7, sellPrice: 0, canUse: false,
+  },
+  TELEPORT_STONE: {
+    itemId: 'TELEPORT_STONE', name: 'Đá dịch chuyển',
+    description: 'Tạo điểm thu hồi dùng chung tới hết tầng, cho phép thoát truy đuổi; không dùng tại tầng cấm thu hồi.',
+    category: 'CONSUMABLE', rarity: 3, sellPrice: 0, canUse: false,
+  },
   SAMPLE_HERO_EXP_100: {
     itemId: 'SAMPLE_HERO_EXP_100',
     name: 'Sách EXP Hero Sơ Cấp (+1,000)',
@@ -128,6 +139,8 @@ export class InventoryService {
     const scrolls = await db.select().from(masterSummonInventory)
       .where(and(eq(masterSummonInventory.masterId, masterId), gt(masterSummonInventory.quantity, 0)));
 
+    const catalogue = rawItems.length ? await db.select().from(itemTemplates).where(inArray(itemTemplates.code, rawItems.map(r => r.itemId))) : [];
+    const catalogueByCode = new Map(catalogue.map(row => [row.code, row]));
     let items = rawItems.map(row => {
       const def = KNOWN_ITEM_DEFINITIONS[row.itemId] ?? {
         itemId: row.itemId,
@@ -139,11 +152,14 @@ export class InventoryService {
         canUse: false,
       };
 
+      const template = catalogueByCode.get(row.itemId);
       return {
         id: row.id,
         quantity: row.quantity,
         updatedAt: row.updatedAt,
         ...def,
+        ...(template ? { name: template.name, description: template.description, category: template.category as ItemCategory,
+          rarity: Math.max(1, Math.min(7, template.rarity)) } : {}),
       };
     });
 
@@ -249,7 +265,7 @@ export class InventoryService {
           .where(and(eq(heroes.id, targetHeroId), eq(heroes.masterId, masterId))).for('update').limit(1);
 
         if (!hero) throw new InventoryError('Hero không tồn tại hoặc không thuộc quyền sở hữu.', 404);
-        if (hero.state === 'DEAD' || hero.state === 'DISABLED') {
+        if (hero.state === 'DEAD' || hero.state === 'DISABLED' || hero.hp <= 0) {
           throw new InventoryError('Không thể sử dụng vật phẩm cho Hero đã tử trận hoặc vô hiệu hóa.', 409);
         }
 

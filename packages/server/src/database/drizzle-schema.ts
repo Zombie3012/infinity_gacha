@@ -1,6 +1,6 @@
 import { integer, pgTable, timestamp, unique, uniqueIndex, index, varchar, bigint, doublePrecision, boolean, jsonb, check, text, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import type { PveLayout, PvePlan, PvePoint } from '@infiniti-gacha/shared';
+import type { PveLayout, PvePlan, PvePoint, PveExploration } from '@infiniti-gacha/shared';
 import type { CombatV2Report } from '../modules/combat/combat-v2.engine.js';
 
 export const accounts = pgTable('accounts', {
@@ -52,6 +52,7 @@ export const worlds = pgTable('worlds', {
   seedAlgorithmVersion: integer('seed_algorithm_version').default(1).notNull(),
   difficultyMultiplier: doublePrecision('difficulty_multiplier').default(1).notNull(),
   currentFloor: integer('current_floor').default(1).notNull(),
+  pveRun: integer('pve_run').default(0).notNull(),
   baseZones: integer('base_zones').default(1).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -144,7 +145,7 @@ export const heroes = pgTable('heroes', {
   configId: varchar('config_id', { length: 50 }).notNull(),
   name: varchar('name', { length: 100 }).notNull(),
   rarity: integer('rarity').notNull(),
-  category: varchar('category', { length: 20 }).notNull(),
+  category: varchar('category', { length: 20 }).notNull().default('HERO'),
   state: varchar('state', { length: 20 }).default('HEALTHY').notNull(),
   level: integer('level').default(1).notNull(),
   exp: bigint('exp', { mode: 'bigint' }).default(sql`0`).notNull(),
@@ -640,6 +641,17 @@ export const baseProductionNodes = pgTable('base_production_nodes', {
   lastHarvestAt: timestamp('last_harvest_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const magicProductionNodes = pgTable('magic_production_nodes', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  buildingId: varchar('building_id', { length: 36 }).notNull().references(() => baseBuildings.id, { onDelete: 'cascade' }),
+  wing: varchar('wing', { length: 30 }).notNull(),
+  resourceType: varchar('resource_type', { length: 30 }).notNull(),
+  baseRatePerHour: doublePrecision('base_rate_per_hour').notNull(),
+  currentStored: doublePrecision('current_stored').default(0).notNull(),
+  maxCapacity: doublePrecision('max_capacity').notNull(),
+  lastHarvestAt: timestamp('last_harvest_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [unique('uq_magic_production_wing').on(table.buildingId, table.wing)]);
+
 export const buildingWorkerAssignments = pgTable('building_worker_assignments', {
   id: varchar('id', { length: 36 }).primaryKey(),
   buildingId: varchar('building_id', { length: 36 }).notNull().references(() => baseBuildings.id, { onDelete: 'cascade' }),
@@ -741,7 +753,7 @@ export const shopItems = pgTable('shop_items', {
   description: text('description').notNull(),
   itemId: varchar('item_id', { length: 50 }).notNull(),
   category: varchar('category', { length: 20 }).notNull(),
-  priceSilver: bigint('price_silver', { mode: 'bigint' }).notNull(),
+  priceSilver: bigint('price_silver', { mode: 'bigint' }).default(sql`1`).notNull(),
   dailyLimit: integer('daily_limit').default(0).notNull(),
   rotationDays: integer('rotation_days').array().notNull().default(sql`'{}'::integer[]`),
   isActive: boolean('is_active').default(true).notNull(),
@@ -758,6 +770,16 @@ export const shopPurchaseLimits = pgTable('shop_purchase_limits', {
 }, (table) => [
   uniqueIndex('uq_shop_purchase_limit').on(table.masterId, table.shopItemCode, table.periodKey),
 ]);
+
+export const shopPurchases = pgTable('shop_purchases', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  idempotencyKey: varchar('idempotency_key', { length: 80 }).notNull(),
+  itemCode: varchar('item_code', { length: 50 }).notNull(),
+  quantity: integer('quantity').notNull(),
+  result: jsonb('result').$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [unique('uq_shop_purchase_key').on(table.masterId, table.idempotencyKey)]);
 
 export const mailboxMessages = pgTable('mailbox_messages', {
   id: varchar('id', { length: 36 }).primaryKey(),
@@ -1275,13 +1297,43 @@ export const wonderHoldings = pgTable('wonder_holdings', {
 
 // --- Private PvE strategic maps (separate from global territories and legacy sessions) ---
 
+export const heroChronicles = pgTable('hero_chronicles', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  heroId: varchar('hero_id', { length: 36 }).references(() => heroes.id, { onDelete: 'set null' }),
+  name: varchar('name', { length: 100 }).notNull(),
+  rarity: integer('rarity').notNull(),
+  classCode: varchar('class_code', { length: 30 }).notNull(),
+  biography: text('biography').notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('ALIVE'),
+  summonedAt: timestamp('summoned_at', { withTimezone: true }).notNull(),
+  events: jsonb('events').$type<{ type: string; at: string; floor?: number; referenceId?: string; detail?: string }[]>().notNull().default([]),
+}, table => [
+  index('idx_chronicle_master').on(table.masterId, table.summonedAt, table.id),
+  unique('uq_chronicle_hero').on(table.heroId),
+  check('ck_chronicle_rarity', sql`${table.rarity} BETWEEN 1 AND 7`),
+  check('ck_chronicle_status', sql`${table.status} IN ('ALIVE','DEAD','SACRIFICED')`),
+]);
+
+export const pveFloorRules = pgTable('pve_floor_rules', {
+  floor: integer('floor').primaryKey(),
+  recallPolicy: varchar('recall_policy', { length: 30 }).notNull().default('FREE'),
+}, table => [
+  check('ck_pve_rule_floor', sql`${table.floor} >= 1`),
+  check('ck_pve_rule_recall', sql`${table.recallPolicy} IN ('FREE', 'UNTIL_COMPLETE')`),
+]);
+
 export const pveMaps = pgTable('pve_maps', {
   id: varchar('id', { length: 36 }).primaryKey(),
   masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
   worldId: varchar('world_id', { length: 36 }).notNull().references(() => worlds.id, { onDelete: 'cascade' }),
   floor: integer('floor').notNull(),
+  run: integer('run').default(0).notNull(),
+  recallPolicy: varchar('recall_policy', { length: 30 }).notNull().default('FREE'),
+  recallPoints: jsonb('recall_points').$type<{ areaId: string; x: number; y: number; createdBy: string }[]>().notNull().default([]),
   status: varchar('status', { length: 20 }).notNull().default('ACTIVE'),
   layout: jsonb('layout').$type<PveLayout>().notNull(),
+  exploration: jsonb('exploration').$type<PveExploration>(),
   encounterCatalog: jsonb('encounter_catalog').$type<{
     code: string; name: string; hp: number; attack: number; defense: number; agi: number;
     silver: number; exp: number; boss: boolean;
@@ -1293,12 +1345,36 @@ export const pveMaps = pgTable('pve_maps', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   clearedAt: timestamp('cleared_at', { withTimezone: true }),
 }, table => [
-  unique('uq_pve_world_floor').on(table.worldId, table.floor),
+  unique('uq_pve_world_floor_run').on(table.worldId, table.floor, table.run),
   uniqueIndex('uq_pve_active_master').on(table.masterId).where(sql`${table.status} = 'ACTIVE'`),
   index('idx_pve_map_master_latest').on(table.masterId, table.createdAt, table.id),
-  check('ck_pve_map_status', sql`${table.status} IN ('ACTIVE', 'CLEARED')`),
+  check('ck_pve_map_status', sql`${table.status} IN ('ACTIVE', 'CLEARED', 'ABANDONED')`),
+  check('ck_pve_map_recall', sql`${table.recallPolicy} IN ('FREE', 'UNTIL_COMPLETE')`),
   check('ck_pve_floor', sql`${table.floor} >= 1`),
 ]);
+
+export const alchemyResearch = pgTable('alchemy_research', {
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  code: varchar('code', { length: 60 }).notNull(),
+  researchedAt: timestamp('researched_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [unique('uq_alchemy_research').on(table.masterId, table.code)]);
+
+export const heroConsumables = pgTable('hero_consumables', {
+  heroId: varchar('hero_id', { length: 36 }).primaryKey().references(() => heroes.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  config: jsonb('config').$type<import('../modules/base/alchemy-rules.js').ConsumableConfig>().notNull(),
+  squadId: varchar('squad_id', { length: 36 }),
+  strengthReady: boolean('strength_ready').notNull().default(false),
+});
+
+export const pveConsumableDrops = pgTable('pve_consumable_drops', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  mapId: varchar('map_id', { length: 36 }).notNull().references(() => pveMaps.id, { onDelete: 'cascade' }),
+  areaId: varchar('area_id', { length: 80 }).notNull(),
+  x: integer('x').notNull(), y: integer('y').notNull(),
+  items: jsonb('items').$type<{ itemId: string; quantity: number }[]>().notNull(),
+});
 
 export const pvePartyPlans = pgTable('pve_party_plans', {
   partyId: varchar('party_id', { length: 36 }).primaryKey().references(() => masterParties.id, { onDelete: 'cascade' }),
@@ -1317,6 +1393,8 @@ export const pveSquads = pgTable('pve_squads', {
   status: varchar('status', { length: 20 }).notNull().default('IDLE'),
   x: integer('x').notNull().default(0),
   y: integer('y').notNull().default(0),
+  areaId: varchar('area_id', { length: 80 }).notNull().default('floor'),
+  pendingPortalId: varchar('pending_portal_id', { length: 100 }),
   autoExplore: boolean('auto_explore').notNull().default(false),
   route: jsonb('route').$type<PvePoint[]>().notNull().default([]),
   nextStepAt: timestamp('next_step_at', { withTimezone: true }),
@@ -1328,7 +1406,7 @@ export const pveSquads = pgTable('pve_squads', {
   index('idx_pve_due_steps').on(table.masterId, table.nextStepAt),
   index('idx_pve_squad_map_arrival').on(table.mapId, table.nextStepAt, table.id),
   check('ck_pve_squad_status', sql`${table.status} IN ('IDLE', 'MOVING', 'FIGHTING', 'WITHDRAWN', 'DEFEATED')`),
-  check('ck_pve_squad_position', sql`${table.x} BETWEEN 0 AND 11 AND ${table.y} BETWEEN 0 AND 11`),
+  check('ck_pve_squad_position', sql`${table.x} BETWEEN 0 AND 19 AND ${table.y} BETWEEN 0 AND 19`),
 ]);
 
 // Authoritative exclusive reservations. Guard triggers also protect older mutation paths.

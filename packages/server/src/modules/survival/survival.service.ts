@@ -1,4 +1,5 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
+import { isLivingHero } from '@infiniti-gacha/shared';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import type { GameDatabase } from '../../database/transaction.js';
@@ -50,7 +51,8 @@ export class SurvivalService {
   }
 
   private async ensureStates(masterId: string, now: Date, database: GameDatabase = db) {
-    const roster = await database.select({ id: heroes.id, hunger: heroes.hunger, fatigue: heroes.fatigue }).from(heroes).where(eq(heroes.masterId, masterId));
+    const roster = await database.select({ id: heroes.id, hunger: heroes.hunger, fatigue: heroes.fatigue }).from(heroes)
+      .where(and(eq(heroes.masterId, masterId), gt(heroes.hp, 0), sql`${heroes.state} NOT IN ('DEAD','DISABLED')`));
     if (roster.length === 0) return [];
     const existing = await database.select().from(heroSurvivalStates)
       .where(inArray(heroSurvivalStates.heroId, roster.map(row => row.id)));
@@ -113,7 +115,7 @@ export class SurvivalService {
     await this.settle(masterId);
     const roster = await db.select({
       id: heroes.id, name: heroes.name, level: heroes.level, state: heroes.state, maxHp: heroes.maxHp, hp: heroes.hp,
-    }).from(heroes).where(eq(heroes.masterId, masterId)).orderBy(asc(heroes.name));
+    }).from(heroes).where(and(eq(heroes.masterId, masterId), gt(heroes.hp, 0), sql`${heroes.state} NOT IN ('DEAD','DISABLED')`)).orderBy(asc(heroes.name));
     const states = roster.length === 0 ? [] : await db.select().from(heroSurvivalStates)
       .where(inArray(heroSurvivalStates.heroId, roster.map(row => row.id)));
     const assignments = roster.length === 0 ? [] : await db.select().from(buildingWorkerAssignments)
@@ -160,6 +162,7 @@ export class SurvivalService {
       const [hero] = await tx.select().from(heroes)
         .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).for('update');
       if (!hero) throw new SurvivalError('Không tìm thấy Hero.', 404);
+      if (!isLivingHero(hero)) throw new SurvivalError('Hero không còn sống hoặc đang chờ hồi sinh.', 409);
       if ((await tx.select().from(pveHeroReservations).where(eq(pveHeroReservations.heroId, heroId))).length) {
         throw new SurvivalError('ERR_PVE_HERO_DEPLOYED', 409);
       }
@@ -186,7 +189,7 @@ export class SurvivalService {
       const [hero] = await tx.select().from(heroes)
         .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).for('update');
       if (!hero) throw new SurvivalError('Không tìm thấy Hero.', 404);
-      if (hero.state === 'DEAD' || hero.state === 'DISABLED') throw new SurvivalError('Hero không thể nghỉ ngơi.', 409);
+      if (!isLivingHero(hero)) throw new SurvivalError('Hero không thể nghỉ ngơi.', 409);
       if ((await tx.select().from(pveHeroReservations).where(eq(pveHeroReservations.heroId, heroId))).length) {
         throw new SurvivalError('ERR_PVE_HERO_DEPLOYED', 409);
       }

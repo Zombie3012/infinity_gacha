@@ -17,24 +17,27 @@ test('HTTP economy: shop limits, mailbox and IAP', { skip: skipReason }, async t
   });
 
   await setSilver(master.masterId, 100_000);
+  const limitedSku = 'TEST_LIMIT_' + master.masterId.replaceAll('-','').toUpperCase();
+  await sql("insert into shop_items(code,name,description,item_id,category,price_silver,daily_limit) values($1,'Test limit','Isolated limit fixture','FOOD','CONSUMABLE',500,5)",[limitedSku]);
+  t.after(()=>sql('delete from shop_items where code=$1',[limitedSku]));
 
   await t.test('daily purchase limits sell the remainder and warn', async () => {
     const first = await harness.request('/api/shop/purchase', {
-      method: 'POST', token: master.token, body: { itemCode: 'STAMINA_POTION', quantity: 4 },
+      method: 'POST', token: master.token, body: { itemCode: limitedSku, quantity: 4 },
     });
     assert.equal(first.status, 200);
     assert.equal(first.body.purchased, 4);
     assert.equal(first.body.remainingToday, 1);
 
     const second = await harness.request('/api/shop/purchase', {
-      method: 'POST', token: master.token, body: { itemCode: 'STAMINA_POTION', quantity: 2 },
+      method: 'POST', token: master.token, body: { itemCode: limitedSku, quantity: 2 },
     });
     assert.equal(second.status, 200);
     assert.equal(second.body.purchased, 1);
     assert.equal(second.body.warning, 'ERR_SHOP_DAILY_LIMIT_EXCEEDED');
 
     const blocked = await harness.request('/api/shop/purchase', {
-      method: 'POST', token: master.token, body: { itemCode: 'STAMINA_POTION', quantity: 1 },
+      method: 'POST', token: master.token, body: { itemCode: limitedSku, quantity: 1 },
     });
     assert.equal(blocked.status, 409);
     assert.equal(blocked.body.error, 'ERR_SHOP_DAILY_LIMIT_EXCEEDED');

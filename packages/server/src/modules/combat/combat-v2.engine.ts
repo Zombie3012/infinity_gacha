@@ -19,6 +19,8 @@ import {
   type PveTargetPriority,
 } from '@infiniti-gacha/shared';
 
+import { MANA_RESTORE_RATIO, STRENGTH_ATK_MULTIPLIER, type ConsumableConfig } from '../base/alchemy-rules.js';
+
 export type CombatSide = 'HERO' | 'ENEMY';
 export type CombatV2Winner = CombatSide | 'DRAW';
 
@@ -42,6 +44,8 @@ export interface CombatV2UnitInput {
   formationSlot?: number;
   targetPriority?: PveTargetPriority;
   skillOrder?: string[];
+  consumables?: ConsumableConfig;
+  strengthReady?: boolean;
   initialHp?: number;
   initialMp?: number;
   agi: number;
@@ -77,23 +81,31 @@ export interface CombatV2LogEntry {
   actorMp: number;
   actorHp?: number;
   targetName?: string;
-  actionType?: 'BASIC' | 'SKILL' | 'HEAL' | 'REVIVE';
+  actionType?: 'BASIC' | 'SKILL' | 'HEAL' | 'REVIVE' | 'ITEM';
   hit?: boolean;
 }
 
 export interface CombatV2Report {
+  pending?: { key: string; actorId: string; round: number; skills: { code: string; mpCost: number }[] };
+  consumables?: Record<string, ConsumableConfig>;
+  ambush?: boolean;
   winner: CombatV2Winner;
   rounds: number;
   log: CombatV2LogEntry[];
   units: {
     id: string; name: string; side: CombatSide; hp: number; maxHp: number; mp: number; maxMp: number; alive: boolean;
     slotIndex?: number;
+    effects?: string[];
   }[];
   initialUnits?: CombatV2Report['units'];
   totalDamage: number;
 }
 
+export interface CombatChoice { action?: 'BASIC' | 'SKILL'; skillCode?: string; targetId?: string; items?: string[] }
 export interface CombatV2Options {
+  pauseManual?: boolean;
+  choices?: Record<string, CombatChoice>;
+  ambush?: boolean;
   maxRounds?: number;
   random?: () => number;
   skillMpCostRatio?: number;
@@ -108,6 +120,8 @@ const DEFAULT_BASIC_MP_RATIO = 0.05;
 function initialize(input: CombatV2UnitInput): CombatV2UnitState {
   return {
     ...input,
+    stats: { ...input.stats },
+    consumables: input.consumables ? structuredClone(input.consumables) : undefined,
     hp: Math.max(0, Math.min(input.stats.maxHp, input.initialHp ?? input.stats.maxHp)),
     mp: Math.max(0, Math.min(input.stats.maxMp, input.initialMp ?? input.stats.maxMp)),
     shield: 0,
@@ -205,25 +219,62 @@ export function resolveBattleV2(
   const unitSnapshot = (unit: CombatV2UnitState) => ({
     id: unit.id, name: unit.name, side: unit.side, hp: unit.hp, maxHp: unit.stats.maxHp,
     mp: unit.mp, maxMp: unit.stats.maxMp, alive: unit.alive, slotIndex: unit.formationSlot ?? unit.slotIndex,
+    effects: unit.strengthReady ? ['STRENGTH_POTION'] : [],
   });
+  for (const unit of units) if (unit.strengthReady) unit.stats.atk *= STRENGTH_ATK_MULTIPLIER;
   const initialUnits = units.map(unitSnapshot);
   const log: CombatV2LogEntry[] = [];
   let rounds = 0;
   let totalDamage = 0;
+  let pending: CombatV2Report['pending'];
 
-  for (let round = 1; round <= maxRounds; round += 1) {
+  roundsLoop: for (let round = options.ambush ? 0 : 1; round <= maxRounds; round += 1) {
     rounds = round;
-    const order = turnOrder(units);
+    const order = turnOrder(units).filter(unit => round !== 0 || unit.side === 'ENEMY');
     if (order.length === 0) break;
 
     for (const actor of order) {
       if (!actor.alive) continue;
       if (units.every(unit => unit.side === actor.side || !unit.alive)) break;
 
+      const key = `${round}:${actor.id}`;
+      const choice = options.choices?.[key];
+      const items = choice ? (choice.items ?? []) : (!options.pauseManual && actor.consumables ? [
+        ...(actor.consumables.autoStrength && !actor.strengthReady ? ['STRENGTH_POTION'] : []),
+        ...(actor.stats.maxMp > 0 && actor.mp / actor.stats.maxMp * 100 < actor.consumables.autoManaBelow ? ['MANA_POTION'] : []),
+      ].filter(code => actor.consumables!.slots.some(s => s?.itemId === code && s.quantity > 0)) : []);
+      if (items.length > 2 || new Set(items).size !== items.length) throw new Error('ERR_COMBAT_ITEM_LIMIT');
+      for (const code of items) {
+        const slot = actor.consumables?.slots.find(s => s?.itemId === code && s.quantity > 0);
+        if (!slot || !['MANA_POTION', 'STRENGTH_POTION'].includes(code) || !actor.alive) throw new Error('ERR_COMBAT_ITEM_INVALID');
+        if (code === 'MANA_POTION') {
+          if (actor.stats.maxMp <= 0 || actor.mp >= actor.stats.maxMp) throw new Error('ERR_COMBAT_MP_FULL');
+          actor.mp = Math.min(actor.stats.maxMp, actor.mp + Math.ceil(actor.stats.maxMp * MANA_RESTORE_RATIO));
+        } else {
+          if (actor.strengthReady) throw new Error('ERR_COMBAT_BUFF_ACTIVE');
+          actor.strengthReady = true; actor.stats.atk *= STRENGTH_ATK_MULTIPLIER;
+        }
+        slot.quantity--;
+        log.push({ round, actorId: actor.id, actorName: actor.name, targetId: actor.id, targetName: actor.name,
+          action: code, actionType: 'ITEM', damage: 0, heal: 0, crit: false, blocked: false, hit: true,
+          actorHp: actor.hp, targetHp: actor.hp, actorMp: actor.mp });
+      }
+      if (options.pauseManual && actor.side === 'HERO' && !choice?.action) {
+        pending = { key, actorId: actor.id, round, skills: (actor.skills ?? []).map(s=>({code:s.code,mpCost:s.mpCost ?? Math.max(10,Math.round(actor.stats.maxMp*skillMpRatio))})).filter(s=>(actor.cooldowns[s.code] ?? 0)<=0 && actor.mp>=s.mpCost) }; break roundsLoop;
+      }
       let { skill, mpCost } = chooseSkill(actor, skillMpRatio, units);
+      if (choice?.action === 'BASIC') { skill = null; mpCost = 0; }
+      if (choice?.action === 'SKILL') {
+        skill = actor.skills?.find(s => s.code === choice.skillCode) ?? null;
+        mpCost = skill?.mpCost ?? Math.max(10, Math.round(actor.stats.maxMp * skillMpRatio));
+        if (!skill || (actor.cooldowns[skill.code] ?? 0) > 0 || actor.mp < mpCost) throw new Error('ERR_COMBAT_SKILL_UNAVAILABLE');
+      }
+      const chosenTarget = choice?.targetId ? units.find(u => u.id === choice.targetId && u.alive) : undefined;
+      if (choice?.targetId && !chosenTarget) throw new Error('ERR_COMBAT_TARGET');
 
       if (skill?.effectType === 'HEAL_LOWEST_ALLY') {
-        const target = pickHealTarget(actor, units);
+        const target = chosenTarget ?? pickHealTarget(actor, units);
+        if (target && target.side !== actor.side) throw new Error('ERR_COMBAT_TARGET');
         if (target) {
           const heal = Math.max(1, Math.round(skill.effectValue * actor.stats.matk));
           target.hp = Math.min(target.stats.maxHp, target.hp + heal);
@@ -241,7 +292,8 @@ export function resolveBattleV2(
         mpCost = 0;
       }
 
-      const target = pickTarget(actor, units);
+      const target = chosenTarget ?? pickTarget(actor, units);
+      if (target && target.side === actor.side) throw new Error('ERR_COMBAT_TARGET');
       if (!target) break;
 
       const multiplier = skill ? skill.multiplier : 1;
@@ -305,8 +357,8 @@ export function resolveBattleV2(
       }
     }
 
-    // End of round: cooldowns tick and ARCANE_EMPOWER restores MP.
-    for (const unit of units) {
+    // The ambush opening is an extra action phase, not a cooldown/regen round.
+    for (const unit of round === 0 ? [] : units) {
       if (unit.alive) {
         const mpRegenPct = unit.imprintEffects?.mpRegenPct ?? 0;
         if (mpRegenPct > 0 && unit.stats.maxMp > 0) {
@@ -335,6 +387,9 @@ export function resolveBattleV2(
   }
 
   return {
+    ...(options.ambush ? { ambush: true } : {}),
+    ...(pending ? { pending } : {}),
+    consumables: Object.fromEntries(units.filter(u => u.consumables).map(u => [u.id, { ...u.consumables!, slots: u.consumables!.slots.map(s => s && s.quantity > 0 ? s : null) }])),
     winner,
     rounds,
     log,

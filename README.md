@@ -4,13 +4,21 @@ Game quản lý Hero, sinh tồn và chiến thuật. Client hiện tại là **
 
 Cập nhật: **22/11/2026 (UTC+7)**. Đây là bản prototype đang hoàn thiện, với dữ liệu cân bằng mẫu; các checklist P0–P3 cũ không có nghĩa toàn bộ game đã sẵn sàng phát hành.
 
+Hero và vật liệu dùng độ hiếm **1–7★**. Mọi Hero đều có thể tử trận; hồ sơ được giữ tại công trình **Sử Điện Anh Hùng**. Dùng **1 Ngọc hồi sinh 7★** để hồi sinh một Hero về **100% HP**, không phí thêm. Xem [cơ chế và API](docs/HERO_CHRONICLE.md).
+
+Công trình **[Thương Thuyền Khinh Khí](docs/SHOP_AIRSHIP.md)** là cửa hàng dạng khinh khí cầu tại căn cứ. Danh mục tạm bán vật phẩm dùng được, trang bị và Thiên Thư thường với giá **1 bạc/món**, gồm cả Ngọc hồi sinh 7★.
+
+**Xây mới và nâng cấp công trình hoàn tất ngay**, không có thời gian chờ hoặc thanh đếm ngược. Công trình đang chờ từ bản cũ được hoàn tất khi đọc lại căn cứ. Xem [quy tắc xây dựng](docs/BASE_CONSTRUCTION.md).
+
+**[Đại Sảnh Ma Thuật](docs/MAGIC_HALL.md)** tích hợp Thư viện, Giả kim và Nghiên cứu. Ba phân khu giữ chức năng nhưng không còn là công trình xây riêng.
+
 ## Cấu trúc
 
 ```text
 client-godot/                   Client Godot, giao diện và diễn hoạt 3D
 packages/shared/               Combat v2, sinh chỉ số, công thức, hằng số
 packages/server/               Express API, domain services, Drizzle ORM
-packages/server/drizzle/       Lịch sử migration (0000–0048)
+packages/server/drizzle/       Lịch sử migration (0000–0052)
 packages/server/src/database/seeds/  Dữ liệu mẫu
 docs/design_drafts/            Đặc tả/checklist lịch sử P0–P3
 scripts/                       Build cleanup, encoding, seed và tài liệu API
@@ -25,8 +33,10 @@ scripts/                       Build cleanup, encoding, seed và tài liệu API
 | Hero | Sinh instance ngẫu nhiên, huấn luyện, kỹ năng, đổi nghề, thức tỉnh, ấn ký, thăng sao | Danh sách/thẻ Hero, chi tiết 3D, trang bị và các thao tác phát triển |
 | Căn cứ | Xây/nâng cấp, mở rộng, sản xuất và phân công Hero | Căn cứ 3D, thao tác công trình và các modal chuyên dụng |
 | Sinh tồn, y tế, chế tạo | Có API và lưu trạng thái | Có giao diện bếp, ký túc xá, hồi phục, rèn và kho; cần kiểm thử toàn luồng trong engine |
-| PvE map / Combat v2 | Map riêng 12×12, ba đội, di chuyển 1 giây/ô, auto khám phá, tài nguyên, tự giao chiến và boss mở tầng | Map điều quân, avatar đội trưởng, đội hình 3×3, chiến báo/replay và phục hồi lệnh |
-| Nhiệm vụ, shop/mail, LiveOps, bảng xếp hạng, IAP | Có API prototype | Chưa có luồng Godot đầy đủ |
+| Giả kim và công nghệ | Nghiên cứu tức thì, chế ba loại thuốc, dược liệu 1–7★ và tiến độ theo Master | Cây Giả kim, chế/dùng thuốc trong Đại Sảnh; [hướng dẫn](docs/ALCHEMY_PVE_CONSUMABLES.md) |
+| PvE map / Combat v2 | Map ba cấp, radar/phục kích, ba đội, năm ô tiêu hao/Hero; auto hoặc thủ công 10 giây/lượt | Điều quân, cấu hình thuốc, điều khiển kỹ năng/mục tiêu/vật phẩm, đội hình 3×3 và replay |
+| Cửa hàng khinh khí cầu | Danh mục, mua bằng bạc, chống trả tiền hai lần | Mô hình khinh khí cầu và giao diện mua hàng Godot |
+| Nhiệm vụ, mail, LiveOps, bảng xếp hạng, IAP | Có API prototype | Chưa có luồng Godot đầy đủ |
 | Thế giới, PvP, liên minh, chiến tranh | Có API; PvP Hero dùng Combat v2, siege Kỳ Quan dùng so sánh sức mạnh | Chưa có bản đồ và luồng Godot đầy đủ |
 | Vận hành | Admin API key, cấu hình, audit, analytics, hỗ trợ | Có gửi ticket trong hồ sơ; console quản trị Web cũ đã gỡ |
 
@@ -41,7 +51,7 @@ Mỗi lượt chọn trực tiếp từ các dòng đang bật trong `summon_rew
 
 - Đây là tỷ lệ từ seed hiện tại, không phải xác suất cố định cho mọi banner do operator tạo. API trả `costType`, `costPerRoll` và `rates` theo banner/pool đang lưu.
 - Chi phí SPECIAL nằm ở `GAME_CONSTANTS.GACHA.SPECIAL_BANNER_GEM_COST_PER_ROLL`. NORMAL dùng scroll thường; LIMITED vẫn được backend hỗ trợ bằng scroll LIMITED nhưng chưa có trong cặp banner seed.
-- Hero procedural tạo instance riêng với tên, chỉ số và nghề được roll. Chỉ Hero template cố định 5★+ thuộc SPECIAL/LIMITED mới đổi bản trùng thành +1 Thiên Mệnh; quy tắc này không áp dụng cho Hero procedural 5★.
+- Mỗi phần thưởng Hero tạo instance riêng, kể cả trùng template cố định. Bỏ phân loại Hero theo nguồn và đặc quyền sinh tử; giữ các cách triệu hồi hiện có.
 - Yêu cầu summon cần `Idempotency-Key`; gửi lại cùng khóa không trừ tài nguyên hoặc tạo kết quả lần nữa.
 - Đổi 1 scroll thường tốn 10.000 Silver, tối đa 50/tuần, reset thứ Năm 00:00 UTC+7.
 - Tỷ lệ được cấu hình qua pool của banner. `GACHA_PITY` đã bị loại khỏi các loại cấu hình được tạo/kích hoạt. Analytics không còn trả `averagePityAtFiveStar`.
@@ -91,6 +101,7 @@ $env:DATABASE_URL='postgres://postgres:postgres@localhost:5433/infinite_gacha_pv
 $env:GODOT_BIN='C:\path\to\godot_console.exe'
 npm run test:godot:pve
 npm run test:godot:pve -- --integration
+npm run test:godot:pve -- --exploration
 npm run test:godot:pve:recovery
 ```
 
@@ -102,12 +113,14 @@ Từ cổng **Chinh phạt** ở căn cứ, tạo hoặc chọn đội 1–5 Her
 
 Bấm ô để ra lệnh đi bốn hướng. Mỗi bước mất một giây theo đồng hồ server; map cập nhật mỗi giây. Bật auto cho từng đội để tự khám phá, thu tài nguyên và đánh boss; auto dừng khi thua, hòa hoặc kiệt sức. Hero đầu tiên còn sống của đội xuất hiện trên map. Chiến báo là bản xem lại kết quả đã lưu; các đội khác tiếp tục di chuyển. Hạ boss mở tầng tiếp theo và thu hồi các đội còn sống. Người chơi chủ động bấm vào tầng mới.
 
+Tầng mới dùng ba cấp map: tổng quan 1 km/ô, khu vực 50 m/ô và công trình 5 m/ô; nhiều công trình có thể cùng nằm trong một ô tổng quan. Quái có radar bị chặn bởi địa hình, đuổi qua cửa và phục kích khi đội chưa nhìn thấy trước tiếp xúc. Auto khám phá công trình phụ rồi tìm boss được chỉ định trong mục tiêu tầng. Tầng cũ đang chơi giữ nguyên cơ chế trước tới khi hoàn thành.
+
 Tiến độ và phần thưởng được xử lý khi đọc trạng thái hoặc gửi lệnh. Khi game/API ngừng chạy, thời điểm đến vẫn nằm trong PostgreSQL và được quyết toán lần đọc tiếp theo. Không cần Redis cho prototype này. Luồng PvE mới dùng `/api/pve`; API dungeon/session cũ vẫn tồn tại nhưng không chạy đồng thời với một map PvE đang mở. Chi tiết ở [đặc tả triển khai](docs/PVE_IMPLEMENTATION.md) và [OpenAPI PvE](openapi.pve.yaml).
 
 ## Phần còn lại
 
 1. Chơi thử trực quan và cân bằng PvE bằng đội Hero có chỉ số thực tế; hoàn thiện asset, VFX và khả năng sử dụng trên màn hình mục tiêu.
-2. Hoàn thiện UI Godot cho nhiệm vụ, shop/mail, sự kiện, bản đồ và liên minh.
+2. Hoàn thiện UI Godot cho nhiệm vụ, mail, sự kiện, bản đồ và liên minh.
 3. Thay auto-login demo bằng luồng tài khoản và lưu phiên phù hợp bản phát hành.
 4. Thay mô phỏng OAuth/IAP bằng tích hợp nhà cung cấp thật. Hiện xác minh bằng HMAC; refund mới thu hồi Gem, chưa thu hồi Silver/item đính kèm.
 5. Bổ sung Redis/timer dùng chung cho nhiều API instance, rà soát siege Kỳ Quan và cân bằng dữ liệu mẫu.

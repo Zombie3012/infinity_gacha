@@ -8,7 +8,7 @@
  * Growth model (owner decision 2026-11-05):
  *   Budget(L) = Budget(1) + 8 * (L - 1) + Compensation(L)
  *   Compensation(L) = (672 - Budget(1) - 392) * ((L - 1) / 49)^2
- * Every rarity reaches 672 total stat points at level 50.
+ * Rarities 1-5 reach 672 total stat points at level 50; 6-7 keep their higher base budgets.
  *
  * Speed was removed as a balance lever; turn order is AGI-based (one action
  * per unit per round), so no attack/cast/move speed stats exist here.
@@ -74,9 +74,10 @@ export const BASE_STAT_BUDGET: Record<StarRating, number> = {
   7: 430,
 };
 
-/** 6-7 star Heroes exist in data but stay locked until a future release. */
-export const ENABLED_STARS: StarRating[] = [1, 2, 3, 4, 5];
-export const LOCKED_STARS: StarRating[] = [6, 7];
+/** All Heroes and items use the same seven-star rarity scale. */
+export const ENABLED_STARS: StarRating[] = [1, 2, 3, 4, 5, 6, 7];
+export const LOCKED_STARS: StarRating[] = [];
+export const MAX_HERO_LEVEL = 70;
 
 /** Total stat points every rarity shares at level 50. */
 export const TARGET_LEVEL = 50;
@@ -272,7 +273,7 @@ export function targetBudgetAt50(star: StarRating): number {
 
 /**
  * Growth compensation: lower rarities receive extra points while levelling so
- * every rarity reaches the same 672-point budget at level 50.
+ * rarities 1-5 reach the same 672-point budget at level 50.
  */
 export function growthCompensation(star: StarRating, level: number): number {
   const safeLevel = clamp(Math.floor(level) || 1, 1, TARGET_LEVEL);
@@ -284,13 +285,13 @@ export function growthCompensation(star: StarRating, level: number): number {
 
 /** Total stat points available at `level` (base + normal growth + compensation). */
 export function budgetAtLevel(star: StarRating, level: number): number {
-  const safeLevel = clamp(Math.floor(level) || 1, 1, TARGET_LEVEL);
+  const safeLevel = clamp(Math.floor(level) || 1, 1, MAX_HERO_LEVEL);
   return BASE_STAT_BUDGET[star] + GROWTH_PER_LEVEL * (safeLevel - 1) + growthCompensation(star, safeLevel);
 }
 
 /** Player-directed points earned by levelling to `level`. */
 export function trainingPointsForLevel(level: number): number {
-  const safeLevel = clamp(Math.floor(level) || 1, 1, TARGET_LEVEL);
+  const safeLevel = clamp(Math.floor(level) || 1, 1, MAX_HERO_LEVEL);
   return TRAINING_PER_LEVEL * (safeLevel - 1);
 }
 
@@ -353,7 +354,7 @@ export function rollBaseStats(
 
 /** Base stats after levelling, class growth and training. */
 export function computeHeroBaseStats(input: HeroBaseInput): BaseStats {
-  const level = clamp(Math.floor(input.level) || 1, 1, TARGET_LEVEL);
+  const level = clamp(Math.floor(input.level) || 1, 1, MAX_HERO_LEVEL);
   const gainedLevels = level - 1;
   const compensation = Math.round(growthCompensation(input.star, level));
   const automatic = classGrowthPoints(AUTO_GROWTH_PER_LEVEL * gainedLevels + compensation, input.heroClass);
@@ -442,7 +443,7 @@ export function eligibleClasses(base: BaseStats, level: number, star: StarRating
   return classes;
 }
 
-/** Weighted class roll at summon; Mage only appears on SPECIAL/LIMITED banners. */
+/** Weighted class roll at summon, independent of summon payment method. */
 export function rollSummonClass(
   star: StarRating,
   bannerKind: BannerKind = 'STANDARD',

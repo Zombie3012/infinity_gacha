@@ -1,3 +1,5 @@
+> Updated contract (2026-11-22): [Hero Chronicle, mortality and 1-7 star rarity](../HERO_CHRONICLE.md) supersedes the legacy origin-based death/duplicate rules and Divine Grace sections below. All Heroes die as DEAD and drop equipped gear; one RESURRECTION_GEM_7 revives to full HP with no Silver fee or escalating cycle. NORMAL/SPECIAL/LIMITED remain payment/banner types only.
+
 # Acceptance Criteria Specification — Phase P0
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -287,21 +289,17 @@ This document specifies the exact, testable **Acceptance Criteria (AC)** for all
 ### UC-P0-11: Resolve Hero Death
 **Covered Functions:** `FUN-04-01-001`, `FUN-04-01-002`, `FUN-04-01-003`, `FUN-04-01-004`, `FUN-04-01-005`, `FUN-04-01-006`
 
-#### Scenario 11.1: Permadeath of Normal Hero with Equipment Drop
-- **Given** a Hero with `summon_origin = 'NORMAL'` and `status = 'ALIVE'` equipped with a sword and shield.
-- **When** HP reaches 0 in battle and combat finishes.
-- **Then** the Hero's status updates to `status = 'DEAD'`, and `death_at` is set to `NOW()`.
-- **And** each equipped item is moved to a `FLOOR_DROP` at the current World and floor, and is not available in inventory until picked up.
-- **And** the Master can retrieve the drop from their own World and move it to inventory.
-- **And** a `hero_death_records` row is inserted with `death_type = 'PERMADEATH'` and a snapshot of dropped items.
-- **And** previously spent upgrade/training resources are strictly NOT refunded.
+#### Scenario 11.1: Unified death and equipment drop
+- **Given** any living Hero, regardless of summon payment source, equipped with a sword and shield.
+- **When** HP reaches zero in combat and the outcome settles.
+- **Then** state becomes DEAD, equipped gear moves to FLOOR_DROP on the actual World/floor, and hero_death_records stores DEATH with the gear snapshot.
+- **And** party/work/rest/treatment assignments are cleared; development costs are not refunded.
+- **And** Hero Chronicle retains the instance biography and appends DIED.
 
-#### Scenario 11.2: Disabled State for Special or Limited Hero
-- **Given** a Hero with `summon_origin = 'LIMITED'` or `'SPECIAL'`.
-- **When** HP reaches 0 in battle.
-- **Then** Hero status updates to `status = 'DISABLED'`.
-- **And** equipped gear is NOT dropped.
-- **And** Hero becomes ineligible for active party slots until recovered.
+#### Scenario 11.2: Resurrection preserves the death history
+- **Given** an existing deceased instance and one RESURRECTION_GEM_7.
+- **When** resurrection settles.
+- **Then** the Hero returns HEALTHY with full HP; Chronicle appends RESURRECTED. Silver and already dropped gear remain unchanged.
 
 ---
 

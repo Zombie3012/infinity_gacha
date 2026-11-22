@@ -62,7 +62,7 @@ func _ready() -> void:
 func setup(data: Dictionary, mode: ContextMode = ContextMode.DEFAULT, can_select: bool = false) -> void:
 	hero_data = data
 	context_mode = mode
-	selectable = can_select
+	selectable = can_select and GameState.is_hero_alive(data)
 	_custom_badges.clear()
 	_rebuild_ui()
 
@@ -107,6 +107,7 @@ func set_status_bar(current_val: float, max_val: float, label_text: String, bar_
 
 func _rebuild_ui() -> void:
 	for c in get_children():
+		remove_child(c)
 		c.queue_free()
 
 	var star: int = int(hero_data.get("rarity", 1))
@@ -199,7 +200,7 @@ func _rebuild_ui() -> void:
 
 	_avatar_canvas = Control.new()
 	_avatar_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_avatar_canvas.draw.connect(_on_avatar_canvas_draw)
+	_avatar_canvas.draw.connect(_on_avatar_canvas_draw.bind(_avatar_canvas))
 	_avatar_box.add_child(_avatar_canvas)
 
 	# Center Hero Silhouette / Icon
@@ -223,15 +224,14 @@ func _rebuild_ui() -> void:
 		_avatar_box.add_child(awk_lbl)
 
 	# Dead / Disabled status overlay
-	var hero_state_str: String = str(hero_data.get("state", "HEALTHY")).to_upper()
-	if hero_state_str == "DEAD" or hero_state_str == "DISABLED":
+	if not GameState.is_hero_alive(hero_data):
 		var dead_panel := PanelContainer.new()
 		dead_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 		var dp_style := StyleBoxFlat.new()
 		dp_style.bg_color = Color(0.4, 0.05, 0.05, 0.75)
 		dead_panel.add_theme_stylebox_override("panel", dp_style)
 		var dead_lbl := Label.new()
-		dead_lbl.text = "TỬ TRẬN" if hero_state_str == "DEAD" else "THƯƠNG NẶNG"
+		dead_lbl.text = GameState.hero_life_label(hero_data)
 		dead_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		dead_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		dead_lbl.add_theme_font_size_override("font_size", 13)
@@ -317,6 +317,9 @@ func _rebuild_ui() -> void:
 	_set_children_mouse_filter_ignore(self)
 
 func _apply_context_rules() -> void:
+	if not GameState.is_hero_alive(hero_data):
+		set_status_bar(0, float(hero_data.get("maxHp", 100)), GameState.hero_life_label(hero_data) + " · HP: 0", Color(0.65, 0.2, 0.2))
+		return
 	match context_mode:
 		ContextMode.RECOVERY:
 			var cur_hp: float = float(hero_data.get("hp", 100))
@@ -495,21 +498,21 @@ func _update_selection_visual() -> void:
 			_checkbox_icon.text = "☐"
 			_checkbox_icon.add_theme_color_override("font_color", Color(0.6, 0.68, 0.78))
 
-func _on_avatar_canvas_draw() -> void:
-	if _avatar_canvas == null:
+func _on_avatar_canvas_draw(canvas: Control) -> void:
+	if not is_instance_valid(canvas):
 		return
-	var c: Vector2 = _avatar_canvas.size / 2.0
+	var c: Vector2 = canvas.size / 2.0
 	var star: int = int(hero_data.get("rarity", 1))
 	var col: Color = _get_rarity_color(star)
 	var ring_col := Color(col.r, col.g, col.b, 0.22)
 	var thin_col := Color(col.r, col.g, col.b, 0.12)
 
-	_avatar_canvas.draw_arc(c, 42.0, 0.0, TAU, 36, ring_col, 1.2, true)
-	_avatar_canvas.draw_arc(c, 30.0, 0.0, TAU, 28, thin_col, 1.0, true)
-	_avatar_canvas.draw_line(c - Vector2(48.0, 0.0), c - Vector2(36.0, 0.0), thin_col, 1.0, true)
-	_avatar_canvas.draw_line(c + Vector2(36.0, 0.0), c + Vector2(48.0, 0.0), thin_col, 1.0, true)
-	_avatar_canvas.draw_line(c - Vector2(0.0, 48.0), c - Vector2(0.0, 36.0), thin_col, 1.0, true)
-	_avatar_canvas.draw_line(c + Vector2(0.0, 36.0), c + Vector2(0.0, 48.0), thin_col, 1.0, true)
+	canvas.draw_arc(c, 42.0, 0.0, TAU, 36, ring_col, 1.2, true)
+	canvas.draw_arc(c, 30.0, 0.0, TAU, 28, thin_col, 1.0, true)
+	canvas.draw_line(c - Vector2(48.0, 0.0), c - Vector2(36.0, 0.0), thin_col, 1.0, true)
+	canvas.draw_line(c + Vector2(36.0, 0.0), c + Vector2(48.0, 0.0), thin_col, 1.0, true)
+	canvas.draw_line(c - Vector2(0.0, 48.0), c - Vector2(0.0, 36.0), thin_col, 1.0, true)
+	canvas.draw_line(c + Vector2(0.0, 36.0), c + Vector2(0.0, 48.0), thin_col, 1.0, true)
 
 func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:

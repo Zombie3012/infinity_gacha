@@ -48,15 +48,9 @@ test('Combat v2 - server summon build', async (t) => {
     assert.equal(build.elementAffinity, null);
   });
 
-  await t.test('refuses locked 6-7 star templates', () => {
-    assert.throws(
-      () => buildSummonedHero({ template: { ...mageTemplate, defaultRarity: 6 } }),
-      error => error.message === HERO_STAR_LOCKED,
-    );
-    assert.throws(
-      () => buildSummonedHero({ template: { ...thiefTemplate, defaultRarity: 7 } }),
-      error => error.message === HERO_STAR_LOCKED,
-    );
+  await t.test('builds enabled 6-7 star templates', () => {
+    assert.equal(buildSummonedHero({template: {...mageTemplate, defaultRarity: 6}}).star, 6);
+    assert.equal(buildSummonedHero({template: {...thiefTemplate, defaultRarity: 7}}).star, 7);
   });
 
   await t.test('1-star templates always build an unclassified Hero', () => {

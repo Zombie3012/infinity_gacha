@@ -4,6 +4,10 @@ extends Node
 var _checks: int = 0
 var _failures: int = 0
 
+class RecoveryFixture extends "res://scripts/ui/recovery_center_modal.gd":
+	func refresh_facility_data() -> void:
+		_update_hero_list(GameState.heroes)
+
 func expect(condition: bool, description: String) -> void:
 	_checks += 1
 	if not condition:
@@ -53,6 +57,26 @@ func _run() -> void:
 	expect(map_screen._report_rows.is_empty(), "Null battle identifiers do not create fake reports")
 	expect(map_screen._deploy.disabled and map_screen._edit.disabled, "A deployed party cannot be redeployed or edited")
 	expect(not map_screen._recall.disabled, "An idle deployed squad can be recalled")
+	PveState.snapshot["devToolsEnabled"] = true
+	PveState.snapshot["teleportStones"] = 1
+	PveState.snapshot["squads"][0]["canRecall"] = false
+	PveState.snapshot["squads"][0]["recallBlockReason"] = "ERR_PVE_RECALL_LOCKED"
+	PveState.snapshot["map"]["recallPolicy"] = "UNTIL_COMPLETE"
+	map_screen._render_state()
+	expect(map_screen._recall.disabled and not map_screen._auto.disabled, "Floor recall lock does not disable auto commands")
+	expect(map_screen._stone.disabled and map_screen._reset_tower.visible, "Locked floor blocks stone placement while dev reset remains available")
+	PveState.snapshot["map"]["recallPolicy"] = "FREE"
+	PveState.snapshot["squads"][0]["canRecall"] = true
+	PveState.snapshot["squads"][0]["atRecallPoint"] = true
+	PveState.snapshot["squads"][0]["pursued"] = true
+	map_screen._render_state()
+	expect(not map_screen._recall.disabled and map_screen._stone.disabled, "A point on an ordinary floor permits pursued recall without another stone")
+	PveState.snapshot["devToolsEnabled"] = false
+	PveState.snapshot["squads"][0].erase("canRecall")
+	PveState.snapshot["squads"][0].erase("atRecallPoint")
+	PveState.snapshot["squads"][0].erase("pursued")
+	map_screen._render_state()
+	expect(not map_screen._reset_tower.visible, "Production server capability hides the developer reset")
 	var victory_notice: Dictionary = PveState._event_notice("BATTLE_COMPLETED", {"squadId": "ui-squad", "winner": "HERO", "silverReward": 12, "heroExpReward": 5})
 	expect(str(victory_notice.get("message", "")).contains("Team") and str(victory_notice.get("message", "")).contains("12 Silver"), "Battle notices identify the squad and committed rewards")
 	expect(bool(PveState._event_notice("SQUAD_EXHAUSTED", {"squadId": "ui-squad"}).get("error", false)), "Exhaustion creates a visible warning rather than a silent idle squad")
@@ -64,6 +88,30 @@ func _run() -> void:
 	PveState.connected = false
 	PveState.command_changed.emit()
 	expect(map_screen._tiles.all(func(button): return button.disabled), "Disconnect disables movement controls")
+	PveState.connected = true
+	PveState.snapshot["squads"][0]["status"] = "IDLE"
+	PveState.snapshot["squads"][0]["areaId"] = "region:0"
+	PveState.snapshot["squads"][0]["pursued"] = true
+	var region_tiles: Array = []
+	for index in range(400):
+		region_tiles.append({"id": index, "x": index % 20, "y": index / 20, "kind": "EMPTY"})
+	PveState.snapshot["areas"] = [
+		{"id": "floor", "name": "Tầng", "parentAreaId": null, "width": 12, "height": 12, "tiles": tiles},
+		{"id": "region:0", "name": "Khu vực", "parentAreaId": "floor", "width": 20, "height": 20, "metersPerTile": 50, "tiles": region_tiles,
+			"portals": [{"id": "exit", "x": 0, "y": 0, "label": "Ra ngoài"}]}]
+	PveState.snapshot["objective"] = {"type": "DEFEAT_BOSS", "progress": 0, "required": 1, "status": "ACTIVE"}
+	PveState.snapshot_changed.emit()
+	expect(map_screen._tiles.size() == 400 and map_screen._grid.columns == 20, "Detail map changes dimensions to 20 by 20")
+	expect(map_screen._breadcrumbs.get_child_count() == 2, "Detail map shows parent navigation")
+	expect(map_screen._portal_actions.get_child_count() == 1, "Standing at a portal provides an explicit action")
+	expect(map_screen._recall.disabled and not map_screen._auto.disabled, "Pursuit blocks recall while auto remains controllable")
+	map_screen._view_area_id = "floor"
+	map_screen._render_state()
+	expect(map_screen._tiles.all(func(button): return button.disabled), "Browsing another area cannot issue movement there")
+	PveState.snapshot["areas"].append({"id": "interior:0", "name": "Công trình", "parentAreaId": "region:0", "width": 8, "height": 8, "metersPerTile": 5, "tiles": []})
+	PveState.snapshot["squads"][0]["areaId"] = "interior:0"
+	PveState.snapshot_changed.emit()
+	expect(map_screen._tiles.size() == 64 and map_screen._breadcrumbs.get_child_count() == 3, "Selected squad entering a building follows to its 8 by 8 interior")
 	PveState.snapshot["squads"] = []
 	PveState.connected = true
 	map_screen.queue_free()
@@ -162,6 +210,31 @@ func _run() -> void:
 	expect(dorm._hero_browser.extra_action_box.get_child_count() == 3, "Preconfigured facility action buttons remain attached and visible")
 	expect(dorm._hero_browser.header_title_label.text.contains("Nghỉ"), "Browser initialization preserves a preconfigured facility heading")
 	dorm.queue_free()
+	await get_tree().process_frame
+	var recovery: Control = RecoveryFixture.new()
+	var injured := {"id": "medical-alive", "name": "Injured", "state": "INJURED", "hp": 30, "maxHp": 100}
+	var dead := {"id": "medical-dead", "name": "Dead", "state": "DEAD", "hp": 0, "maxHp": 100}
+	var disabled := {"id": "medical-disabled", "name": "Disabled", "state": "DISABLED", "hp": 0, "maxHp": 100}
+	GameState.heroes = [injured, dead, disabled, GameState.heroes[0]]
+	add_child(recovery)
+	await get_tree().process_frame
+	expect(recovery.browser.all_items.size() == 1 and recovery.browser.all_items[0]["id"] == "medical-alive", "Recovery excludes dead, disabled and deployed Heroes")
+	recovery._on_auto_select_pressed()
+	expect(recovery.browser.get_selected_items().size() == 1, "Recovery auto-select chooses only a living eligible Hero")
+	injured["state"] = "DEAD"
+	injured["hp"] = 0
+	EventBus.heroes_updated.emit(GameState.heroes)
+	expect(recovery.browser.all_items.is_empty() and recovery.browser.get_selected_items().is_empty(), "A new death removes the Hero and stale selection from an open Recovery Center")
+	expect(recovery.browser.confirm_action_btn.disabled, "Recovery treatment is disabled after the selected Hero dies")
+	await recovery._finish_treatment_batch({"admitted": ["hero-a", "hero-b"], "queued": ["hero-c"], "errors": []})
+	expect(recovery.banner_label.text.contains("2 Hero vào giường") and recovery.banner_label.text.contains("1 Hero vào hàng chờ"), "Treatment result counts API arrays without casting them to int")
+	await recovery._finish_treatment_batch({"admitted": [], "queued": [], "errors": [{"heroId": "hero-d", "message": "Hero đã tử trận"}]})
+	expect(recovery.banner_label.text.contains("0 Hero vào giường") and recovery.banner_label.text.contains("Hero đã tử trận"), "A failed batch shows the server reason after refreshing")
+	await recovery._finish_treatment_batch({"healed": ["hero-a", "hero-b"], "errors": []}, true)
+	expect(recovery.banner_label.text.contains("100% HP cho 2 Hero") and recovery.banner_label.text.contains("2 Bình Thuốc"), "Quick Heal reads healed IDs and the one-medicine-per-success contract")
+	await recovery._finish_treatment_batch({"healed": ["hero-a"], "errors": [{"heroId": "hero-b", "message": "Thiếu thuốc"}]}, true)
+	expect(recovery.banner_label.text.contains("1 Bình Thuốc") and recovery.banner_label.text.contains("Thiếu thuốc"), "Partial Quick Heal counts only successful treatments and retains failures")
+	recovery.queue_free()
 	await get_tree().process_frame
 	PveState.pending_command = {"masterId": "old-account", "key": "pending"}
 	PveState.selected_battle_id = "old-report"

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mulberry32 } from '@infiniti-gacha/shared';
+import { mulberry32, generatePveLayout } from '@infiniti-gacha/shared';
 import { resolveBattleV2 } from '../dist/modules/combat/combat-v2.engine.js';
 import { buildNow, cleanupAccount, createHero, createMaster, grantItems, pool, skipReason, sql, startHarness } from './helpers/harness.mjs';
 
@@ -23,7 +23,18 @@ async function fixture(t) {
     await harness.close();
   });
   const request = (path, options = {}) => harness.request(path, { token: master.token, ...options });
-  const command = (path, body = {}, key = randomUUID(), method = 'POST') => request(path, { method, body, headers: { 'Idempotency-Key': key } });
+  // This suite deliberately exercises persisted v1 floors; v2 has its own integration suite.
+  const legacyMaps = new Set();
+  const command = async (path, body = {}, key = randomUUID(), method = 'POST') => {
+    const result = await request(path, { method, body, headers: { 'Idempotency-Key': key } });
+    if (path === '/api/pve/enter' && result.status === 201 && !legacyMaps.has(result.body.mapId)) {
+      legacyMaps.add(result.body.mapId);
+      const world = (await sql('select world_seed from worlds where master_id=$1', [master.masterId])).rows[0];
+      await sql('update pve_maps set exploration=null, layout=$2::jsonb, discovered=$3::jsonb where id=$1',
+        [result.body.mapId, JSON.stringify(generatePveLayout(world.world_seed, result.body.floor, 1)), '[0,1,12]']);
+    }
+    return result;
+  };
   return { master, request, command };
 }
 
@@ -202,11 +213,12 @@ test('HTTP private PvE: discovery, three squads, retries, resource collisions an
   });
 });
 
-test('HTTP private PvE: permanent death, Special retention and repair of an emptied party', { skip: skipReason }, async t => {
+test('HTTP private PvE: uniform death, gear drops and repair of an emptied party', { skip: skipReason }, async t => {
   const { master, request, command } = await fixture(t);
   const normal = await createHero(master.masterId, { name: 'Mortal', hp: 1, maxHp: 1, attack: 1, defense: 0, speed: 1 });
   const special = await createHero(master.masterId, { name: 'Immortal', category: 'SPECIAL', hp: 1, maxHp: 1, attack: 1, defense: 0, speed: 1 });
   const partyId = await party(master, [normal.id, special.id], 'Fallen Squad');
+  for (const h of [normal,special]) await sql("insert into hero_injuries (id,hero_id,master_id,severity,penalty_percent,natural_heal_at) values (gen_random_uuid()::text,$1,$2,'SEVERE',25,now()+interval '2 hours')",[h.id,master.masterId]);
   const template = (await sql('select code from equipment_templates where bonus_hp=0 order by code limit 1')).rows[0].code;
   const normalGear = randomUUID(); const specialGear = randomUUID();
   for (const [id, hero] of [[normalGear, normal], [specialGear, special]]) {
@@ -227,12 +239,13 @@ test('HTTP private PvE: permanent death, Special retention and repair of an empt
   assert.equal(report.body.settlement.silverReward, 0);
   const roster = (await sql('select id,state,hp from heroes where id=any($1::varchar[])', [[normal.id, special.id]])).rows;
   assert.equal(roster.find(hero => hero.id === normal.id).state, 'DEAD');
-  assert.equal(roster.find(hero => hero.id === special.id).state, 'DISABLED');
+  assert.equal(roster.find(hero => hero.id === special.id).state, 'DEAD');
+  assert.equal((await sql('select count(*)::int n from hero_injuries where hero_id=any($1::varchar[]) and healed_at is null',[[normal.id,special.id]])).rows[0].n,0,'death closes old injuries instead of leaving the casualty in healing candidates');
   const gear = (await sql('select id,location,equipped_hero_id,drop_floor from equipment_instances where id=any($1::varchar[])', [[normalGear, specialGear]])).rows;
   assert.equal(gear.find(item => item.id === normalGear).location, 'FLOOR_DROP');
   assert.equal(gear.find(item => item.id === normalGear).drop_floor, 1);
-  assert.equal(gear.find(item => item.id === specialGear).location, 'EQUIPPED');
-  assert.equal(gear.find(item => item.id === specialGear).equipped_hero_id, special.id);
+  assert.equal(gear.find(item => item.id === specialGear).location, 'FLOOR_DROP');
+  assert.equal(gear.find(item => item.id === specialGear).equipped_hero_id, null);
   assert.equal((await sql('select count(*)::int as n from combat_party_slots where party_id=$1', [partyId])).rows[0].n, 0);
   assert.equal((await sql('select count(*)::int as n from pve_hero_reservations where master_id=$1', [master.masterId])).rows[0].n, 0);
   assert.equal((await sql('select current_floor from worlds where master_id=$1 order by created_at limit 1', [master.masterId])).rows[0].current_floor, 1);
@@ -434,7 +447,7 @@ test('HTTP private PvE: recovered v2 Heroes enter encounters with their restored
     await sql(`update heroes set origin_stats='{"str":30,"int":20,"sta":30,"agi":20}',
       hp=100,current_hp_pct=0.2,mp=35,max_mp=100,current_mp_pct=0.35 where id=$1`, [hero.id]);
     await sql('update masters set silver_coins=200000 where id=$1', [master.masterId]);
-    await grantItems(master.masterId, { FOOD: 1000, MEDICINE: 1, DIVINE_TEAR: 5 });
+    await grantItems(master.masterId, { FOOD: 1000, MEDICINE: 1, RESURRECTION_GEM_7: 5 });
     let expectedHpPct = 1;
     if (mode === 'emergency') {
       const healed = await request('/api/medical/emergency', { method: 'POST', body: { heroId: hero.id } });
@@ -452,8 +465,8 @@ test('HTTP private PvE: recovered v2 Heroes enter encounters with their restored
       assert.equal(revived.filter(row => row.status === 200).length, 1, JSON.stringify(revived));
       assert.equal(revived.filter(row => row.status === 409).length, 2);
       assert.equal((await sql('select resurrection_count from hero_resurrection_cycles where hero_id=$1', [hero.id])).rows[0].resurrection_count, 1);
-      assert.equal((await sql("select quantity from master_items where master_id=$1 and item_id='DIVINE_TEAR'", [master.masterId])).rows[0].quantity, 4);
-      expectedHpPct = 0.5;
+      assert.equal((await sql("select quantity from master_items where master_id=$1 and item_id='RESURRECTION_GEM_7'", [master.masterId])).rows[0].quantity, 4);
+      expectedHpPct = 1;
     }
     const healed = (await sql('select hp,max_hp,current_hp_pct,current_mp_pct from heroes where id=$1', [hero.id])).rows[0];
     assert.equal(healed.current_hp_pct, expectedHpPct);
@@ -618,7 +631,8 @@ test('HTTP PvE auto can be stopped, and a loss never retries itself', { skip: sk
   const secondParty = await party(master, [reinforcement.id], 'Reinforcement');
   const second = (await command(`/api/pve/parties/${secondParty}/deploy`)).body.squadId;
   assert.equal((await command(`/api/pve/squads/${second}/auto`, { enabled: true })).status, 200);
-  await due(second);
+  // Settle only this first encounter; a random second enemy can otherwise be reached in six seconds.
+  await due(second, 0.02);
   const reinforced = await request('/api/pve/state');
   assert.equal(reinforced.status, 200, JSON.stringify(reinforced.body));
   assert.equal((await sql('select count(*)::int n from pve_battles where map_id=$1', [map.body.mapId])).rows[0].n, 2, 'another auto squad can attack an enemy previously visited by a defeated squad');

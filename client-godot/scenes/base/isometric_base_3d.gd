@@ -1,5 +1,16 @@
 extends Node3D
 
+var _scene_generation := 0
+
+func _enter_tree() -> void:
+	_scene_generation += 1
+
+func _exit_tree() -> void:
+	_scene_generation += 1
+
+func _scene_is_current(generation: int) -> bool:
+	return is_inside_tree() and not is_queued_for_deletion() and generation == _scene_generation
+
 ## Isometric 3D Seamless 2-Tier Castle Lobby (Pick Me Up: Infinite Gacha Architecture)
 ## - Seamless 2-Tier Castle (No Split Rendering - 100% Visible at all times):
 ##   * Tier 1 (Hạ Thành - East): 100m x 100m (X in [-50.0, +50.0], Z in [-50.0, +50.0], Y = 0.0)
@@ -29,6 +40,8 @@ const DormitoryModalScript := preload("res://scripts/ui/dormitory_modal.gd")
 const TrainingCenterModalScript := preload("res://scripts/ui/training_center_modal.gd")
 const PlayerProfileModalScript := preload("res://scripts/ui/player_profile_modal.gd")
 const SummonBannerModalScript := preload("res://scripts/ui/summon_banner_modal.gd")
+const BuildingLabelStyle := preload("res://scripts/base/building_label_style.gd")
+var _landmark_nameplates: Array[Label3D] = []
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
@@ -180,7 +193,6 @@ const DRAG_THRESHOLD_PX := 8.0
 # Lighting / Ambiance state (0 = Day, 1 = Sunset, 2 = Night Campfire)
 var _lighting_mode: int = 0
 var _bonfire_time: float = 0.0
-var _auto_poll_timer: float = 0.0
 
 func _ready() -> void:
 	if camera_rig != null:
@@ -196,6 +208,7 @@ func _ready() -> void:
 	_load_or_init_castle_grid_layout()
 	_setup_grand_citadel_floor1()
 	_setup_landmark_metadata()
+	_style_landmark_labels()
 	_spawn_stacked_3d_floors_and_plots()
 	_setup_grid_overlay_and_roads()
 	_apply_all_grid_transforms()
@@ -249,10 +262,6 @@ func _ready() -> void:
 	_building_action_bar.collect_pressed.connect(_on_action_bar_collect_pressed)
 	_building_action_bar.build_pressed.connect(_on_action_bar_build_pressed)
 	_building_action_bar.expand_zone_pressed.connect(_on_action_bar_expand_zone_pressed)
-	_building_action_bar.timer_clicked.connect(func(_b_data):
-		status_banner_label.text = "⏳ Công trình đang trong quá trình nâng cấp..."
-		_poll_construction_progress()
-	)
 	_building_action_bar.closed.connect(_on_action_bar_closed)
 	$HUD.add_child(_building_action_bar)
 
@@ -262,9 +271,12 @@ func _ready() -> void:
 	_spawn_resident_heroes()
 	_apply_floor_focus_isolation(_current_lobby_floor, false, 0)
 
+	var generation := _scene_generation
 	var demo_ok := await GameState.ensure_demo_session()
+	if not _scene_is_current(generation): return
 	if demo_ok:
 		await _sync_all_from_backend()
+		if not _scene_is_current(generation): return
 		status_banner_label.text = "🏰 Lâu Đài 2 Tầng Liền Khối (100×100 Hạ Thành + 60×100 Thượng Thành) — Tự do đặt Công trình & Lát Đường trên lưới!"
 	else:
 		status_banner_label.text = "⚠️ KHÔNG THỂ KẾT NỐI SERVER BACKEND (PORT 3000)! Vui lòng kiểm tra lại server."
@@ -1111,6 +1123,17 @@ func _setup_grand_citadel_floor1() -> void:
 		i_shape.shape = ishape
 		i_shape.position = Vector3(0.0, 2.25, 0.0)
 
+func _style_landmark_labels() -> void:
+	var label_style = preload("res://scripts/base/building_label_style.gd")
+	var labels := {"BonfireLabel": "Quảng trường", "AltarLabel": "Đài triệu hồi", "BarracksLabel": "Nhà chiến lược", "InfirmaryLabel": "Trung tâm hồi phục", "PortalLabel": "Chinh phạt"}
+	for node in $BaseArchitecture.find_children("*", "Label3D", true, false):
+		if labels.has(str(node.name)):
+			node.text = labels[str(node.name)]
+			label_style.apply(node, 56)
+			_landmark_nameplates.append(node)
+		elif str(node.name) in ["AltarSubLabel", "PortalSubLabel"]:
+			node.visible = false
+
 func _setup_landmark_metadata() -> void:
 	bonfire_body.set_meta("interactable_type", "LANDMARK")
 	bonfire_body.set_meta("landmark_code", "FOUNTAIN")
@@ -1537,6 +1560,7 @@ func _set_road_at_cell(gx: int, gz: int, place_road: bool) -> bool:
 		return true
 
 func _apply_all_grid_transforms() -> void:
+	if not is_inside_tree() or is_queued_for_deletion(): return
 	var arch := $BaseArchitecture
 	if arch == null:
 		return
@@ -1581,6 +1605,7 @@ func _apply_all_grid_transforms() -> void:
 	# 5. All 48 Plot Nodes
 	for p_num in _plot_nodes.keys():
 		var plot_node: BasePlot3D = _plot_nodes[p_num]
+		if not is_instance_valid(plot_node) or not plot_node.is_inside_tree() or plot_node.is_queued_for_deletion(): continue
 		var p_key := "PLOT:%d" % int(p_num)
 		if not _grid_structures.has(p_key):
 			var def_c := _get_default_plot_grid_coord(int(p_num))
@@ -1726,6 +1751,10 @@ func _apply_floor1_architecture_transparency(_trans: float) -> void:
 	_floor1_current_trans = 0.0
 
 func _process(delta: float) -> void:
+	var label_camera := get_viewport().get_camera_3d()
+	if label_camera != null:
+		for label in _landmark_nameplates:
+			BuildingLabelStyle.fit(label, label_camera, 20.0)
 	_bonfire_time += delta * 2.2
 	if bonfire_light != null:
 		var base_energy := 3.2 if _lighting_mode == 2 else (2.4 if _lighting_mode == 1 else 1.8)
@@ -1733,40 +1762,20 @@ func _process(delta: float) -> void:
 	if dungeon_portal_mesh != null:
 		dungeon_portal_mesh.rotate_z(delta * 0.85)
 
-	_auto_poll_timer += delta
-	if _auto_poll_timer >= 6.0:
-		_auto_poll_timer = 0.0
-		if _has_pending_construction() and GameState.is_logged_in():
-			_poll_construction_progress()
-
-func _has_pending_construction() -> bool:
-	var buildings: Array = GameState.base_overview.get("buildings", [])
-	for b in buildings:
-		if b is Dictionary:
-			var st := str(b.get("status", "READY"))
-			if st == "CONSTRUCTING" or st == "UPGRADING":
-				return true
-	return false
-
-func _poll_construction_progress() -> void:
-	var ok := await GameState.refresh_base_overview()
-	if ok:
-		_refresh_hud()
-		_refresh_3d_plots()
-		_re_render_inspector_if_open()
-
 func _sync_all_from_backend() -> void:
-	await GameState.refresh_profile()
-	await GameState.refresh_base_overview()
-	await GameState.refresh_inventory()
-	await GameState.refresh_crafting()
-	await GameState.refresh_equipment()
-	await GameState.refresh_heroes()
-	await GameState.refresh_party()
+	var generation := _scene_generation
+	if not _scene_is_current(generation): return
+	for refresh in _backend_refresh_steps():
+		await refresh.call()
+		if not _scene_is_current(generation): return
 	_refresh_hud()
 	_refresh_3d_plots()
 	_spawn_resident_heroes()
 	_re_render_inspector_if_open()
+
+func _backend_refresh_steps() -> Array[Callable]:
+	return [GameState.refresh_profile, GameState.refresh_base_overview, GameState.refresh_inventory,
+		GameState.refresh_crafting, GameState.refresh_equipment, GameState.refresh_heroes, GameState.refresh_party]
 
 func _format_num(val: int) -> String:
 	var s := str(val)
@@ -1982,6 +1991,7 @@ func _open_player_profile_modal(tab_idx: int = 0) -> void:
 	)
 
 func _refresh_3d_plots() -> void:
+	if not is_inside_tree() or is_queued_for_deletion(): return
 	var unlocked_plot_count := GameState.unlocked_plots
 	var built_cnt := _get_constructed_building_count()
 
@@ -1997,6 +2007,7 @@ func _refresh_3d_plots() -> void:
 	var has_medical_plot := false
 	for plot_num in _plot_nodes.keys():
 		var plot_node: BasePlot3D = _plot_nodes[plot_num]
+		if not is_instance_valid(plot_node) or not plot_node.is_inside_tree() or plot_node.is_queued_for_deletion(): continue
 		var is_unlocked := int(plot_num) <= unlocked_plot_count
 		var b_data := GameState.get_building_on_plot(int(plot_num))
 		if not b_data.is_empty() and str(b_data.get("buildingType", "")) == "MEDICAL":
@@ -2013,6 +2024,7 @@ func _refresh_3d_plots() -> void:
 const MAX_HEROES_PER_FLOOR := 6
 
 func _spawn_resident_heroes() -> void:
+	if not is_inside_tree() or is_queued_for_deletion(): return
 	for child in heroes_container.get_children():
 		child.queue_free()
 	_hero_actors.clear()
@@ -2026,7 +2038,7 @@ func _spawn_resident_heroes() -> void:
 		]
 
 	var worker_map := GameState.get_worker_assignment_map()
-	roster = roster.filter(func(hero): return not GameState.is_hero_pve_deployed(hero) and str(hero.get("state", "HEALTHY")) not in ["DEAD", "DISABLED"])
+	roster = roster.filter(func(hero): return GameState.is_hero_available(hero))
 	var floor_heroes: Dictionary = { 1: [], 2: [] }
 	var assigned_hero_ids: Dictionary = {}
 
@@ -2036,7 +2048,7 @@ func _spawn_resident_heroes() -> void:
 			if assigned_hero_ids.has(hid):
 				continue
 			var h_data := GameState.get_hero_by_id(hid)
-			if not h_data.is_empty() and not GameState.is_hero_pve_deployed(h_data) and str(h_data.get("state", "HEALTHY")) not in ["DEAD", "DISABLED"] and floor_heroes[f].size() < MAX_HEROES_PER_FLOOR:
+			if GameState.is_hero_available(h_data) and floor_heroes[f].size() < MAX_HEROES_PER_FLOOR:
 				floor_heroes[f].append(h_data)
 				assigned_hero_ids[hid] = f
 
@@ -2616,9 +2628,9 @@ func _get_or_pick_facility_hero() -> Dictionary:
 		return {}
 	if _selected_facility_hero_id != "":
 		var found := GameState.get_hero_by_id(_selected_facility_hero_id)
-		if not found.is_empty() and not GameState.is_hero_pve_deployed(found):
+		if GameState.is_hero_available(found):
 			return found
-	var available: Array = GameState.heroes.filter(func(hero): return not GameState.is_hero_pve_deployed(hero))
+	var available: Array = GameState.heroes.filter(func(hero): return hero is Dictionary and GameState.is_hero_available(hero))
 	if available.is_empty():
 		_selected_facility_hero_id = ""
 		return {}
@@ -2649,7 +2661,8 @@ func _render_hero_selector_row(prompt_text: String = "🎯 Chọn Hero thao tác
 	var pick_btn := Button.new()
 	pick_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pick_btn.custom_minimum_size = Vector2(0, 34)
-	pick_btn.text = "👥 Đổi Hero Khác (%d Tướng Sảnh Chờ)" % GameState.heroes.size()
+	var available_heroes: Array = GameState.heroes.filter(func(hero): return hero is Dictionary and GameState.is_hero_available(hero))
+	pick_btn.text = "👥 Đổi Hero Khác (%d Tướng Sảnh Chờ)" % available_heroes.size()
 	pick_btn.modulate = Color(0.75, 0.95, 1.0)
 	pick_btn.pressed.connect(func():
 		_open_hero_picker_for_facility(ctx_mode, allowed_classes)
@@ -2660,9 +2673,9 @@ func _render_hero_selector_row(prompt_text: String = "🎯 Chọn Hero thao tác
 	var quick_row := HBoxContainer.new()
 	quick_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	quick_row.add_theme_constant_override("separation", 4)
-	var quick_limit := mini(GameState.heroes.size(), 4)
+	var quick_limit := mini(available_heroes.size(), 4)
 	for i in range(quick_limit):
-		var h: Dictionary = GameState.heroes[i]
+		var h: Dictionary = available_heroes[i]
 		var hid := str(h.get("id", ""))
 		var hname := str(h.get("name", "Hero"))
 		var is_sel := (hid == _selected_facility_hero_id)
@@ -3058,6 +3071,22 @@ func _on_action_bar_upgrade_pressed(b_data: Dictionary) -> void:
 
 func _on_action_bar_facility_pressed(b_data: Dictionary, action_code: String) -> void:
 	match action_code:
+		"HALL_OF_MAGIC":
+			var existing = $HUD.get_node_or_null("MagicHallModal")
+			if existing != null: return
+			var magic = preload("res://scripts/ui/magic_hall_modal.gd").new()
+			magic.name = "MagicHallModal"
+			magic.setup(b_data)
+			magic.closed.connect(func(): await _sync_all_from_backend())
+			$HUD.add_child(magic)
+		"SHOP_AIRSHIP":
+			var shop = preload("res://scripts/ui/airship_shop_modal.gd").new()
+			shop.closed.connect(func(): await _sync_all_from_backend())
+			$HUD.add_child(shop)
+		"HERO_CHRONICLE":
+			var modal = preload("res://scripts/ui/hero_chronicle_modal.gd").new()
+			modal.closed.connect(func(): await _sync_all_from_backend())
+			$HUD.add_child(modal)
 		"KITCHEN":
 			_open_kitchen_modal(b_data)
 		"MEDICAL":
@@ -3148,7 +3177,7 @@ func _open_dormitory_modal(b_data: Dictionary) -> void:
 	)
 	modal.squad_rest_requested.connect(func(is_resting):
 		for hid in GameState.active_party_ids:
-			if GameState.is_hero_pve_deployed(GameState.get_hero_by_id(str(hid))):
+			if not GameState.is_hero_available(GameState.get_hero_by_id(str(hid))):
 				continue
 			var hname := "Hero"
 			for h in GameState.heroes:
@@ -3331,9 +3360,8 @@ func _render_legacy_plot_inspector(plot_node: BasePlot3D) -> void:
 			var quick_workers: Array = []
 			for h in GameState.heroes:
 				var hid := str(h.get("id", ""))
-				var hstate := str(h.get("state", "IDLE"))
 				var hclass := str(h.get("classCode", h.get("heroClass", "WARRIOR"))).to_upper()
-				if assigned_map.has(hid) or hstate == "DEAD":
+				if assigned_map.has(hid) or not GameState.is_hero_available(h):
 					continue
 				if b_code == "LIBRARY" and hclass != "MAGE":
 					continue
@@ -3400,18 +3428,6 @@ func _render_specialized_facility_section(building_id: String, b_code: String, b
 
 		"HALL_OF_MAGIC":
 			_render_hall_of_magic_subwings(building_id, b_lvl)
-
-		"LIBRARY":
-			_add_inspector_section_header("📚 1. THƯ VIỆN MA THUẬT (LIBRARY Lv.%d/3)" % b_lvl, Color(0.55, 0.88, 1.0))
-			_render_library_actions(building_id, b_lvl)
-
-		"ALCHEMY_WORKSHOP":
-			_add_inspector_section_header("⚗️ 2. XƯỞNG GIẢ KIM (ALCHEMY WORKSHOP Lv.%d/3)" % b_lvl, Color(0.52, 0.95, 0.68))
-			_render_alchemy_workshop_actions(b_lvl)
-
-		"MAGIC_RESEARCH_LAB":
-			_add_inspector_section_header("✨ 3. PHÒNG NGHIÊN CỨU (RESEARCH LAB Lv.%d/3)" % b_lvl, Color(0.95, 0.62, 0.95))
-			_render_magic_research_actions(b_lvl)
 
 		"WAREHOUSE":
 			_render_warehouse_facility(b_lvl)
@@ -3721,193 +3737,27 @@ func _render_training_center_facility(b_lvl: int, b_status: String) -> void:
 func _render_hall_of_magic_subwings(building_id: String, b_lvl: int) -> void:
 	_add_inspector_section_header("🔮 ĐẠI SẢNH MA THUẬT (Lv.%d/3 • 2 NGƯỜI/PHÂN KHU = TỔNG 6)" % b_lvl, Color(0.82, 0.72, 1.0))
 	_add_inspector_info(
-		"• Mở khóa theo cấp Master, có 3 Level, mỗi phân khu tối đa 2 Hero (tổng cộng 6 Hero cho 3 phân khu).",
+		"• Ba phân khu nằm trong một đại sảnh, không cần xây riêng. Tối đa 6 Hero: ưu tiên 2 MAGE cho Thư viện, 2 người tiếp theo cho Giả kim, còn lại cho Nghiên cứu.",
 		Color(0.88, 0.80, 1.0)
 	)
+	for hall in GameState.base_overview.get("buildings", []):
+		if str(hall.get("id", "")) != building_id: continue
+		for output in hall.get("magicProduction", []):
+			var label := "Sách EXP" if str(output.get("wing", "")) == "LIBRARY" else "Đá cường hóa"
+			_add_inspector_info("• %s: %.1f/%d • +%.1f/giờ" % [label, float(output.get("stored", 0)), int(output.get("capacity", 0)), float(output.get("ratePerHour", 0))])
+	_add_inspector_button("🔮 Thu hoạch sản phẩm của đại sảnh", func(): _collect_building(building_id))
 	_add_inspector_tab_bar(["📚 1. Thư Viện", "⚗️ 2. Giả Kim", "✨ 3. Phòng Nghiên Cứu"])
 	var tab_idx := clampi(_facility_subtab, 0, 2)
 	if tab_idx == 0:
-		_render_library_actions(building_id, b_lvl)
+		_add_inspector_button("📚 Tu Luyện Ma Pháp • Đọc Sách EXP & Kỹ Năng", func(): _open_hall_subtab(building_id, 0))
 	elif tab_idx == 1:
-		_render_alchemy_workshop_actions(b_lvl)
+		_add_inspector_info("Đá Cường Hóa và công thức thuốc nằm trong Đại Sảnh. Chế thuốc cần nghiên cứu công thức, không yêu cầu nâng Đại Sảnh lên cấp 2.")
+		_add_inspector_button("⚗️ Điều Chế Bình Thuốc & Dùng Thuốc", func(): _open_hall_subtab(building_id, 1))
 	else:
-		_render_magic_research_actions(b_lvl)
+		_add_inspector_button("✨ Chuyển Chức • Thức Tỉnh & Cây Công Nghệ", func(): _open_hall_subtab(building_id, 2))
 
-func _render_library_actions(building_id: String, b_lvl: int) -> void:
-	var exp_100 := int(GameState.materials.get("SAMPLE_HERO_EXP_100", 0))
-	var exp_1000 := int(GameState.materials.get("SAMPLE_HERO_EXP_1000", 0))
-	var exp_10000 := int(GameState.materials.get("SAMPLE_HERO_EXP_10000", 0))
-	var skill_books := int(GameState.materials.get("SAMPLE_HERO_SKILL_BOOK", 0))
-	var prod_desc := "📘 100 Sách EXP Sơ Cấp/giờ" if b_lvl <= 1 else ("📗 50 Sách EXP Trung Cấp/giờ" if b_lvl == 2 else "📙 15 Sách EXP Cao Cấp/giờ")
-	var mage_exp_rate := 25000 if b_lvl <= 1 else (1250000 if b_lvl == 2 else 16500000)
-
-	_add_inspector_info(
-		"📚 [1. Thư Viện Ma Thuật – Library Lv.%d/3 (Tối đa 2 Hero hệ MAGE)]:\n" % b_lvl +
-		"• 🔮 Quy tắc: Chỉ Hero class MAGE mới được phân công vào Thư Viện & sản xuất Sách EXP!\n" +
-		"• Tự động sản xuất hiện tại: %s\n" % prod_desc +
-		"  (Lv.1: 100 Sách Sơ Cấp/h | Lv.2: 50 Sách Trung Cấp/h | Lv.3: 15 Sách Cao Cấp/h)\n" +
-		"• Pháp Sư (MAGE) tu luyện tăng cấp trực tiếp: +%s EXP/giờ\n" % _format_num(mage_exp_rate) +
-		"• Kho Sách: 📘 Sơ Cấp ×%d | 📗 Trung Cấp ×%d | 📙 Cao Cấp ×%d | 📕 Kỹ Năng ×%d" % [
-			exp_100, exp_1000, exp_10000, skill_books
-		],
-		Color(0.58, 0.9, 1.0)
-	)
-	var h := _get_or_pick_facility_hero()
-	if h.is_empty():
-		return
-	_render_hero_selector_row("📖 Chọn Hero lĩnh hội tại Thư Viện Ma Thuật:", UniversalHeroCardScript.ContextMode.LIBRARY)
-	var hid := str(h.get("id", ""))
-	var hname := str(h.get("name", "Hero"))
-	var hlvl := int(h.get("level", 1))
-	var hexp := int(h.get("exp", 0))
-	var hclass := str(h.get("classCode", h.get("heroClass", "WARRIOR"))).to_upper()
-	_add_inspector_info("• [%s] Hệ: %s | Cấp hiện tại: Lv.%d (EXP: %s)" % [hname, hclass, hlvl, _format_num(hexp)], Color(0.86, 0.94, 1.0))
-
-	if hclass == "MAGE":
-		_add_inspector_button(
-			"🔮 Tu Luyện Ma Pháp Cho %s (+%s EXP / 1 Giờ)" % [hname, _format_num(mage_exp_rate)],
-			func(): _study_mage_in_library(building_id, hid, hname)
-		)
-	else:
-		_add_inspector_info("ℹ️ Chỉ Hero class MAGE mới có thể tu luyện tăng cấp trực tiếp tại Thư Viện Ma Thuật.", Color(1.0, 0.82, 0.48))
-
-	_add_inspector_button(
-		"📘 Đọc Sách EXP Sơ Cấp (+1,000 EXP) Cho %s (Còn %d)" % [hname, exp_100],
-		func(): _use_exp_book_on_hero(hid, hname, "SAMPLE_HERO_EXP_100"),
-		exp_100 <= 0
-	)
-	if exp_1000 > 0 or b_lvl >= 2:
-		_add_inspector_button(
-			"📗 Đọc Sách EXP Trung Cấp (+100,000 EXP) Cho %s (Còn %d)" % [hname, exp_1000],
-			func(): _use_exp_book_on_hero(hid, hname, "SAMPLE_HERO_EXP_1000"),
-			exp_1000 <= 0
-		)
-	if exp_10000 > 0 or b_lvl >= 3:
-		_add_inspector_button(
-			"📙 Đọc Sách EXP Cao Cấp (+10,000,000 EXP) Cho %s (Còn %d)" % [hname, exp_10000],
-			func(): _use_exp_book_on_hero(hid, hname, "SAMPLE_HERO_EXP_10000"),
-			exp_10000 <= 0
-		)
-
-	var skills: Array = h.get("skills", [])
-	for sk in skills:
-		if sk is Dictionary:
-			var sk_code := str(sk.get("code", ""))
-			var sk_name := str(sk.get("name", sk_code))
-			var sk_lvl := int(sk.get("level", 0))
-			var sk_max := int(sk.get("maxLevel", 5))
-			var unlocked := bool(sk.get("unlocked", sk_lvl > 0))
-			if not unlocked:
-				_add_inspector_button(
-					"🔓 Nghiên Cứu Mở Khóa Kỹ Năng: %s" % sk_name,
-					func(): _unlock_hero_skill(hid, hname, sk_code, sk_name)
-				)
-			elif sk_lvl < sk_max:
-				_add_inspector_button(
-					"📕 Lĩnh Hội Nâng Cấp %s (Lv.%d → Lv.%d)" % [sk_name, sk_lvl, sk_lvl + 1],
-					func(): _upgrade_hero_skill(hid, hname, sk_code, sk_name)
-				)
-
-func _render_alchemy_workshop_actions(b_lvl: int) -> void:
-	var enh_stones := int(GameState.materials.get("ENHANCEMENT_STONE", 0))
-	var rations := int(GameState.materials.get("RATION", 0))
-	var raw_food := int(GameState.materials.get("RAW_FOOD", 0))
-	var stone_rate := 15 if b_lvl <= 1 else (30 if b_lvl == 2 else 60)
-	_add_inspector_info(
-		"⚗️ [2. Xưởng Giả Kim – Alchemy Workshop Lv.%d/3 (Tối đa 2 Hero)]:\n" % b_lvl +
-		"• Tự động điều chế Đá Cường Hóa: +%d viên/giờ (Lv.1: 15/h | Lv.2: 30/h | Lv.3: 60/h).\n" % stone_rate +
-		"• Chế tạo bình thuốc & vật phẩm tiêu hao: %s\n" % ("Đã mở khóa (Lv.2+)" if b_lvl >= 2 else "🔒 Mở khóa ở Level 2") +
-		"• Chuyển đổi nguyên liệu theo tỉ lệ: %s (Tính năng cập nhật sau)\n" % ("Sẵn sàng khung Lv.2+" if b_lvl >= 2 else "🔒 Mở khóa ở Level 2") +
-		"• Tồn kho: 💎 Đá Cường Hóa ×%d | 🧪 Khẩu phần/Dược phẩm ×%d | 🌾 Thảo dược ×%d" % [
-			enh_stones, rations, raw_food
-		],
-		Color(0.55, 0.96, 0.72)
-	)
-	_add_inspector_button(
-		"⚗️ Điều Chế Bình Thuốc & Vật Phẩm Tiêu Hao (Yêu cầu Lv.2+)",
-		func(): _cook_rations(5),
-		b_lvl < 2
-	)
-	_add_inspector_button(
-		"🔄 Chuyển Đổi Nguyên Liệu Theo Tỉ Lệ (Mở ở Lv.2 — Làm sau)",
-		func(): status_banner_label.text = "ℹ️ Tính năng Chuyển đổi nguyên liệu theo tỉ lệ sẽ được cập nhật ở bản tiếp theo!",
-		true
-	)
-	var h := _get_or_pick_facility_hero()
-	if not h.is_empty():
-		_render_hero_selector_row("🧪 Chọn Hero dùng Bình thuốc / Vật phẩm tiêu hao:", UniversalHeroCardScript.ContextMode.RECOVERY)
-		var hid := str(h.get("id", ""))
-		var hname := str(h.get("name", "Hero"))
-		var hp := int(h.get("hp", 100))
-		var mhp := int(h.get("maxHp", 100))
-		_add_inspector_button(
-			"🧪 Tiếp Tế Bình Thuốc Hồi Sức Cho %s (HP %d/%d)" % [hname, hp, mhp],
-			func(): _feed_hero(hid, hname),
-			rations <= 0 or b_lvl < 2
-		)
-
-func _render_magic_research_actions(b_lvl: int) -> void:
-	_add_inspector_info(
-		"✨ [3. Phòng Nghiên Cứu – Research Lab Lv.%d/3 (Tối đa 2 Hero)]:\n" % b_lvl +
-		"• Nghiên cứu các công nghệ ma导 & chiến thuật toàn Căn cứ.\n" +
-		"• Thực hiện Chuyển Chức (Class Change khi đạt Lv.20+).\n" +
-		"• Thức Tỉnh Huyết Mạch (Bloodline Awakening) cho Hero!",
-		Color(0.95, 0.68, 0.98)
-	)
-	var h := _get_or_pick_facility_hero()
-	if h.is_empty():
-		return
-	_render_hero_selector_row("🔮 Chọn Hero tại Phòng Nghiên Cứu:", UniversalHeroCardScript.ContextMode.RESEARCH)
-	var hid := str(h.get("id", ""))
-	var hname := str(h.get("name", "Hero"))
-	var hlvl := int(h.get("level", 1))
-	var hclass := str(h.get("classCode", h.get("heroClass", "UNCLASSIFIED")))
-	var awaken_lvl := int(h.get("awakeningRank", h.get("awakenLevel", 0)))
-	_add_inspector_info(
-		"• [%s] Hệ phái hiện tại: %s | Cấp: Lv.%d | Tầng Thức Tỉnh: +%d" % [hname, hclass, hlvl, awaken_lvl],
-		Color(0.96, 0.84, 1.0)
-	)
-
-	var aff_dict: Dictionary = h.get("elementAffinities", {}) if h.get("elementAffinities") is Dictionary else {}
-	if hclass.to_upper() == "MAGE" or not aff_dict.is_empty():
-		_add_inspector_info(
-			"🔮 Tương Thích 7 Nguyên Tố Pháp Sư (Mage Affinity):\n" +
-			"   🔥 Hỏa: %d | 💧 Thủy: %d | 🌪️ Phong: %d | 🪨 Địa: %d\n" % [
-				int(aff_dict.get("FIRE", 60)), int(aff_dict.get("WATER", 45)),
-				int(aff_dict.get("WIND", 40)), int(aff_dict.get("EARTH", 35))
-			] +
-			"   ☀️ Quang: %d | 🌑 Ám: %d | ⚡ Lôi: %d" % [
-				int(aff_dict.get("LIGHT", 50)), int(aff_dict.get("DARK", 30)),
-				int(aff_dict.get("LIGHTNING", 55))
-			],
-			Color(0.68, 0.94, 1.0)
-		)
-
-	var classes := ["WARRIOR", "KNIGHT", "MAGE", "RANGER", "ASSASSIN", "PRIEST"]
-	var class_grid := GridContainer.new()
-	class_grid.columns = 2
-	class_grid.add_theme_constant_override("h_separation", 6)
-	class_grid.add_theme_constant_override("v_separation", 6)
-	for target_cls in classes:
-		var cls_code := str(target_cls)
-		var btn := Button.new()
-		var is_current := hclass.to_upper() == cls_code
-		btn.text = ("✅ Hệ " + cls_code) if is_current else ("🔮 Chuyển " + cls_code)
-		btn.custom_minimum_size = Vector2(0, 32)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.disabled = is_current or hlvl < 20
-		btn.add_theme_font_size_override("font_size", 12)
-		btn.pressed.connect(func(): _perform_class_change(hid, hname, cls_code))
-		class_grid.add_child(btn)
-	inspector_action_container.add_child(class_grid)
-
-	if hlvl < 20:
-		_add_inspector_info("ℹ️ Hero cần đạt Lv.20 để mở khóa nghi thức Chuyển Chức.", Color(0.95, 0.78, 0.55))
-
-	_add_inspector_button(
-		"🌟 Thức Tỉnh Huyết Mạch (Awaken +%d → +%d) Cho %s" % [awaken_lvl, awaken_lvl + 1, hname],
-		func(): _awaken_hero(hid, hname)
-	)
+func _open_hall_subtab(building_id: String, index: int) -> void:
+	_on_action_bar_facility_pressed({"id": building_id, "initialTab": index}, "HALL_OF_MAGIC")
 
 func _render_warehouse_facility(b_lvl: int) -> void:
 	var bonus_slots := clampi(b_lvl, 1, 3) * 100
@@ -4197,7 +4047,7 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 			_building_action_bar.show_landmark(
 				"BARRACKS",
 				"🛡️ NHÀ CHIẾN LƯỢC (STRATEGIC HOUSE)",
-				"• Tổng số Tướng sở hữu: %d Tướng" % GameState.heroes.size(),
+				"• Tổng số Tướng sở hữu: %d Tướng" % GameState.owned_hero_count(),
 				[
 					{
 						"icon": "ℹ️", "label": "Thông tin", "color": Color(0.3, 0.75, 1.0),
@@ -4359,7 +4209,7 @@ func _construct_building_on_plot(building_type: String, plot_index: int) -> void
 		"plotIndex": plot_index
 	})
 	if res["ok"]:
-		status_banner_label.text = "✅ Khởi công [%s] thành công tại Ô #%d!" % [building_type, plot_index]
+		status_banner_label.text = "✅ Đã xây xong [%s] tại Ô #%d!" % [building_type, plot_index]
 		await _sync_all_from_backend()
 	else:
 		status_banner_label.text = "❌ Không thể xây dựng: " + str(res["error"])
@@ -4525,7 +4375,7 @@ func _upgrade_building(building_id: String) -> void:
 	status_banner_label.text = "⬆️ Đang nâng cấp công trình..."
 	var res := await ApiClient.post_req("/api/base/buildings/%s/upgrade" % building_id, {})
 	if res["ok"]:
-		status_banner_label.text = "✅ Đã bắt đầu nâng cấp công trình!"
+		status_banner_label.text = "✅ Đã nâng cấp xong công trình!"
 		await _sync_all_from_backend()
 	else:
 		status_banner_label.text = "❌ Không thể nâng cấp: " + str(res["error"])
@@ -4546,6 +4396,13 @@ func _collect_building(building_id: String) -> void:
 		var amt := int(res["data"].get("collected", 0))
 		var rtype := str(res["data"].get("resourceType", ""))
 		status_banner_label.text = "🌾 Thu hoạch thành công +%d %s!" % [amt, rtype]
+		if rtype == "MAGIC_OUTPUT":
+			var outputs := PackedStringArray()
+			var product_names := {"SAMPLE_HERO_EXP_100": "Sách EXP sơ cấp", "SAMPLE_HERO_EXP_1000": "Sách EXP trung cấp", "SAMPLE_HERO_EXP_10000": "Sách EXP cao cấp", "ENHANCEMENT_STONE": "Đá cường hóa"}
+			for output in res["data"].get("resources", []):
+				var product := str(output.get("resourceType", ""))
+				outputs.append("+%d %s" % [int(output.get("collected", 0)), str(product_names.get(product, "vật phẩm"))])
+			status_banner_label.text = "🔮 Đại sảnh đã thu: " + ", ".join(outputs) if not outputs.is_empty() else "🔮 Đại sảnh chưa có sản phẩm để thu."
 		await _sync_all_from_backend()
 	else:
 		status_banner_label.text = "❌ Không thể thu hoạch: " + str(res["error"])

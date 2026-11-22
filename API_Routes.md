@@ -1,6 +1,6 @@
 # API route inventory
 
-Generated from `packages/server/src/server.ts` (227 routes).
+Generated from `packages/server/src/server.ts` (233 routes).
 Errors use `{ "error": string }`; the string may be an error code or a readable message. Detailed schemas: [private PvE map](openapi.pve.yaml) and [Combat v2](openapi.combat-v2.yaml). PvE mutations require `Idempotency-Key`; map reads settle due arrivals. This inventory lists the remaining API coverage.
 
 | Method | Path | Auth | Feature |
@@ -88,6 +88,9 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | DELETE | `/api/base/buildings/:buildingId/workers/:heroId` | Bearer | — |
 | POST | `/api/base/expand` | Bearer | — |
 | GET | `/api/base/overview` | Bearer | — |
+| GET | `/api/chronicles/heroes` | Bearer | — |
+| GET | `/api/chronicles/heroes/:id` | Bearer | — |
+| POST | `/api/chronicles/heroes/:id/resurrect` | Bearer | — |
 | GET | `/api/combat/buffs` | Bearer | PVE_COMBAT |
 | GET | `/api/combat/party` | Bearer | PVE_COMBAT |
 | PUT | `/api/combat/party` | Bearer | PVE_COMBAT |
@@ -183,6 +186,7 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | PATCH | `/api/profile` | Bearer | — |
 | GET | `/api/pve/battles` | Bearer | PVE_COMBAT |
 | GET | `/api/pve/battles/:battleId` | Bearer | PVE_COMBAT |
+| POST | `/api/pve/dev/reset-tower` | Bearer | — |
 | POST | `/api/pve/enter` | Bearer | PVE_COMBAT |
 | POST | `/api/pve/parties` | Bearer | PVE_COMBAT |
 | PUT | `/api/pve/parties/:partyId` | Bearer | PVE_COMBAT |
@@ -190,7 +194,9 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | PUT | `/api/pve/parties/:partyId/plan` | Bearer | PVE_COMBAT |
 | POST | `/api/pve/squads/:squadId/auto` | Bearer | PVE_COMBAT |
 | POST | `/api/pve/squads/:squadId/move` | Bearer | PVE_COMBAT |
+| POST | `/api/pve/squads/:squadId/portal` | Bearer | PVE_COMBAT |
 | POST | `/api/pve/squads/:squadId/recall` | Bearer | PVE_COMBAT |
+| POST | `/api/pve/squads/:squadId/recall-point` | Bearer | PVE_COMBAT |
 | GET | `/api/pve/state` | Bearer | PVE_COMBAT |
 | GET | `/api/quests` | Bearer | — |
 | POST | `/api/quests/:code/accept` | Bearer | — |
@@ -232,4 +238,15 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | GET | `/api/world/territories/history` | Bearer | — |
 | GET | `/api/world/tiles/:tileId/defense` | Bearer | — |
 | GET | `/health` | public | — |
+
+# Giả kim và combat PvE thủ công
+
+- `GET /api/alchemy`: cây Giả kim, công thức, kho, cấu hình túi và định hướng Bến Thiên Hành.
+- `POST /api/alchemy/research`, `/craft`, `/configure`, `/use`: nghiên cứu, chế thuốc, cấu hình năm ô Hero, sử dụng ngoài trận; yêu cầu `Idempotency-Key`.
+- `POST /api/pve/consumables/use`: dùng ô tiêu hao của Hero trên map, hỗ trợ lệnh retry của Godot.
+- `POST /api/pve/battles/:battleId/action`: xem/rời điều khiển, chọn đánh thường/kỹ năng/mục tiêu hoặc dùng thuốc theo `turnKey`; yêu cầu `Idempotency-Key`.
+- `GET /api/pve/battles/:battleId`: hỗ trợ cả trận đang chờ (`live`, `deadline`, `report.pending`) và chiến báo đã quyết toán.
+- Lưu đội hỗ trợ `loadouts` theo Hero, `plan.battleMode` là `AUTO` hoặc `MANUAL`; trạng thái map trả túi và đồ rơi đã khám phá.
+
+Hợp đồng và quy tắc chi tiết: [Giả kim và vật phẩm PvE](docs/ALCHEMY_PVE_CONSUMABLES.md).
 

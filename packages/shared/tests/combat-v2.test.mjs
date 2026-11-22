@@ -176,7 +176,7 @@ test('Combat v2 - class rules', async (t) => {
   });
 });
 
-test('Combat v2 - future 6/7 star tiers (locked)', async (t) => {
+test('Combat v2 - 6/7 star tiers', async (t) => {
   await t.test('star progression continues the budget curve', () => {
     assert.equal(budgetAtLevel(6, 1), 350); // 280 + 70
     assert.equal(budgetAtLevel(7, 1), 430); // 350 + 80
@@ -188,13 +188,13 @@ test('Combat v2 - future 6/7 star tiers (locked)', async (t) => {
     assert.equal(growthCompensation(7, 50), 0);
   });
 
-  await t.test('6-7 star Heroes are data-ready but disabled in play', () => {
+  await t.test('6-7 star Heroes are enabled in play', () => {
     assert.equal(isStarRating(6), true);
     assert.equal(isStarRating(7), true);
     assert.equal(isStarRating(8), false);
     assert.equal(isStarEnabled(5), true);
-    assert.equal(isStarEnabled(6), false);
-    assert.equal(isStarEnabled(7), false);
+    assert.equal(isStarEnabled(6), true);
+    assert.equal(isStarEnabled(7), true);
     const roll = rollBaseStats(6, { str: 0.3, int: 0.2, sta: 0.3, agi: 0.2 }, mulberry32(11));
     assert.equal(roll.str + roll.int + roll.sta + roll.agi, 350);
   });

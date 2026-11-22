@@ -136,7 +136,7 @@ export class HeroPromotionService {
       ));
 
     const availableFodders = potentialFodders
-      .filter(f => f.id !== hero.id && f.state !== 'DEAD' && f.state !== 'DISABLED' && !partyHeroIds.has(f.id))
+      .filter(f => f.id !== hero.id && f.hp > 0 && f.state !== 'DEAD' && f.state !== 'DISABLED' && !partyHeroIds.has(f.id))
       .map(f => ({
         id: f.id,
         name: f.name,
@@ -146,7 +146,7 @@ export class HeroPromotionService {
       }));
 
     let projectedStats: StarPromotionPreview['projectedStats'];
-    if (isV2Origin(hero.originStats) && hero.rarity < 6) {
+    if (isV2Origin(hero.originStats) && hero.rarity < 7) {
       const imprintBonus = await this.getImprintBonus(db, hero.id);
       const newOrigin = promoteOriginStats(originOf(hero.originStats), hero.rarity as StarRating, nextStar);
       const snapshot = progressionFor({
@@ -258,7 +258,7 @@ export class HeroPromotionService {
         if (fodder.isLocked) {
           throw new ProgressionError(`Fodder Hero ${fodder.name} is locked.`, 409);
         }
-        if (fodder.state === 'DEAD' || fodder.state === 'DISABLED') {
+        if (fodder.state === 'DEAD' || fodder.state === 'DISABLED' || fodder.hp <= 0) {
           throw new ProgressionError(`Fodder Hero ${fodder.name} is unavailable (${fodder.state}).`, 409);
         }
       }

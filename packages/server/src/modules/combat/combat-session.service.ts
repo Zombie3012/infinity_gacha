@@ -12,6 +12,7 @@ import { survivalService } from '../survival/survival.service.js';
 import { medicalService } from '../medical/medical.service.js';
 import { personalityService } from '../personality/personality.service.js';
 import { assertNoPrivatePve, chargeCombatDispatch } from './combat-readiness.js';
+import { clearCasualtyActivities } from './combat-settlement.js';
 
 export class CombatSessionError extends Error {
   constructor(message: string, public readonly statusCode: number) { super(message); }
@@ -105,7 +106,7 @@ export type CombatFallenHero = {
   id: string;
   name: string;
   origin?: string;
-  deathType: 'PERMADEATH' | 'DISABLED';
+  deathType: 'DEATH';
   droppedEquipmentCount: number;
   droppedEquipment?: unknown[];
 };
@@ -434,6 +435,7 @@ export class CombatSessionService {
 
   public async advance(masterId: string, sessionId: string) {
     return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
       const [session] = await tx.select().from(combatSessions)
         .where(and(eq(combatSessions.id, sessionId), eq(combatSessions.masterId, masterId))).for('update').limit(1);
       if (!session) throw new CombatSessionError('Không tìm thấy phiên chiến đấu.', 404);
@@ -701,26 +703,28 @@ export class CombatSessionService {
             hpPercent: Math.round((hero.hp / hero.maxHp) * 100),
           }));
 
-        // FUN-06-05-003 Process Battle Casualties: permadeath for normal heroes, disabled for special/limited
+        // FUN-06-05-003 Process Battle Casualties: uniform death and gear drop for all Heroes
         const fallenHeroes: CombatFallenHero[] = [];
 
         for (const hero of state.heroes) {
           const isFallen = hero.hp <= 0;
-          const deathType = isFallen ? (hero.origin === 'NORMAL' ? 'PERMADEATH' : 'DISABLED') : null;
-          // FUN-06-05-007 Update Hero Condition: update health condition (DEAD/DISABLED if 0 HP, INJURED if <= 25% maxHp, else HEALTHY)
+          const deathType = isFallen ? 'DEATH' : null;
+          // FUN-06-05-007 Update Hero Condition: update health condition (DEAD if 0 HP, INJURED if <= 25% maxHp, else HEALTHY)
           const conditionState = isFallen
-            ? (deathType === 'PERMADEATH' ? 'DEAD' : 'DISABLED')
+            ? 'DEAD'
             : (hero.hp <= Math.floor(hero.maxHp * 0.25) ? 'INJURED' : 'HEALTHY');
 
           await tx.update(heroes).set({
             hp: Math.max(0, hero.hp),
+            currentHpPct: hero.maxHp > 0 ? Math.max(0, Math.min(1, hero.hp / hero.maxHp)) : 0,
             state: conditionState,
             updatedAt: new Date(),
           }).where(and(eq(heroes.id, hero.id), eq(heroes.masterId, masterId)));
 
           if (deathType) {
+            await clearCasualtyActivities(tx, hero.id, new Date());
             const droppedEquipment: { id: string; templateCode: string; name: string; slotType: string; bonusHp: number; bonusAttack: number; bonusDefense: number; bonusSpeed: number }[] = [];
-            if (deathType === 'PERMADEATH') {
+            if (deathType === 'DEATH') {
               const equipped = await tx.select({ item: equipmentInstances, template: equipmentTemplates })
                 .from(equipmentInstances).innerJoin(equipmentTemplates, eq(equipmentInstances.templateCode, equipmentTemplates.code))
                 .where(and(eq(equipmentInstances.masterId, masterId), eq(equipmentInstances.equippedHeroId, hero.id), eq(equipmentInstances.location, 'EQUIPPED')))
@@ -735,7 +739,7 @@ export class CombatSessionService {
             }
             await tx.insert(heroDeathRecords).values({
               id: uuidv4(), heroId: hero.id, masterId, combatSessionId: session.id,
-              summonOrigin: hero.origin ?? 'NORMAL', deathType, droppedEquipment,
+              summonOrigin: 'HERO', deathType, droppedEquipment,
               cause: 'PVE_COMBAT', recordedAt: new Date(),
             });
             await tx.delete(combatPartySlots).where(and(eq(combatPartySlots.masterId, masterId), eq(combatPartySlots.heroId, hero.id)));
@@ -868,12 +872,16 @@ export class CombatSessionService {
 
   public async retreat(masterId: string, sessionId: string) {
     return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
       const [session] = await tx.select().from(combatSessions)
         .where(and(eq(combatSessions.id, sessionId), eq(combatSessions.masterId, masterId))).for('update').limit(1);
       if (!session) throw new CombatSessionError('Phiên chiến đấu không tồn tại.', 404);
       if (session.status !== 'ACTIVE') throw new CombatSessionError('Phiên chiến đấu đã kết thúc.', 409);
 
       const state = readCombatState(session.combatState);
+      if (state.heroes.some(hero => hero.hp <= 0)) {
+        throw new CombatSessionError('Đội đã có Hero tử trận. Hãy hoàn tất quyết toán trận đấu trước khi rời trận.', 409);
+      }
       const survivors: CombatSurvivor[] = state.heroes.filter(h => h.hp > 0).map(h => ({
         id: h.id,
         name: h.name,

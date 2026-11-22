@@ -71,6 +71,8 @@ try {
   assert.equal(saved.status, 201);
   assert.equal((await setup.request('/api/pve/enter', { method: 'POST', token: master.token,
     headers: { 'Idempotency-Key': randomUUID() }, body: {} })).status, 201);
+  // Recovery fixture predates area-aware movement; keep it as a v1 compatibility check.
+  await sql("update pve_maps set exploration=null, layout=jsonb_set(layout,'{algorithmVersion}','1'), discovered='[0,1,12]'::jsonb where master_id=$1", [master.masterId]);
   await setup.close(); setup = null;
   await startApi();
   proxy = http.createServer((request, response) => {

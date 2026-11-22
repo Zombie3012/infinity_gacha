@@ -35,6 +35,7 @@ func _init() -> void:
 
 func _ready() -> void:
 	_build_ui()
+	EventBus.heroes_updated.connect(_update_hero_list)
 	refresh_facility_data()
 
 func _build_ui() -> void:
@@ -211,7 +212,10 @@ func _build_ui() -> void:
 
 func refresh_facility_data() -> void:
 	banner_label.text = "⏳ Đang tải thông tin Trung Tâm Hồi Phục..."
-	var res: Dictionary = await ApiClient.get_req("/api/medical/overview")
+	var res: Dictionary = await ApiClient.get_req("/api/medical")
+	if not res.get("ok", false) or not (res.get("data") is Dictionary):
+		banner_label.text = "⚠️ Không tải được trạng thái điều trị: %s" % str(res.get("error", "Phản hồi không hợp lệ"))
+		return
 
 	if res["ok"] and res["data"] is Dictionary:
 		var d: Dictionary = res["data"]
@@ -246,7 +250,11 @@ func refresh_facility_data() -> void:
 	]
 
 	# Refresh heroes list & annotate with treatment state
-	await GameState.refresh_heroes()
+	if not await GameState.refresh_heroes():
+		_update_hero_list(GameState.heroes)
+	banner_label.text = "💡 Chọn các Hero cần hồi phục từ danh sách bên dưới rồi nhấn Hồi phục."
+
+func _update_hero_list(roster: Array) -> void:
 	var heroes_list: Array = []
 	var active_ids: Dictionary = {}
 	for t in active_treatments:
@@ -258,8 +266,8 @@ func refresh_facility_data() -> void:
 		if q is Dictionary:
 			queue_ids[str(q.get("heroId", ""))] = q
 
-	for h in GameState.heroes:
-		if h is Dictionary:
+	for h in roster:
+		if h is Dictionary and GameState.is_hero_available(h):
 			var h_dup: Dictionary = h.duplicate()
 			var hid := str(h_dup.get("id", ""))
 			if active_ids.has(hid):
@@ -271,7 +279,6 @@ func refresh_facility_data() -> void:
 			heroes_list.append(h_dup)
 
 	browser.set_items(heroes_list, false)
-	banner_label.text = "💡 Chọn các Hero cần hồi phục từ danh sách bên dưới rồi nhấn Hồi phục."
 
 func _on_auto_select_pressed() -> void:
 	var free_beds := maxi(0, bed_capacity - active_treatments.size())
@@ -309,10 +316,7 @@ func _on_admit_selected_heroes(selected_items: Array) -> void:
 	})
 
 	if res["ok"] and res["data"] is Dictionary:
-		var admitted: int = int(res["data"].get("admitted", 0))
-		var queued: int = int(res["data"].get("queued", 0))
-		banner_label.text = "✅ Thành công! Đưa %d Hero vào giường điều trị, %d Hero vào hàng chờ." % [admitted, queued]
-		await refresh_facility_data()
+		await _finish_treatment_batch(res["data"])
 	else:
 		var err_msg := str(res.get("error", "Lỗi gửi yêu cầu điều trị"))
 		banner_label.text = "❌ Thất bại: %s" % err_msg
@@ -337,13 +341,27 @@ func _on_quick_heal_pressed() -> void:
 	})
 
 	if res["ok"] and res["data"] is Dictionary:
-		var healed: int = int(res["data"].get("healedCount", 0))
-		var used: int = int(res["data"].get("medicineUsed", 0))
-		banner_label.text = "✨ Quick Heal thành công! Đã hồi sinh 100% HP cho %d Hero (Tốn %d Bình Thuốc)." % [healed, used]
-		await refresh_facility_data()
+		await _finish_treatment_batch(res["data"], true)
 	else:
 		var err_msg := str(res.get("error", "Lỗi thực hiện Quick Heal"))
 		banner_label.text = "❌ Thất bại: %s" % err_msg
+
+func _finish_treatment_batch(data: Dictionary, emergency: bool = false) -> void:
+	# Batch endpoints return arrays of Hero IDs, not numeric counts.
+	var message: String
+	if emergency:
+		var healed: Array = data.get("healed", [])
+		# Each successful emergency treatment consumes exactly one medicine.
+		message = "✨ Quick Heal: Hồi phục 100%% HP cho %d Hero (Tốn %d Bình Thuốc)." % [healed.size(), healed.size()]
+	else:
+		var admitted: Array = data.get("admitted", [])
+		var queued: Array = data.get("queued", [])
+		message = "Đã đưa %d Hero vào giường điều trị, %d Hero vào hàng chờ." % [admitted.size(), queued.size()]
+	var errors: Array = data.get("errors", [])
+	if not errors.is_empty():
+		message += "\n⚠️ %d Hero không thực hiện được: %s" % [errors.size(), str(errors[0].get("message", "Không thể hồi phục"))]
+	await refresh_facility_data()
+	banner_label.text = message
 
 func _on_cancel_treatment_pressed() -> void:
 	var selected: Array = browser.get_selected_items()

@@ -202,6 +202,31 @@ func _create_banner_card(b: Dictionary) -> Control:
 	style.corner_radius_bottom_left = 12
 	style.corner_radius_bottom_right = 12
 	card.add_theme_stylebox_override("panel", style)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	card.tooltip_text = "Mở banner " + bname
+	card.focus_mode = Control.FOCUS_ALL
+	var hover_style: StyleBoxFlat = style.duplicate()
+	hover_style.bg_color = bg.lightened(0.12)
+	hover_style.border_color = accent.lightened(0.2)
+	card.mouse_entered.connect(func(): card.add_theme_stylebox_override("panel", hover_style))
+	card.mouse_exited.connect(func(): card.add_theme_stylebox_override("panel", style))
+	card.focus_entered.connect(func(): card.add_theme_stylebox_override("panel", hover_style))
+	card.focus_exited.connect(func(): card.add_theme_stylebox_override("panel", style))
+	card.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				card.set_meta("press_origin", event.global_position)
+			elif card.has_meta("press_origin"):
+				var origin: Vector2 = card.get_meta("press_origin")
+				card.remove_meta("press_origin")
+				if origin.distance_to(event.global_position) < 8.0 and card.get_global_rect().has_point(event.global_position):
+					_render_banner_detail.call_deferred(b)
+					card.accept_event()
+		elif event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+			_render_banner_detail.call_deferred(b)
+			card.accept_event()
+	)
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 18)
@@ -247,12 +272,10 @@ func _create_banner_card(b: Dictionary) -> Control:
 
 	var rates: Dictionary = b.get("rates", {})
 	var rate_lines: PackedStringArray = []
-	if is_special:
-		rate_lines.append("• Hero 5★: %.2f%%  |  Hero 4★: %.2f%%" % [float(rates.get("fiveStarHeroPercent", 0.4)), float(rates.get("fourStarHeroPercent", 3.6))])
-		rate_lines.append("• Hero 3★: %.2f%%  |  Hero 2★: %.2f%%" % [float(rates.get("threeStarHeroPercent", 16.0)), float(rates.get("twoStarHeroPercent", 30.0))])
-	else:
-		rate_lines.append("• Hero 3★: %.2f%%  |  Hero 2★: %.2f%%" % [float(rates.get("threeStarHeroPercent", 5.0)), float(rates.get("twoStarHeroPercent", 18.0))])
-		rate_lines.append("• Hero 1★: %.2f%%" % float(rates.get("oneStarHeroPercent", 27.0)))
+	var rate_keys := ["", "oneStarHeroPercent", "twoStarHeroPercent", "threeStarHeroPercent", "fourStarHeroPercent", "fiveStarHeroPercent", "sixStarHeroPercent", "sevenStarHeroPercent"]
+	for star in range(7, 0, -1):
+		var rate := float(rates.get(rate_keys[star], 0.0))
+		if rate > 0.0: rate_lines.append("Hero %d\u2605: %.2f%%" % [star, rate])
 	rate_lines.append("• Vật liệu & Sách EXP: %.2f%%" % float(rates.get("materialPercent", 50.0)))
 	rate_lines.append("• Cơ chế: Random tên, nghề & chỉ số gốc (Không Pity)")
 
@@ -264,15 +287,13 @@ func _create_banner_card(b: Dictionary) -> Control:
 	rate_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vb.add_child(rate_lbl)
 
-	var enter_btn := Button.new()
-	enter_btn.text = "✨ Vào Giao Diện Banner Này"
-	enter_btn.custom_minimum_size = Vector2(0, 42)
-	enter_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	enter_btn.modulate = accent
-	enter_btn.pressed.connect(func(): _render_banner_detail(b))
-	vb.add_child(enter_btn)
-
+	_ignore_card_children_mouse(card)
 	return card
+
+func _ignore_card_children_mouse(node: Node) -> void:
+	for child in node.get_children():
+		if child is Control: child.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_ignore_card_children_mouse(child)
 
 func _render_banner_detail(b: Dictionary) -> void:
 	_selected_banner = b
@@ -335,8 +356,9 @@ func _render_banner_detail(b: Dictionary) -> void:
 	var mech_lbl := Label.new()
 	mech_lbl.text = (
 		"🎲 CƠ CHẾ PROCEDURAL RANDOM HERO (KHÔNG PITY — TỈ LỆ THUẦN)\n"
-		+ "• Mỗi Anh Hùng triệu hồi được sẽ sinh ngẫu nhiên Tên Fantasy, Nghề nghiệp và 4 chỉ số gốc (STR / INT / STA / AGI) theo ngân sách bậc sao.\n"
-		+ "• 1★–2★: 100% Vô nghề (chuyển chức ở Lv.20)  |  3★: 40% có nghề  |  4★: 70% có nghề  |  5★: 100% có nghề."
+		+ "• Hero procedural sinh ngẫu nhiên tên, nghề và 4 chỉ số gốc (STR / INT / STA / AGI) theo ngân sách sao; template cố định giữ tên riêng.\n"
+		+ "• 1★–2★: 100% Vô nghề (chuyển chức ở Lv.20)  |  3★: 40% có nghề  |  4★: 70% có nghề  |  5★–7★: 100% có nghề.\n"
+		+ "• Mỗi lần nhận Hero tạo một cá thể riêng. Mọi Hero đều có thể tử trận; hồ sơ được giữ tại Sử Điện Anh Hùng."
 	)
 	mech_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mech_lbl.add_theme_font_size_override("font_size", 13)
@@ -358,15 +380,11 @@ func _render_banner_detail(b: Dictionary) -> void:
 	grid.add_theme_constant_override("v_separation", 6)
 	dvbox.add_child(grid)
 
-	if is_special:
-		_add_rate_row(grid, "★★★★★ Anh Hùng 5★ (280 điểm gốc):", "%.2f%%" % float(rates.get("fiveStarHeroPercent", 0.4)), Color(1.0, 0.85, 0.28))
-		_add_rate_row(grid, "★★★★ Anh Hùng 4★ (220 điểm gốc):", "%.2f%%" % float(rates.get("fourStarHeroPercent", 3.6)), Color(0.85, 0.55, 1.0))
-		_add_rate_row(grid, "★★★ Anh Hùng 3★ (170 điểm gốc):", "%.2f%%" % float(rates.get("threeStarHeroPercent", 16.0)), Color(0.42, 0.85, 1.0))
-		_add_rate_row(grid, "★★ Anh Hùng 2★ (130 điểm gốc):", "%.2f%%" % float(rates.get("twoStarHeroPercent", 30.0)), Color(0.55, 0.95, 0.68))
-	else:
-		_add_rate_row(grid, "★★★ Anh Hùng 3★ (170 điểm gốc):", "%.2f%%" % float(rates.get("threeStarHeroPercent", 5.0)), Color(0.42, 0.85, 1.0))
-		_add_rate_row(grid, "★★ Anh Hùng 2★ (130 điểm gốc):", "%.2f%%" % float(rates.get("twoStarHeroPercent", 18.0)), Color(0.55, 0.95, 0.68))
-		_add_rate_row(grid, "★ Anh Hùng 1★ (100 điểm gốc):", "%.2f%%" % float(rates.get("oneStarHeroPercent", 27.0)), Color(0.82, 0.86, 0.92))
+	var rate_keys := ["", "oneStarHeroPercent", "twoStarHeroPercent", "threeStarHeroPercent", "fourStarHeroPercent", "fiveStarHeroPercent", "sixStarHeroPercent", "sevenStarHeroPercent"]
+	for star in range(7, 0, -1):
+		var rate := float(rates.get(rate_keys[star], 0.0))
+		if rate > 0.0:
+			_add_rate_row(grid, "Hero %d\u2605:" % star, "%.2f%%" % rate, Color(1.0, 0.85, 0.35))
 
 	_add_rate_row(grid, "📦 Vật Liệu, Ấn & Sách EXP:", "%.2f%%" % float(rates.get("materialPercent", 50.0)), Color(0.95, 0.78, 0.55))
 

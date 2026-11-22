@@ -1,13 +1,19 @@
 openapi: 3.0.3
 info:
   title: Infinite Gacha — private PvE map API
-  version: '1.0'
+  version: '2.0'
   description: >-
     Authenticated prototype using Combat v2, a persistent 12x12 map and at most
     three deployed squads. Each squad has one to five Heroes on nine formation
     cells. Four-way movement takes one second per cell. State reads and new
     commands settle due arrivals under a per-Master transaction lock. Replay is
-    read-only and has no effect on movement or rewards. All mutations require
+    read-only and has no effect on movement or rewards. New floors have a 12x12
+    floor (1000m/cell), lazy 20x20 regions (50m/cell) and 8x8 interiors (5m/cell).
+    Buildings are separate objects; several can share one floor cell. Enemy
+    movement takes 1.5 seconds per step and radar needs line of sight within
+    four area cells. Unseen contact grants enemies an AGI-ordered opening at
+    combat round zero. Only the designated DEFEAT_BOSS objective clears a floor.
+    Persisted v1 floors retain their previous behavior. All mutations require
     Idempotency-Key. Failed transactions do not consume their key. A committed
     key replays its saved result; a changed operation or body returns 409.
 servers:
@@ -165,7 +171,13 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Point' }
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/Point'
+                - type: object
+                  description: areaId is mandatory for v2; bounds depend on the current area.
+                  properties:
+                    areaId: { type: string }
       responses:
         '200':
           description: Persisted route or completed encounter retry
@@ -190,11 +202,93 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /api/pve/squads/{squadId}/portal:
+    post:
+      tags: [PvE]
+      summary: Cross a portal from the squad's current position in one second
+      description: >-
+        Requires a v2 floor, matching areaId, and a portal at the squad's position.
+        Queues a server-timed transition; does not teleport immediately. A manual
+        portal order disables Auto. Enemies can follow witnessed crossings.
+      parameters:
+        - $ref: '#/components/parameters/SquadId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [areaId, portalId]
+              properties:
+                areaId: { type: string }
+                portalId: { type: string }
+      responses:
+        '200': { description: Transition queued with nextStepAt }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/pve/dev/reset-tower:
+    post:
+      tags: [PvE]
+      summary: Developer-only reset to floor one in a new tower run
+      description: >-
+        Accepted only on development/test servers with PVE_DEV_TOOLS not set to 0.
+        Production always rejects it. Archives the active map as ABANDONED,
+        withdraws squads and releases reservations. Keeps Heroes, inventory,
+        reports and old maps. Skips offline settlement to allow recovery.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm: { type: boolean, enum: [true] }
+      responses:
+        '200': { description: New run and floor 1; committed keys do not reset twice }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/pve/squads/{squadId}/recall-point:
+    post:
+      tags: [PvE]
+      summary: Consume one TELEPORT_STONE at a stationary squad's current position
+      description: >-
+        UNTIL_COMPLETE floors reject this without consuming inventory. On ordinary
+        floors creates a shared recall point lasting for this map only. Squads
+        standing there can recall during pursuit, but never while FIGHTING.
+        Duplicate locations reject without charge; committed keys replay exactly.
+      parameters:
+        - $ref: '#/components/parameters/SquadId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/Point'
+                - type: object
+                  required: [areaId]
+                  properties:
+                    areaId: { type: string }
+      responses:
+        '200': { description: Persisted point and remaining teleportStones }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /api/pve/squads/{squadId}/recall:
     post:
       tags: [PvE]
       summary: Withdraw a squad and release its Hero reservations
-      description: Cancels its route. Cannot be used for a squad in FIGHTING state.
+      description: >-
+        Cancels the route and releases Heroes. UNTIL_COMPLETE floors reject manual
+        recall until the objective completes; stones do not override this. On ordinary
+        floors pursuit blocks recall unless standing at a recall point. FIGHTING
+        always blocks recall. A recalled squad's pursuers return home.
       parameters:
         - $ref: '#/components/parameters/SquadId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -354,8 +448,8 @@ components:
       type: object
       required: [x, y]
       properties:
-        x: { type: integer, minimum: 0, maximum: 11 }
-        y: { type: integer, minimum: 0, maximum: 11 }
+        x: { type: integer, minimum: 0, maximum: 19 }
+        y: { type: integer, minimum: 0, maximum: 19 }
     Plan:
       type: object
       required: [targetPriority, members]
@@ -399,8 +493,8 @@ components:
         - type: object
           required: [id, kind]
           properties:
-            id: { type: integer, minimum: 0, maximum: 143 }
-            kind: { type: string, enum: [UNKNOWN, CAMP, EMPTY, RESOURCE, ENEMY, BOSS] }
+            id: { type: integer, minimum: 0, maximum: 399 }
+            kind: { type: string, enum: [UNKNOWN, CAMP, EMPTY, RESOURCE, ENEMY, BOSS, WALL, ROCK] }
             cleared: { type: boolean }
             collected: { type: boolean }
             resource: { $ref: '#/components/schemas/Resource' }
@@ -415,10 +509,16 @@ components:
         name: { type: string }
         leaderHeroId: { type: string, nullable: true, description: 'First surviving party member, used as the squad avatar' }
         autoExplore: { type: boolean }
+        areaId: { type: string, description: Current area; floor on v1 maps }
+        pendingPortalId: { type: string, nullable: true }
+        pursued: { type: boolean, description: Being chased or investigated }
+        atRecallPoint: { type: boolean }
+        canRecall: { type: boolean }
+        recallBlockReason: { type: string, nullable: true }
         plan: { $ref: '#/components/schemas/Plan' }
         status: { type: string, enum: [IDLE, MOVING, FIGHTING, WITHDRAWN, DEFEATED] }
-        x: { type: integer, minimum: 0, maximum: 11 }
-        y: { type: integer, minimum: 0, maximum: 11 }
+        x: { type: integer, minimum: 0, maximum: 19 }
+        y: { type: integer, minimum: 0, maximum: 19 }
         route: { type: array, items: { $ref: '#/components/schemas/Point' } }
         nextStepAt: { type: string, format: date-time, nullable: true }
         lastBattleId: { type: string, nullable: true }
@@ -428,6 +528,79 @@ components:
       type: object
       required: [serverNow, map, squads, parties, events, cursor]
       properties:
+        devToolsEnabled: { type: boolean, description: Server-authoritative developer capability }
+        currentFloor: { type: integer, minimum: 1 }
+        run: { type: integer, minimum: 0 }
+        teleportStones: { type: integer, minimum: 0 }
+        objective:
+          type: object
+          description: Present on v2 floors; only DEFEAT_BOSS is implemented.
+          properties:
+            type: { type: string, enum: [DEFEAT_BOSS] }
+            targetId: { type: string }
+            required: { type: integer, enum: [1] }
+            progress: { type: integer, minimum: 0, maximum: 1 }
+            status: { type: string, enum: [ACTIVE, COMPLETED] }
+        catchupPending:
+          type: boolean
+          description: >-
+            More historical movement remains after this batch (up to 512 events).
+            Continue polling. New mutations return 503 ERR_PVE_CATCHUP_PENDING
+            without consuming their key until historical steps are caught up.
+        enemySecondsPerTile: { type: number, enum: [1.5] }
+        areas:
+          type: array
+          description: Materialized v2 areas only. Hidden tile contents and enemy coordinates are omitted.
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              level: { type: string, enum: [FLOOR, REGION, INTERIOR] }
+              parentAreaId: { type: string, nullable: true }
+              width: { type: integer, enum: [8, 12, 20] }
+              height: { type: integer, enum: [8, 12, 20] }
+              metersPerTile: { type: integer, enum: [5, 50, 1000] }
+              explored: { type: boolean }
+              tiles: { type: array, items: { $ref: '#/components/schemas/Tile' } }
+              portals:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    x: { type: integer }
+                    y: { type: integer }
+                    toAreaId: { type: string }
+                    arrival: { $ref: '#/components/schemas/Point' }
+                    label: { type: string }
+              buildings:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    main: { type: boolean }
+                    parentTileId: { type: integer }
+                    areaId: { type: string }
+                    door: { $ref: '#/components/schemas/Point' }
+                    widthMeters: { type: number }
+                    heightMeters: { type: number }
+              enemies:
+                type: array
+                description: Only enemies currently visible to an active squad in this area.
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    x: { type: integer }
+                    y: { type: integer }
+                    boss: { type: boolean }
+                    state: { type: string, enum: [IDLE, CHASE, INVESTIGATE, RETURN] }
+                    targetSquadId: { type: string, nullable: true }
+                    radarRadius: { type: integer, enum: [4] }
+                    radarTileIds: { type: array, items: { type: integer } }
         serverNow: { type: string, format: date-time }
         map:
           type: object
@@ -436,10 +609,21 @@ components:
           properties:
             id: { type: string }
             floor: { type: integer, minimum: 1 }
-            status: { type: string, enum: [ACTIVE, CLEARED] }
+            status: { type: string, enum: [ACTIVE, CLEARED, ABANDONED] }
+            run: { type: integer, minimum: 0 }
+            recallPolicy: { type: string, enum: [FREE, UNTIL_COMPLETE] }
+            recallPoints:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/Point'
+                  - type: object
+                    properties:
+                      areaId: { type: string }
+                      createdBy: { type: string }
             width: { type: integer, enum: [12] }
             height: { type: integer, enum: [12] }
-            algorithmVersion: { type: integer, enum: [1] }
+            algorithmVersion: { type: integer, enum: [1, 2] }
             tiles: { type: array, minItems: 144, maxItems: 144, items: { $ref: '#/components/schemas/Tile' } }
             revision: { type: integer, minimum: 0 }
         squads: { type: array, items: { $ref: '#/components/schemas/Squad' } }

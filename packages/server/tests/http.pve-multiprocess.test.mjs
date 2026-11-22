@@ -55,7 +55,8 @@ test('HTTP PvE across two API processes: reservations, arrival collisions and bo
   const layout = (await sql('select layout from pve_maps where id=$1', [mapId])).rows[0].layout;
   layout.tiles[1] = { ...layout.tiles[1], kind: 'RESOURCE', resource: { itemId: 'WOOD', quantity: 29 } };
   layout.tiles[2].kind = 'ENEMY'; layout.tiles[3].kind = 'BOSS';
-  await sql('update pve_maps set layout=$2::jsonb where id=$1', [mapId, JSON.stringify(layout)]);
+  layout.algorithmVersion = 1;
+  await sql('update pve_maps set exploration=null, layout=$2::jsonb, discovered=$3::jsonb where id=$1', [mapId, JSON.stringify(layout), '[0,1,12]']);
   const squads = [];
   for (let index = 0; index < 3; index++) {
     const hero = await createHero(master.masterId, { hp: 90000, maxHp: 90000, attack: 8000, defense: 3000, speed: 200 });

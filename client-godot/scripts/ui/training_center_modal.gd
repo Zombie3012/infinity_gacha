@@ -40,6 +40,7 @@ func _init() -> void:
 func _ready() -> void:
 	if not _is_ui_built:
 		_build_ui()
+	EventBus.heroes_updated.connect(func(_heroes: Array): refresh_ui())
 	refresh_ui()
 
 func setup(b_data: Dictionary) -> void:
@@ -62,20 +63,17 @@ func refresh_ui() -> void:
 		]
 		_capacity_label.modulate = Color(0.4, 1.0, 0.6) if building_status == "READY" else Color(1.0, 0.75, 0.3)
 
+	var candidates: Array = GameState.heroes.filter(func(h): return h is Dictionary and GameState.is_hero_available(h))
 	if _hero_browser != null:
-		_hero_browser.set_items(GameState.heroes, true)
-
-	if not selected_hero.is_empty():
-		# Refresh selected hero data from GameState
-		var hid := str(selected_hero.get("id", ""))
-		for h in GameState.heroes:
-			if h is Dictionary and str(h.get("id", "")) == hid:
-				selected_hero = h
-				break
-		_update_workbench(selected_hero)
-	elif not GameState.heroes.is_empty() and GameState.heroes[0] is Dictionary:
-		selected_hero = GameState.heroes[0]
-		_update_workbench(selected_hero)
+		_hero_browser.set_items(candidates, true)
+	var selected_id := str(selected_hero.get("id", ""))
+	selected_hero = {}
+	for h in candidates:
+		if str(h.get("id", "")) == selected_id:
+			selected_hero = h
+	if selected_hero.is_empty() and not candidates.is_empty():
+		selected_hero = candidates[0]
+	_update_workbench(selected_hero)
 
 func _build_ui() -> void:
 	if _is_ui_built:
@@ -284,6 +282,12 @@ func _on_hero_selected(hero: Dictionary) -> void:
 
 func _update_workbench(hero: Dictionary) -> void:
 	if hero.is_empty():
+		_profile_name_label.text = "Hero: Chưa chọn"
+		_profile_stats_label.text = ""
+		for button in _stat_buttons.values():
+			button.disabled = true
+		for child in _skills_vbox.get_children():
+			child.queue_free()
 		return
 	var hname := str(hero.get("name", "Hero"))
 	var hlvl := int(hero.get("level", 1))
@@ -298,7 +302,7 @@ func _update_workbench(hero: Dictionary) -> void:
 		str_val, agi_val, int_val, sta_val
 	]
 
-	var can_train := building_status == "READY"
+	var can_train := building_status == "READY" and GameState.is_hero_available(hero)
 	if _stat_buttons.has("str"):
 		_stat_buttons["str"].text = "💪 STR (%d→%d)" % [str_val, str_val + 1]
 		_stat_buttons["str"].disabled = not can_train
@@ -386,7 +390,7 @@ func _update_workbench(hero: Dictionary) -> void:
 		_skills_vbox.add_child(sk_row)
 
 func _on_train_stat_pressed(stat_code: String) -> void:
-	if selected_hero.is_empty():
+	if not GameState.is_hero_available(selected_hero):
 		return
 	var hid := str(selected_hero.get("id", ""))
 	var hname := str(selected_hero.get("name", "Hero"))

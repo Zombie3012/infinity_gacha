@@ -117,6 +117,11 @@ func setup_combat_unit(data: Dictionary) -> void:
 	_refresh_labels()
 
 func setup_base_resident(data: Dictionary, spawn_pos: Vector3, worker_info: Dictionary = {}, in_party: bool = false, infirmary_pos: Vector3 = Vector3(5.5, 0.0, 4.5), t_center: Vector3 = Vector3.ZERO) -> void:
+	is_alive = GameState.is_hero_alive(data)
+	if not is_alive:
+		hide()
+		process_mode = Node.PROCESS_MODE_DISABLED
+		return
 	hero_raw_data = data
 	unit_id = str(data.get("id", ""))
 	unit_name = str(data.get("name", "Hero"))
@@ -162,6 +167,7 @@ func setup_base_resident(data: Dictionary, spawn_pos: Vector3, worker_info: Dict
 
 ## Isolates Hero actors on the active floor and completely hides/disables them on other floors to eliminate lag
 func set_floor_focus_state(active_floor: bool, animate: bool = true) -> void:
+	active_floor = active_floor and is_alive
 	is_on_active_floor = active_floor
 	if click_body != null and click_body.has_node("CollisionShape3D"):
 		var shape: CollisionShape3D = click_body.get_node("CollisionShape3D")

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanupAccount, createMaster, dbReady, finishBuildings, setSilver, skipReason, sql, startHarness } from './helpers/harness.mjs';
+import { cleanupAccount, createMaster, dbReady, setSilver, skipReason, sql, startHarness } from './helpers/harness.mjs';
 
 test('HTTP base, construction and production', { skip: skipReason }, async t => {
   const harness = await startHarness();
@@ -25,19 +25,21 @@ test('HTTP base, construction and production', { skip: skipReason }, async t => 
     assert.ok(!codes.includes('LUMBER'));
     assert.ok(!codes.includes('MINE'));
     assert.ok(!codes.includes('FARM'));
-    for (const expected of ['HOUSE', 'PARTY_MANSION', 'WAREHOUSE', 'TRAINING_CENTER', 'FORGE', 'KITCHEN', 'MEDICAL', 'HALL_OF_MAGIC', 'LIBRARY', 'ALCHEMY_WORKSHOP', 'MAGIC_RESEARCH_LAB']) {
+    for (const retired of ['LIBRARY','ALCHEMY_WORKSHOP','MAGIC_RESEARCH_LAB']) assert.ok(!codes.includes(retired));
+    for (const expected of ['HOUSE', 'PARTY_MANSION', 'WAREHOUSE', 'TRAINING_CENTER', 'FORGE', 'KITCHEN', 'MEDICAL', 'HALL_OF_MAGIC']) {
       assert.ok(codes.includes(expected), `missing building type ${expected}`);
     }
     const forgeType = overview.body.buildingTypes.find(type => type.code === 'FORGE');
     assert.equal(forgeType.production, null);
   });
 
-  await t.test('construction reserves the plot and starts a timer', async () => {
+  await t.test('construction immediately reserves the plot and returns READY', async () => {
     const built = await harness.request('/api/base/buildings', {
       method: 'POST', token: master.token, body: { buildingType: 'KITCHEN', plotIndex: 1 },
     });
     assert.equal(built.status, 201);
-    assert.equal(built.body.building.status, 'CONSTRUCTING');
+    assert.equal(built.body.building.status, 'READY');
+    assert.equal(built.body.building.upgradeFinishesAt, null);
     kitchenId = built.body.building.id;
 
     const duplicate = await harness.request('/api/base/buildings', {
@@ -46,8 +48,7 @@ test('HTTP base, construction and production', { skip: skipReason }, async t => 
     assert.equal(duplicate.status, 409);
   });
 
-  await t.test('the timer settles into a READY building with a production node', async () => {
-    await finishBuildings(master.masterId);
+  await t.test('construction immediately activates production without a timer', async () => {
     const overview = await harness.request('/api/base/overview', { token: master.token });
     const building = overview.body.buildings.find(row => row.id === kitchenId);
     assert.equal(building.status, 'READY');
@@ -78,7 +79,6 @@ test('HTTP base, construction and production', { skip: skipReason }, async t => 
     });
     assert.equal(builtHouse.status, 201);
     houseId = builtHouse.body.building.id;
-    await finishBuildings(master.masterId);
 
     const earlyPromote = await harness.request(`/api/base/buildings/${houseId}/promote-mansion`, {
       method: 'POST', token: master.token,

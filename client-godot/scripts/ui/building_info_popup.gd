@@ -291,7 +291,7 @@ func _get_building_stats_display(code: String, lvl: int) -> Array[Dictionary]:
 			list.append({"label": "Đá Quý (Gems) hiện có:", "val": "%s Gem" % _format_num(GameState.gem_stones), "col": Color(0.55, 0.88, 1.0)})
 			list.append({"label": "Bạc hiện có:", "val": "%s Bạc" % _format_num(GameState.silver_coins), "col": Color(1.0, 0.85, 0.4)})
 		"BARRACKS":
-			list.append({"label": "Tổng số Hero sở hữu:", "val": "%d Hero" % GameState.heroes.size(), "col": Color(0.4, 0.95, 0.6)})
+			list.append({"label": "Tổng số Hero sở hữu:", "val": "%d Hero" % GameState.owned_hero_count(), "col": Color(0.4, 0.95, 0.6)})
 			list.append({"label": "Đội hình PVE xuất trận:", "val": "%d / 5 Hero" % GameState.active_party_ids.size(), "col": Color(1.0, 0.85, 0.4)})
 		"INFIRMARY":
 			list.append({"label": "Số giường chữa trị:", "val": "%d Giường" % (lvl * 2), "col": Color(0.4, 0.95, 0.6)})

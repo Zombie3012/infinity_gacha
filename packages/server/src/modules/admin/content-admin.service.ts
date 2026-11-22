@@ -35,7 +35,7 @@ export class ContentAdminService {
     const heroCode = code(input.code);
     const name = String(input.name ?? '').trim();
     if (!name || name.length > 100) throw new ContentAdminError('name phải từ 1–100 ký tự.');
-    const rarity = Math.max(1, Math.min(5, positive(input.rarity ?? input.defaultRarity, 'rarity')));
+    const rarity = Math.max(1, Math.min(7, positive(input.rarity ?? input.defaultRarity, 'rarity')));
     const heroClass = String(input.heroClass ?? 'WARRIOR').toUpperCase();
     if (!['WARRIOR', 'MAGE', 'ARCHER', 'ASSASSIN', 'PRIEST', 'TANK'].includes(heroClass)) {
       throw new ContentAdminError('heroClass không hợp lệ.');
@@ -132,7 +132,7 @@ export class ContentAdminService {
     const values = {
       name: String(input.name ?? itemCode).slice(0, 100),
       category: String(input.category ?? 'MATERIAL').toUpperCase().slice(0, 30),
-      rarity: Math.max(1, Math.min(5, positive(input.rarity ?? 1, 'rarity'))),
+      rarity: Math.max(1, Math.min(7, positive(input.rarity ?? 1, 'rarity'))),
       description: String(input.description ?? '').slice(0, 500),
       isActive: input.isActive !== false,
     };

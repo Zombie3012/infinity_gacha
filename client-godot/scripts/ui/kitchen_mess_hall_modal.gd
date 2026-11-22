@@ -42,6 +42,9 @@ func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
+func _ready() -> void:
+	EventBus.heroes_updated.connect(func(_heroes: Array): _populate_browser_items())
+
 func setup(b_data: Dictionary) -> void:
 	building_data = b_data
 	facility_level = int(b_data.get("level", 1))
@@ -507,11 +510,11 @@ func _render_mess_hall_tab() -> void:
 	_populate_browser_items()
 
 func _populate_browser_items() -> void:
-	if browser == null:
+	if not is_instance_valid(browser):
 		return
 	var items: Array = []
 	for h in GameState.heroes:
-		if not (h is Dictionary) or GameState.is_hero_pve_deployed(h):
+		if not (h is Dictionary) or not GameState.is_hero_available(h):
 			continue
 		var d: Dictionary = h.duplicate(true)
 		var hid := str(d.get("id", ""))
@@ -548,7 +551,7 @@ func _on_quick_action_requested(action_code: String, _sel: Array) -> void:
 		status_banner_label.text = "🍱 Đang cho toàn bộ Tổ đội PVE (%d Hero) dùng bữa..." % party_ids.size()
 		var count: int = 0
 		for hid in party_ids:
-			if GameState.is_hero_pve_deployed(GameState.get_hero_by_id(str(hid))):
+			if not GameState.is_hero_available(GameState.get_hero_by_id(str(hid))):
 				continue
 			var res := await ApiClient.post_req("/api/survival/heroes/%s/feed" % str(hid), { "quantity": 1 })
 			if res["ok"]:

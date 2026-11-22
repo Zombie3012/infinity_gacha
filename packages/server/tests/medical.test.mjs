@@ -4,13 +4,17 @@ import {
   bedCapacityForLevel,
   classifyInjury,
   injuryMultiplier,
-  resurrectionQuote,
+  revivedHpPercent, RESURRECTION_GEM_ITEM,
   treatmentSeconds,
 } from '../dist/modules/medical/medical-rules.js';
 
 const day = 86_400_000;
 
 test('DM-04 Medical - injury classification', async (t) => {
+  await t.test('zero or negative HP is not a surviving injury', () => {
+    assert.equal(classifyInjury(0), null);
+    assert.equal(classifyInjury(-10), null);
+  });
   await t.test('scenario 4.1: below 15% HP is SEVERE with a 25% penalty and 2h timer', () => {
     const profile = classifyInjury(12);
     assert.deepEqual(profile, { severity: 'SEVERE', penaltyPercent: 25, naturalHealSeconds: 7200 });
@@ -44,26 +48,7 @@ test('DM-04 Medical - facility and treatment', async (t) => {
   });
 });
 
-test('DM-04 Medical - divine grace resurrection', async (t) => {
-  const now = new Date('2026-03-01T00:00:00Z');
-
-  await t.test('scenario 6.1: first resurrection costs 1 tear and 10,000 Silver', () => {
-    const quote = resurrectionQuote(0, now, now);
-    assert.equal(quote.tears, 1);
-    assert.equal(quote.silver, 10000);
-    assert.equal(quote.cycleReset, false);
-  });
-
-  await t.test('the cost grows with each resurrection inside the cycle', () => {
-    const quote = resurrectionQuote(2, new Date(now.getTime() - 5 * day), now);
-    assert.equal(quote.tears, 3);
-    assert.equal(quote.silver, 30000);
-  });
-
-  await t.test('scenario 6.2: after 30 days the cycle resets to the base cost', () => {
-    const quote = resurrectionQuote(3, new Date(now.getTime() - 31 * day), now);
-    assert.equal(quote.cycleReset, true);
-    assert.equal(quote.tears, 1);
-    assert.equal(quote.silver, 10000);
-  });
+test('Resurrection requires the seven-star gem and restores full HP', () => {
+  assert.equal(RESURRECTION_GEM_ITEM, 'RESURRECTION_GEM_7');
+  assert.equal(revivedHpPercent(), 1);
 });

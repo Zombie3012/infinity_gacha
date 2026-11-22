@@ -1,23 +1,17 @@
--- DM-11 base shop catalogue (sample prototype prices).
-INSERT INTO shop_items (code, name, description, item_id, category, price_silver, daily_limit, rotation_days, is_active, sort_order)
-VALUES
-  ('STAMINA_POTION', 'Bình Thể Lực Nhỏ', 'Hồi phục thể lực cho một Hero.', 'STAMINA_POTION', 'CONSUMABLE', 500, 5, '{}', true, 10),
-  ('MEDICINE', 'Dược liệu điều trị', 'Dùng cho chữa trị khẩn cấp tại Viện Y Tế.', 'MEDICINE', 'CONSUMABLE', 800, 3, '{}', true, 20),
-  ('FOOD', 'Lương khô', 'Một phần ăn cho Hero hoặc khẩu phần thám hiểm.', 'FOOD', 'CONSUMABLE', 200, 20, '{}', true, 30),
-  ('FOOD_RAW', 'Lương thực thô', 'Nguyên liệu để Nhà bếp chế biến thành lương khô.', 'FOOD_RAW', 'MATERIAL', 120, 40, '{}', true, 40),
-  ('WOOD', 'Gỗ', 'Vật liệu xây dựng và nâng cấp công trình.', 'WOOD', 'MATERIAL', 150, 50, '{}', true, 50),
-  ('STONE', 'Đá', 'Vật liệu xây dựng và nâng cấp công trình.', 'STONE', 'MATERIAL', 150, 50, '{}', true, 60),
-  ('IRON', 'Quặng sắt', 'Nguyên liệu chế tạo tại Xưởng Rèn.', 'IRON', 'MATERIAL', 300, 30, '{}', true, 70),
-  ('DIVINE_TEAR', 'Thần Lệ', 'Vật phẩm hồi sinh Hero Limited/Special.', 'DIVINE_TEAR', 'CONSUMABLE', 5000, 1, '{}', true, 80),
-  ('MOON_CAKE', 'Bánh Trăng', 'Món ăn đặc biệt, chỉ bán vào cuối tuần.', 'MOON_CAKE', 'CONSUMABLE', 900, 2, '{0,6}', true, 90)
-  ,('ENHANCEMENT_STONE', 'Đá Tăng Cường', 'Đá dùng để nâng cấp trang bị tại Xưởng Rèn.', 'ENHANCEMENT_STONE', 'MATERIAL', 400, 20, '{}', true, 85)
-ON CONFLICT (code) DO UPDATE SET
-  name = EXCLUDED.name,
-  description = EXCLUDED.description,
-  item_id = EXCLUDED.item_id,
-  category = EXCLUDED.category,
-  price_silver = EXCLUDED.price_silver,
-  daily_limit = EXCLUDED.daily_limit,
-  rotation_days = EXCLUDED.rotation_days,
-  is_active = EXCLUDED.is_active,
-  sort_order = EXCLUDED.sort_order;
+-- Temporary airship catalogue: all implemented items and equipment cost 1 Silver.
+INSERT INTO shop_items(code,name,description,item_id,category,price_silver,daily_limit,rotation_days,is_active,sort_order)
+SELECT code,name,description,code,category,1,0,'{}',true,100 FROM item_templates
+WHERE is_active=true AND code NOT LIKE 'SAMPLE_TRASH_%' AND code NOT IN ('DIVINE_TEAR','STAMINA_POTION')
+ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,item_id=EXCLUDED.item_id,
+category=EXCLUDED.category,price_silver=1,daily_limit=0,rotation_days='{}',is_active=true;
+
+INSERT INTO shop_items(code,name,description,item_id,category,price_silver,daily_limit,rotation_days,is_active,sort_order)
+SELECT code,name,'Trang bị sử dụng cho Hero.',code,'EQUIPMENT',1,0,'{}',true,200 FROM equipment_templates
+ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name,item_id=EXCLUDED.item_id,category='EQUIPMENT',
+price_silver=1,daily_limit=0,rotation_days='{}',is_active=true;
+
+INSERT INTO shop_items(code,name,description,item_id,category,price_silver,daily_limit,rotation_days,is_active,sort_order)
+VALUES('SHOP_SCROLL_NORMAL','Thiên Thư thường','Dùng cho triệu hồi bằng Thiên Thư thường.','NORMAL','SCROLL',1,0,'{}',true,50)
+ON CONFLICT(code) DO UPDATE SET price_silver=1,daily_limit=0,rotation_days='{}',is_active=true;
+
+UPDATE shop_items SET is_active=false WHERE item_id IN ('DIVINE_TEAR','STAMINA_POTION') OR item_id LIKE 'SAMPLE_TRASH_%';

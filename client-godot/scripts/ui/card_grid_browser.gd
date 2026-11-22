@@ -82,6 +82,9 @@ func set_items(items: Array, preserve_selection: bool = false) -> void:
 	all_items = items
 	if not preserve_selection:
 		selected_item_ids.clear()
+	else:
+		var valid_ids: Array = items.filter(func(it): return it is Dictionary).map(func(it): return str(it.get("id", "")))
+		selected_item_ids = selected_item_ids.filter(func(id): return valid_ids.has(id))
 	apply_filter_and_sort()
 
 func set_action_button(label_text: String, badge_prefix: String = "Hành động") -> void:
@@ -130,9 +133,10 @@ func select_item_by_id(item_id: String) -> void:
 
 func select_items_by_ids(ids: Array) -> void:
 	selected_item_ids.clear()
+	var valid_ids: Array = all_items.filter(func(it): return it is Dictionary).map(func(it): return str(it.get("id", "")))
 	for id in ids:
 		var sid := str(id)
-		if selected_item_ids.size() < max_selection and not selected_item_ids.has(sid):
+		if valid_ids.has(sid) and selected_item_ids.size() < max_selection and not selected_item_ids.has(sid):
 			selected_item_ids.append(sid)
 	_update_card_selection_visuals()
 	_update_action_bar()

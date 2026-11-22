@@ -5,7 +5,7 @@
  * 1. Target hero must be at maximum level for their current star rank.
  * 2. Promotion from N★ to (N+1)★ requires exactly N fodder heroes of the same N★ rank.
  * 3. Fodders are consumed (sacrificed); their equipment is unequipped safely.
- * 4. Star rating increases by 1 (up to 5★ enabled, 6★ available in formula).
+ * 4. Star rating increases by 1 (up to 7★ enabled).
  * 5. Max level increases by 10 (e.g. 1★ max 10, 2★ max 20, 3★ max 30, 4★ max 40, 5★ max 50).
  * 6. Origin stats scale with the new star budget, recomputing derived stats.
  * 7. Imprint slots expand according to the new star rank.
@@ -16,7 +16,7 @@ import {
   type BaseStats, type StarRating,
 } from './stats.js';
 
-export const MAX_PROMOTABLE_STAR = 5;
+export const MAX_PROMOTABLE_STAR = 7;
 
 export const STAR_MAX_LEVEL: Record<number, number> = {
   1: 10,
@@ -34,6 +34,7 @@ export const STAR_PROMOTION_COST_SILVER: Record<number, number> = {
   3: 50_000,
   4: 100_000,
   5: 250_000,
+  6: 500_000,
 };
 
 export const BREAKTHROUGH_SILVER_COST: Record<number, number> = {
@@ -41,6 +42,8 @@ export const BREAKTHROUGH_SILVER_COST: Record<number, number> = {
   2: 15_000,
   3: 30_000,
   4: 50_000,
+  5: 100_000,
+  6: 200_000,
 };
 
 /**
@@ -91,7 +94,7 @@ export function checkBreakthroughEligibility(input: {
   if (input.isLocked) {
     return { eligible: false, reason: 'ERR_HERO_LOCKED' };
   }
-  if (input.promotionRank >= 4) {
+  if (input.promotionRank >= 6) {
     return { eligible: false, reason: 'ERR_HERO_MAX_BREAKTHROUGH' };
   }
   const nextRank = input.promotionRank + 1;

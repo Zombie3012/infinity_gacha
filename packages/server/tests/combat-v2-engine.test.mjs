@@ -18,6 +18,37 @@ const EMPTY_EFFECTS = {
   mpRegenPct: 0, tenacity: 0, lowHp: null, revive: null,
 };
 
+test('PvE potions preserve inputs, restore mana, boost ATK once and log before the action', () => {
+  const hero = {...unit('alchemist','HERO',100),initialMp:0,consumables:{slots:[{itemId:'MANA_POTION',quantity:4},{itemId:'STRENGTH_POTION',quantity:4},null,null,null],autoManaBelow:30,autoStrength:true}};
+  const enemy=unit('target','ENEMY',1,{stats:{maxHp:100000,def:0,atk:0}});
+  const before=structuredClone(hero);
+  const report=resolveBattleV2([hero],[enemy],{random:()=>0.5,maxRounds:1,timeoutIsDraw:true});
+  assert.deepEqual(hero,before);
+  assert.deepEqual(report.log.slice(0,2).map(l=>l.actionType),['ITEM','ITEM']);
+  assert.equal(report.log.find(l=>l.actionType==='BASIC').damage,120);
+  assert.equal(report.consumables.alchemist.slots[0].quantity,3);
+  assert.equal(report.consumables.alchemist.slots[1].quantity,3);
+  assert.equal(report.units.find(u=>u.id==='alchemist').mp,55);
+});
+
+test('Manual prefix replay is deterministic and rejects repeated or excessive item types',()=>{
+  const hero={...unit('manual','HERO',100),initialMp:0,consumables:{slots:[{itemId:'MANA_POTION',quantity:4},{itemId:'STRENGTH_POTION',quantity:4},null,null,null],autoManaBelow:0,autoStrength:false}};
+  const enemy=unit('target','ENEMY',1,{stats:{maxHp:100000,atk:1}});
+  const options={random:()=>0.5,maxRounds:1,timeoutIsDraw:true,pauseManual:true};
+  const pending=resolveBattleV2([hero],[enemy],options);assert.equal(pending.pending.actorId,'manual');
+  const choices={[pending.pending.key]:{items:['MANA_POTION'],action:'BASIC',targetId:'target'}};
+  const manual=resolveBattleV2([hero],[enemy],{...options,choices});
+  assert.equal(manual.pending,undefined);
+  assert.deepEqual(manual,resolveBattleV2([hero],[enemy],{...options,choices}));
+  assert.throws(()=>resolveBattleV2([hero],[enemy],{...options,choices:{[pending.pending.key]:{items:['MANA_POTION','MANA_POTION']}}}),/ITEM_LIMIT/);
+  assert.throws(()=>resolveBattleV2([hero],[enemy],{...options,choices:{[pending.pending.key]:{action:'BASIC',targetId:'manual'}}}),/TARGET/);
+  const configured={...hero,consumables:{...hero.consumables,autoManaBelow:30,autoStrength:true}};
+  const manualChoices={[pending.pending.key]:{action:'BASIC',targetId:'target'}};
+  const partial=resolveBattleV2([configured],[enemy],{...options,maxRounds:2,choices:manualChoices});
+  const resumed=resolveBattleV2([configured],[enemy],{...options,maxRounds:2,pauseManual:false,choices:manualChoices});
+  assert.deepEqual(resumed.log.slice(0,partial.log.length),partial.log,'AI fallback must never insert potions into past manual turns');
+});
+
 function unit(id, side, agi, overrides = {}) {
   return {
     id, name: id, side, slotIndex: 0, agi,

@@ -3,7 +3,7 @@ extends Control
 
 ## Building Upgrade Popup [⬆️] - Clash of Clans Style
 ## Shows current level vs next level stats comparison, required materials (Silver, Wood, Stone),
-## build time, and clean upgrade confirmation button.
+## and immediate upgrade confirmation.
 
 signal closed
 signal upgrade_confirmed(building_data: Dictionary)
@@ -206,14 +206,6 @@ func _build_ui() -> void:
 	cost_row.add_child(_create_cost_pill("🪙 Bạc", cur_silver, req_silver))
 	cost_row.add_child(_create_cost_pill("🪵 Gỗ", cur_wood, req_wood))
 	cost_row.add_child(_create_cost_pill("🪨 Đá", cur_stone, req_stone))
-
-	# Build time indicator
-	var duration_sec := target_level * 15
-	var time_lbl := Label.new()
-	time_lbl.text = "⏱️ Thời gian thi công: %d giây" % duration_sec
-	time_lbl.add_theme_font_size_override("font_size", 11)
-	time_lbl.add_theme_color_override("font_color", Color(0.65, 0.8, 0.95))
-	vbox.add_child(time_lbl)
 
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL

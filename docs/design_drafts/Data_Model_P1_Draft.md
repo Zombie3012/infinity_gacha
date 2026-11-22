@@ -1,3 +1,5 @@
+> Current contract (2026-11-22): [Hero Chronicle and seven-star resurrection](../HERO_CHRONICLE.md). Legacy resurrection-cycle fields below are historical only; pricing no longer uses them. Hero and material rarity is an integer from 1 to 7.
+
 # P1 Data Model & Entity-Relationship Specification
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -165,7 +167,7 @@ Quản lý các công trình được xây dựng trong Private World.
 | `plot_index` | INT | NOT NULL | Vị trí ô đất trên bản đồ căn cứ |
 | `level` | INT | NOT NULL, DEFAULT 1 | Cấp độ công trình |
 | `durability` | INT | NOT NULL, DEFAULT 100 | Độ bền công trình |
-| `status` | VARCHAR(20) | NOT NULL, DEFAULT 'READY' | `CONSTRUCTING`, `UPGRADING`, `READY` |
+| `status` | VARCHAR(20) | NOT NULL, DEFAULT 'READY' | New construction/upgrades finish as `READY`; legacy `CONSTRUCTING`/`UPGRADING` rows are completed on base reads without waiting. See [current contract](../BASE_CONSTRUCTION.md). |
 | `upgrade_finishes_at` | TIMESTAMP WITH TIME ZONE | NULL | Thời điểm hoàn thành nâng cấp |
 | *Ràng buộc* | UNIQUE (`master_id`, `plot_index`) | Không thể xây 2 nhà trên cùng 1 ô |
 

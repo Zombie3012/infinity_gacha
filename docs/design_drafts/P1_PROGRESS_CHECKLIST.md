@@ -1,3 +1,5 @@
+> Updated contract (2026-11-22): [Hero Chronicle, mortality and 1-7 star rarity](../HERO_CHRONICLE.md) supersedes the legacy origin-based death/duplicate rules and Divine Grace sections below. All Heroes die as DEAD and drop equipped gear; one RESURRECTION_GEM_7 revives to full HP with no Silver fee or escalating cycle. NORMAL/SPECIAL/LIMITED remain payment/banner types only.
+
 # P1 Implementation Checklist
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -30,8 +32,8 @@
 - [x] FUN-08-01-005 World Feature Unlock — building types advertise `requiredWorldLevel`; the catalogue marks each type `unlocked` and construction rejects locked types.
 
 ### MOD-08-02 Building Management (5 functions)
-- [x] FUN-08-02-001 Construct Building — `POST /api/base/buildings` (`buildingType`, `plotIndex`); charges Silver, reserves the plot (unique `master_id + plot_index`), starts a `CONSTRUCTING` timer.
-- [x] FUN-08-02-002 Upgrade Building — `POST /api/base/buildings/:id/upgrade`; costs 75% of build price per target level plus WOOD/STONE, sets `UPGRADING` with a countdown, level and capacity apply on completion.
+- [x] FUN-08-02-001 Construct Building — `POST /api/base/buildings` (`buildingType`, `plotIndex`); charges Silver, reserves the plot and immediately returns READY with production active. See [instant construction](../BASE_CONSTRUCTION.md).
+- [x] FUN-08-02-002 Upgrade Building — `POST /api/base/buildings/:id/upgrade`; charges the existing Silver/WOOD/STONE cost, increments level and applies capacity/production immediately in the same transaction. No countdown.
 - [x] FUN-08-02-003 Unlock Building — blueprint unlock is driven by world level (`required_world_level`), see FUN-08-01-005.
 - [x] FUN-08-02-004 Demolish Building — `POST /api/base/buildings/:id/demolish`; refunds 50% of invested Silver, cascades production node and worker assignments.
 - [x] FUN-08-02-005 View Building Status — overview returns status, level/max level, durability, workers, rate, stored/capacity and the `atCapacity` pause flag.
@@ -51,7 +53,7 @@
 
 ### Prototype tuning recorded here (not approved balance)
 - Building catalogue seeded by `building_types.sample.sql`: Farm 1,200 Silver / 50 FOOD_RAW per hour / capacity 500; Lumber Mill 80 WOOD; Stone Quarry 100 STONE; Smithy 30 IRON (world level 2); Kitchen 20 FOOD (level 2); Dormitory and Medical Facility are non-producing.
-- Construction 20s, upgrades 15s × target level. Timers are settled lazily on the next request.
+- No construction/upgrade wait. Legacy pending jobs settle immediately when the base is read, regardless of old deadlines; their prior charges are not repeated.
 - Demolition returns Silver only; spent WOOD/STONE are not refunded.
 - Work shifts do **not** yet raise Hunger/Fatigue: that belongs to DM-09 (next domain) and is a deliberate dependency.
 
@@ -95,7 +97,7 @@
 
 ### MOD-04-03 Medical Facility (4 functions)
 - [x] FUN-04-03-001 Construct Medical Facility — uses the DM-08 building flow with the `MEDICAL` type (world level 2, 3,000 Silver).
-- [x] FUN-04-03-002 Upgrade Medical Facility — DM-08 upgrade path applies (level, durability, timer).
+- [x] FUN-04-03-002 Upgrade Medical Facility — DM-08 instant upgrade path applies; medical treatment itself retains its separate care timer.
 - [x] FUN-04-03-003 Manage Treatment Capacity — bed capacity is `level + 1` (level 1 ⇒ 2 beds, matching scenario 5.1); admission is refused with `Viện Y Tế đã hết giường` when full.
 - [x] FUN-04-03-004 View Medical Facility — overview exposes level, beds used/free and active treatments.
 
@@ -104,14 +106,14 @@
 - [x] FUN-04-04-002 Treatment Queue — active treatments and bed occupancy are part of the overview payload.
 - [x] FUN-04-04-003 Emergency Treatment — `POST /api/medical/emergency` consumes 1 MEDICINE and heals instantly (scenario 5.2).
 - [x] FUN-04-04-004 Discharge — completed treatments mark the injury healed and restore the Hero to HEALTHY.
-- [x] FUN-04-04-005 Resurrection Request — `POST /api/medical/resurrect` opens the Divine Grace flow for DISABLED Heroes.
-- [x] FUN-04-04-006 Resurrection Validation — Normal Heroes are rejected with `ERR_RESURRECTION_NORMAL_PERMADEATH` (scenario 6.3); cost is `n` DIVINE_TEAR + 10,000 × n Silver with a 30-day cycle reset (scenarios 6.1/6.2).
+- [x] FUN-04-04-005 Resurrection Request — `POST /api/medical/resurrect` revives DEAD Heroes with one seven-star gem (the Chronicle endpoint provides the new UI).
+- [x] FUN-04-04-006 Resurrection Validation — All deceased Heroes use one RESURRECTION_GEM_7; full HP, no Silver fee, no cost cycle. See the updated contract.
 - [x] FUN-04-04-007 Process Resurrection — revives to 50% HP, applies +25 fatigue, increments the cycle counter and charges materials/Silver atomically.
 - [x] FUN-04-04-008 Recovery History — every treatment and resurrection is stored in `hero_treatments` with cost, and resurrect actions also write an audit entry.
 
 ### Prototype tuning recorded here
 - Injury thresholds follow the acceptance scenarios; healing is lazy (no background worker).
-- MEDICINE and DIVINE_TEAR are plain `master_items` entries; the prototype seeds neither — operators grant them.
+- MEDICINE and RESURRECTION_GEM_7 use `master_items`; both are sold by the Airship Shop at the temporary price of 1 Silver. DIVINE_TEAR is historical and no longer used.
 - Injuries are recorded from the `advance` route only; the dungeon retreat path does not create injuries yet.
 
 ## Domain 03: Personality, Loyalty and Relationships
@@ -154,7 +156,7 @@
 - [x] FUN-11-04-006 Mail Expiration — expiry is 30 days by default (configurable per send) and expired mail is purged lazily on read.
 
 ### Seed data added
-- `shop_items.sample.sql`: nine entries, including MEDICINE, DIVINE_TEAR, FOOD and raw materials that the previous domains were missing, plus MOON_CAKE rotating on weekends only.
+- `shop_items.sample.sql`: current usable items, equipment and normal summon scrolls, temporarily 1 Silver each with no weekday/daily restrictions. Retired Divine Tears, junk and the unimplemented stamina potion are excluded. See [Airship Shop](../SHOP_AIRSHIP.md).
 
 ## Domain 10: Crafting, Enhancement and Fusion
 

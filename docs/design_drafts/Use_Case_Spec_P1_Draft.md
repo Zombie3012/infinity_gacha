@@ -1,3 +1,5 @@
+> Updated contract (2026-11-22): [Hero Chronicle, mortality and 1-7 star rarity](../HERO_CHRONICLE.md) supersedes the legacy origin-based death/duplicate rules and Divine Grace sections below. All Heroes die as DEAD and drop equipped gear; one RESURRECTION_GEM_7 revives to full HP with no Silver fee or escalating cycle. NORMAL/SPECIAL/LIMITED remain payment/banner types only.
+
 # Use Case Specifications — Phase P1
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -164,26 +166,13 @@ flowchart LR
 
 ---
 
-### UC-P1-06: Resurrect Disabled Hero via Divine Grace
-- **Primary / Supporting Actors:** Player (ACT-01), Game System (ACT-03).
-- **Preconditions:** Special or Limited Hero was defeated in combat, protected by God's Grace, and rests in Medical Facility as `status = 'DISABLED'`.
-- **Trigger:** Player requests resurrection of the Disabled Hero.
-- **Main Flow:**
-  1. Player opens resurrection altar in Medical Facility (`FUN-04-04-005`).
-  2. System verifies required special divine materials and computes current progressive cost multiplier (`FUN-04-04-006`).
-  3. System checks if 30 days have elapsed since the first resurrection in this cycle; if so, resets cost multiplier to base 1.0x.
-  4. Player confirms and consumes divine materials and Silver Coins.
-  5. Hero is revived to `status = 'ALIVE'` with 50% HP and moderate fatigue (`FUN-04-04-007`).
-  6. Resurrection counter increments and timestamp is recorded in `hero_death_records` and `audit_logs` (`FUN-04-04-008`).
-- **Postconditions:** Hero is returned to active roster; progressive cost counter is updated.
-- **Alternate / Exception Paths:** Normal Heroes with Permadeath cannot be resurrected and are rejected with `ERR_RESURRECTION_NORMAL_PERMADEATH`.
-- **Covered Functions:**
-  - `FUN-04-04-005`: Resurrection Request – Yêu cầu hồi sinh
-  - `FUN-04-04-006`: Resurrection Validation – Kiểm tra hồi sinh
-  - `FUN-04-04-007`: Process Resurrection – Xử lý hồi sinh
-  - `FUN-04-04-008`: Recovery History – Lịch sử phục hồi
-
----
+### UC-P1-06: Resurrect deceased Hero via Hero Chronicle
+- **Actors:** Player and Game System.
+- **Preconditions:** An existing owned Hero instance is DEAD at zero HP; Master owns RESURRECTION_GEM_7.
+- **Main Flow:** Open Hero Chronicle, select the deceased instance and request resurrection. Server locks Master and Hero, consumes one gem and restores HEALTHY at full HP in one transaction. Chronicle records the event atomically.
+- **Postconditions:** Hero returns to the active roster, biography unchanged. Silver and dropped gear remain unchanged; no escalating price or cycle applies.
+- **Exceptions:** Missing gem, living/consumed instance or foreign ownership is rejected. Concurrent requests settle once.
+- **Functions:** `FUN-04-04-005` request; `006` validate; `007` settle; `008` history. See [current contract](../HERO_CHRONICLE.md).
 
 ### UC-P1-07: Expand Private World and Manage Base Buildings
 - **Primary / Supporting Actors:** Player (ACT-01), Game System (ACT-03).

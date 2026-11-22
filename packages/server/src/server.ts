@@ -1,10 +1,11 @@
+import { alchemyService } from './modules/base/alchemy.service.js';
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { and, asc, count, desc, eq, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { timingSafeEqual } from 'node:crypto';
-import { aggregateEquipment, BREAKTHROUGH_SILVER_COST, breakthroughMaxLevel, heroEffectiveMaxLevel, roleForClass, rollElementAffinity, starMaxLevel, type EquipmentItemInput, type EquipmentV2Stats, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
+import { aggregateEquipment, BREAKTHROUGH_SILVER_COST, breakthroughMaxLevel, eligibleClasses, heroEffectiveMaxLevel, roleForClass, rollElementAffinity, starMaxLevel, type EquipmentItemInput, type EquipmentV2Stats, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
 import { db, pool } from './database/db.js';
 import { accounts, accountSessions, playerProfiles, banners, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits, heroImprints, imprintDefinitions } from './database/drizzle-schema.js';
 import { CLASS_CHANGE_ITEM, CLASS_CHANGE_SILVER, ProgressionError, allocateTraining, classChangeCheck, isV2Origin, originOf, progressionFor } from './modules/hero/hero-progression.js';
@@ -31,6 +32,7 @@ import { rateGuard, securityAlertService } from './modules/admin/security.servic
 import { BaseError, buildingService } from './modules/base/building.service.js';
 import { SurvivalError, survivalService } from './modules/survival/survival.service.js';
 import { MedicalError, medicalService } from './modules/medical/medical.service.js';
+import { heroChronicleService } from './modules/hero/hero-chronicle.service.js';
 import { PersonalityError, personalityService } from './modules/personality/personality.service.js';
 import { ShopError, shopService } from './modules/shop/shop.service.js';
 import { MailboxError, mailboxService } from './modules/shop/mailbox.service.js';
@@ -74,9 +76,9 @@ function bannerPoolIssue(rows: BannerPoolInput[]): string | undefined {
     if (row.poolGroup === 'FIVE_STAR_HERO') {
       if (row.rewardType !== 'HERO' || row.rarity !== 5 || !row.heroTemplateCode) return 'FIVE_STAR_HERO rows must reference a 5-star Hero template.';
     } else if (row.poolGroup === 'OTHER_HERO') {
-      if (row.rewardType !== 'HERO' || row.rarity === null || row.rarity < 1 || row.rarity > 4 || !row.heroTemplateCode) return 'OTHER_HERO rows must reference a 1–4 star Hero template.';
+      if (row.rewardType !== 'HERO' || row.rarity === null || row.rarity < 1 || row.rarity > 7 || !Number.isInteger(row.rarity) || !row.heroTemplateCode) return 'OTHER_HERO rows must reference a 1-7 star Hero template.';
     } else if (row.poolGroup === 'MATERIAL') {
-      if (row.rewardType !== 'MATERIAL' || row.rarity !== null || row.heroTemplateCode !== null) return 'MATERIAL rows cannot reference Hero templates or rarity.';
+      if (row.rewardType !== 'MATERIAL' || (row.rarity !== null && (!Number.isInteger(row.rarity) || row.rarity < 1 || row.rarity > 7)) || row.heroTemplateCode !== null) return 'MATERIAL rows require a 1-7 star rarity (or catalogue default) and cannot reference Hero templates.';
     } else return 'Unknown banner pool group.';
   }
   const hasHero = groups.has('FIVE_STAR_HERO') || groups.has('OTHER_HERO');
@@ -550,6 +552,8 @@ export function createApp() {
     const oneW = weightByStar(1);
     const heroTotalW = heroRows.reduce((s, r) => s + r.weight, 0);
     return {
+      sevenStarHeroPercent: pct(weightByStar(7)),
+      sixStarHeroPercent: pct(weightByStar(6)),
       fiveStarHeroPercent: pct(fiveW),
       fourStarHeroPercent: pct(fourW),
       threeStarHeroPercent: pct(threeW),
@@ -1883,13 +1887,15 @@ export function createApp() {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
-      const result = await shopService.purchase(master.id, String(req.body?.itemCode ?? ''), req.body?.quantity);
-      void questService.recordEvent(master.id, 'SPEND_SILVER', result.silverSpent).catch(error => console.error('[quest] spend progress failed', error));
-      void eventService.recordEvent(master.id, 'SPEND_SILVER', result.silverSpent).catch(error => console.error('[liveops] spend progress failed', error));
-      void auditService.record({
-        actorId: master.id, actorType: 'MASTER', action: 'SHOP_PURCHASE', entityType: 'SHOP_ITEM',
-        entityId: String(req.body?.itemCode ?? ''), diff: { purchased: result.purchased, silverSpent: result.silverSpent },
+      const result = await shopService.purchase(master.id, String(req.body?.itemCode ?? ''), req.body?.quantity, new Date(), req.get('Idempotency-Key'));
+      if (!result.replayed) {
+        void questService.recordEvent(master.id, 'SPEND_SILVER', result.silverSpent).catch(error => console.error('[quest] spend progress failed', error));
+        void eventService.recordEvent(master.id, 'SPEND_SILVER', result.silverSpent).catch(error => console.error('[liveops] spend progress failed', error));
+        void auditService.record({
+          actorId: master.id, actorType: 'MASTER', action: 'SHOP_PURCHASE', entityType: 'SHOP_ITEM',
+          entityId: String(req.body?.itemCode ?? ''), diff: { purchased: result.purchased, silverSpent: result.silverSpent },
       });
+      }
       return res.json(result);
     } catch (error) {
       if (shopError(res, error)) return undefined;
@@ -2078,6 +2084,31 @@ export function createApp() {
     }
   }));
 
+  app.get('/api/chronicles/heroes', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await heroChronicleService.list(master.id, String(req.query.status ?? ''), Number(req.query.page ?? 1)));
+  }));
+
+  app.get('/api/chronicles/heroes/:id', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try { return res.json(await heroChronicleService.detail(master.id, String(req.params.id))); }
+    catch (error) { if (medicalError(res, error)) return undefined; throw error; }
+  }));
+
+  app.post('/api/chronicles/heroes/:id/resurrect', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      const result = await heroChronicleService.resurrect(master.id, String(req.params.id));
+      void auditService.record({ actorId: master.id, actorType: 'MASTER', action: 'HERO_RESURRECTED',
+        entityType: 'HERO', entityId: result.heroId, diff: { gemsUsed: result.gemsUsed, silverSpent: result.silverSpent } });
+      return res.json(result);
+    }
+    catch (error) { if (medicalError(res, error)) return undefined; throw error; }
+  }));
+
   app.post('/api/medical/resurrect', requireAccount, asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
@@ -2086,7 +2117,7 @@ export function createApp() {
       void auditService.record({
         actorId: master.id, actorType: 'MASTER', action: 'HERO_RESURRECTED',
         entityType: 'HERO', entityId: result.heroId,
-        diff: { tearsUsed: result.tearsUsed, silverSpent: result.silverSpent, cycleCount: result.cycleCount, cycleReset: result.cycleReset },
+        diff: { gemsUsed: result.gemsUsed, silverSpent: result.silverSpent },
       });
       return res.json(result);
     } catch (error) {
@@ -2554,6 +2585,7 @@ export function createApp() {
         };
       }
 
+      if (hero.state === 'DEAD' || hero.state === 'DISABLED' || hero.hp <= 0) derivedStats.hp = 0;
       const elementAffinities = affinityByHero.get(hero.id) ?? (
         effectiveClass === 'MAGE'
           ? { FIRE: 60, WATER: 45, WIND: 40, EARTH: 35, LIGHT: 50, DARK: 30, LIGHTNING: 55 }
@@ -2572,6 +2604,7 @@ export function createApp() {
         starCeiling: starMaxLevel(hero.rarity),
         breakthroughCap: breakthroughMaxLevel(hero.promotionRank),
         skills,
+        classChangeOptions: isV2 ? eligibleClasses({str:hero.baseStr,int:hero.baseInt,sta:hero.baseSta,agi:hero.baseAgi},hero.level,hero.rarity as StarRating) : [],
         derivedStats,
         elementAffinities,
         ...(v2Stats ? { v2Stats, effectiveBaseStats } : {}),
@@ -2932,7 +2965,7 @@ export function createApp() {
 
     const currentRank = hero.promotionRank ?? 0;
     const nextRank = currentRank + 1;
-    const isMax = currentRank >= 4;
+    const isMax = currentRank >= 6;
 
     const [config] = await db.select().from(heroDevelopmentConfigs)
       .where(and(eq(heroDevelopmentConfigs.action, 'PROMOTION'), eq(heroDevelopmentConfigs.rank, nextRank))).limit(1);
@@ -3585,6 +3618,24 @@ export function createApp() {
     }
   }));
 
+  app.get('/api/alchemy', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await alchemyService.state(master.id));
+  }));
+  for (const operation of ['research', 'craft', 'configure', 'use'] as const) {
+    app.post(`/api/alchemy/${operation}`, requireAccount, asyncRoute(async (req, res) => {
+      const master = await requireMaster(req);
+      if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+      return res.json(await pveService.command(master.id, `ALCHEMY:${operation}`, req.header('Idempotency-Key') ?? '', req.body, async tx => {
+        if (operation === 'research') return alchemyService.research(tx, master.id, String(req.body?.code ?? ''));
+        if (operation === 'craft') return alchemyService.craft(tx, master.id, String(req.body?.code ?? ''), req.body?.quantity);
+        if (operation === 'use') return alchemyService.use(tx, master.id, String(req.body?.heroId ?? ''), String(req.body?.itemId ?? ''), req.body?.slotIndex);
+        return alchemyService.configure(tx, master.id, String(req.body?.heroId ?? ''), req.body?.config);
+      }));
+    }));
+  }
+
   app.get('/api/pve/state', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
@@ -3629,6 +3680,24 @@ export function createApp() {
     return res.json(await pveService.move(master.id, String(req.params.squadId), req.body, req.header('Idempotency-Key') ?? ''));
   }));
 
+  app.post('/api/pve/squads/:squadId/portal', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.portal(master.id, String(req.params.squadId), req.body, req.header('Idempotency-Key') ?? ''));
+  }));
+
+  app.post('/api/pve/dev/reset-tower', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.resetTower(master.id, req.body, req.header('Idempotency-Key') ?? ''));
+  }));
+
+  app.post('/api/pve/squads/:squadId/recall-point', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.placeRecallPoint(master.id, String(req.params.squadId), req.body, req.header('Idempotency-Key') ?? ''));
+  }));
+
   app.post('/api/pve/squads/:squadId/recall', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
@@ -3648,6 +3717,19 @@ export function createApp() {
       typeof req.query.before === 'string' ? req.query.before : undefined,
       typeof req.query.mapId === 'string' ? req.query.mapId : undefined,
       req.query.limit === undefined ? 30 : Number(req.query.limit)));
+  }));
+
+  app.post('/api/pve/consumables/use', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.command(master.id, 'CONSUMABLE_USE', req.header('Idempotency-Key') ?? '', req.body,
+      tx => alchemyService.use(tx, master.id, String(req.body?.heroId ?? ''), String(req.body?.itemId ?? ''), req.body?.slotIndex)));
+  }));
+
+  app.post('/api/pve/battles/:battleId/action', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.liveBattle(master.id, String(req.params.battleId), req.body, req.header('Idempotency-Key') ?? ''));
   }));
 
   app.get('/api/pve/battles/:battleId', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {

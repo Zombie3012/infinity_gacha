@@ -36,6 +36,7 @@ func _init() -> void:
 func _ready() -> void:
 	if not _is_ui_built:
 		_build_ui()
+	EventBus.heroes_updated.connect(func(_heroes: Array): refresh_ui())
 	refresh_ui()
 
 func setup(b_data: Dictionary) -> void:
@@ -83,7 +84,7 @@ func refresh_ui() -> void:
 		_ration_label.text = "🍖 Lương thực: %d" % rations
 
 	if _hero_browser != null:
-		_hero_browser.set_items(GameState.heroes.filter(func(hero): return hero is Dictionary and not GameState.is_hero_pve_deployed(hero)), true)
+		_hero_browser.set_items(GameState.heroes.filter(func(hero): return hero is Dictionary and GameState.is_hero_available(hero)), true)
 
 func _build_ui() -> void:
 	if _is_ui_built:

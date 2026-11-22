@@ -262,42 +262,7 @@ test('Battle Result & Report - FUN-06-05-001 -> 003 Result, Survival & Casualtie
     assert.equal(survivors[1].hpPercent, 30);
   });
 
-  await t.test('FUN-06-05-003: Process battle casualties (Normal permadeath vs Special/Limited disabled)', () => {
-    const fallenHeroes = [
-      { id: 'h-normal', name: 'Militia Soldier', origin: 'NORMAL', hp: 0, equippedItems: ['iron_sword', 'wooden_shield'] },
-      { id: 'h-limited', name: 'Phoenix Sorceress', origin: 'LIMITED', hp: 0, equippedItems: ['phoenix_staff'] },
-      { id: 'h-special', name: 'Worldbreaker', origin: 'SPECIAL', hp: 0, equippedItems: ['excalibur'] },
-    ];
-
-    const processed = fallenHeroes.map(h => {
-      const isNormal = h.origin === 'NORMAL';
-      const deathType = isNormal ? 'PERMADEATH' : 'DISABLED';
-      const droppedGear = isNormal ? [...h.equippedItems] : [];
-      const newState = isNormal ? 'DEAD' : 'DISABLED';
-      return {
-        id: h.id,
-        name: h.name,
-        deathType,
-        newState,
-        droppedEquipmentCount: droppedGear.length,
-      };
-    });
-
-    // Normal Hero permadeath and equipment dropped
-    assert.equal(processed[0].deathType, 'PERMADEATH');
-    assert.equal(processed[0].newState, 'DEAD');
-    assert.equal(processed[0].droppedEquipmentCount, 2);
-
-    // Limited Hero disabled, NO equipment dropped
-    assert.equal(processed[1].deathType, 'DISABLED');
-    assert.equal(processed[1].newState, 'DISABLED');
-    assert.equal(processed[1].droppedEquipmentCount, 0);
-
-    // Special Hero disabled, NO equipment dropped
-    assert.equal(processed[2].deathType, 'DISABLED');
-    assert.equal(processed[2].newState, 'DISABLED');
-    assert.equal(processed[2].droppedEquipmentCount, 0);
-  });
+  // Casualty persistence and gear drops are verified by http.hero-lifecycle/http.pve tests.
   await t.test('FUN-06-05-004: Distribute battle EXP across surviving heroes', () => {
     const totalExpReward = 100;
     const survivors = [

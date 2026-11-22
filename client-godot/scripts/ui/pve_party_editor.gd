@@ -11,6 +11,8 @@ var _slots: Dictionary = {}
 var _skill_orders: Dictionary = {}
 var _focused_hero: String = ""
 var _name_input: LineEdit
+var _loadouts: Dictionary = {}
+var _battle_mode: OptionButton
 var _priority: OptionButton
 var _grid: GridContainer
 var _skill_box: VBoxContainer
@@ -25,10 +27,15 @@ var _close_button: Button
 func configure(party: Dictionary) -> void:
 	party_data = party.duplicate(true)
 	for member in party_data.get("members", []):
-		_hero_ids.append(str(member.get("heroId", "")))
+		var member_id := str(member.get("heroId", ""))
+		var hero := GameState.get_hero_by_id(member_id)
+		if hero.is_empty() or GameState.is_hero_alive(hero):
+			_hero_ids.append(member_id)
 	var plan_value: Variant = party_data.get("plan")
 	if plan_value is Dictionary:
 		for member in plan_value.get("members", []):
+			if not _hero_ids.has(str(member.get("heroId", ""))):
+				continue
 			_slots[int(member.get("slotIndex", 0))] = str(member.get("heroId", ""))
 			_skill_orders[str(member.get("heroId", ""))] = member.get("skillOrder", []).duplicate()
 	else:
@@ -36,6 +43,9 @@ func configure(party: Dictionary) -> void:
 			_slots[[0, 2, 4, 6, 8][index]] = _hero_ids[index]
 
 func _ready() -> void:
+	for row in PveState.snapshot.get("loadouts", []):
+		_loadouts[str(row.get("heroId", ""))] = row.get("config", {}).duplicate(true)
+	EventBus.heroes_updated.connect(_on_heroes_updated)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var backdrop := ColorRect.new()
@@ -90,6 +100,12 @@ func _ready() -> void:
 	var selected_priority := str(party_data.get("plan", {}).get("targetPriority", "FRONTLINE")) if party_data.get("plan") is Dictionary else "FRONTLINE"
 	_priority.select(maxi(0, ["FRONTLINE", "LOWEST_HP", "HIGHEST_ATK"].find(selected_priority)))
 	right.add_child(_priority)
+	_battle_mode = OptionButton.new()
+	_battle_mode.add_item("Tự động giao chiến")
+	_battle_mode.add_item("Thủ công • 10 giây/lượt")
+	var mode_plan: Dictionary = party_data.get("plan") if party_data.get("plan") is Dictionary else {}
+	_battle_mode.select(1 if mode_plan.get("battleMode", "AUTO") == "MANUAL" else 0)
+	right.add_child(_battle_mode)
 	var skill_scroll := ScrollContainer.new()
 	skill_scroll.custom_minimum_size = Vector2(290, 270)
 	skill_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -97,7 +113,7 @@ func _ready() -> void:
 	_skill_box = VBoxContainer.new()
 	_skill_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	skill_scroll.add_child(_skill_box)
-	var info := Ui.label(right, "Khi giao chiến, Hero tự hành động.\nKhông thể đổi chiến thuật giữa trận.", 13, Ui.MUTED)
+	var info := Ui.label(right, "Chọn chế độ trước khi triển khai.\nThủ công: 10 giây mỗi lượt; hết giờ tự đánh.", 13, Ui.MUTED)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var actions := HBoxContainer.new()
 	_feedback = Ui.label(panel, "", 13, Color("ffb49a"))
@@ -117,7 +133,7 @@ func _ready() -> void:
 func _build_roster() -> void:
 	var reserved: Array = PveState.reserved_hero_ids()
 	for hero in GameState.heroes:
-		if not (hero is Dictionary):
+		if not (hero is Dictionary) or not GameState.is_hero_alive(hero):
 			continue
 		var hero_id := str(hero.get("id", ""))
 		var state_value := str(hero.get("state", ""))
@@ -133,6 +149,19 @@ func _build_roster() -> void:
 		check.toggled.connect(func(selected: bool): _toggle_hero(hero_id, selected))
 		_roster_box.add_child(check)
 		_hero_checks[hero_id] = check
+
+func _on_heroes_updated(_heroes: Array) -> void:
+	_hero_ids = _hero_ids.filter(func(id): return GameState.is_hero_alive(GameState.get_hero_by_id(str(id))))
+	for slot in _slots.keys():
+		if not _hero_ids.has(_slots[slot]):
+			_slots.erase(slot)
+	if not _hero_ids.has(_focused_hero):
+		_focused_hero = str(_hero_ids[0]) if not _hero_ids.is_empty() else ""
+	Ui.clear(_roster_box)
+	_hero_checks.clear()
+	_build_roster()
+	_render_formation()
+	_render_skills()
 
 func _toggle_hero(hero_id: String, selected: bool) -> void:
 	if selected:
@@ -206,6 +235,14 @@ func _render_skills() -> void:
 	var heading := Ui.label(_skill_box, "KỸ NĂNG — " + str(hero.get("name", "Chọn một Hero")), 13, Ui.GOLD)
 	heading.clip_text = true
 	heading.tooltip_text = str(hero.get("name", ""))
+	if not hero.is_empty():
+		Ui.button(_skill_box, "Túi tiêu hao • 5 ô", func():
+			var editor = preload("res://scripts/ui/pve_consumable_editor.gd").new()
+			editor.config = _loadouts.get(_focused_hero, {}).duplicate(true)
+			var hero_id := _focused_hero
+			editor.configured.connect(func(config): _loadouts[hero_id] = config)
+			add_child(editor)
+		)
 	var skills: Array = hero.get("skills", []).filter(func(skill): return bool(skill.get("isUnlocked", false)))
 	var available: Array = skills.map(func(skill): return str(skill.get("code", "")))
 	var ordered: Array = []
@@ -257,7 +294,7 @@ func _on_save() -> void:
 			members.append({"heroId": hero_id, "slotIndex": cell, "skillOrder": _skill_orders.get(hero_id, [])})
 	var priorities := ["FRONTLINE", "LOWEST_HP", "HIGHEST_ATK"]
 	saved.emit(str(party_data.get("id", "")), {"name": _name_input.text.strip_edges(), "heroIds": _hero_ids.duplicate(),
-		"plan": {"targetPriority": priorities[_priority.selected], "members": members}})
+		"loadouts": _selected_loadouts(), "plan": {"battleMode": "MANUAL" if _battle_mode.selected == 1 else "AUTO", "targetPriority": priorities[_priority.selected], "members": members}})
 
 func show_error(message: String, retry_available: bool) -> void:
 	_feedback.text = message
@@ -279,3 +316,9 @@ func set_busy(busy: bool) -> void:
 			control.disabled = bool(control.get_meta("pve_previous_disabled"))
 			control.remove_meta("pve_previous_disabled")
 	_retry_button.disabled = PveState.command_busy
+
+func _selected_loadouts() -> Dictionary:
+	var result: Dictionary = {}
+	for id in _hero_ids:
+		if _loadouts.has(id): result[id] = _loadouts[id]
+	return result

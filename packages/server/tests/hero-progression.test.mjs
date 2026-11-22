@@ -7,6 +7,12 @@ import {
 
 const origin5 = { str: 70, int: 70, sta: 70, agi: 70 }; // 280 budget
 
+test('living fractional HP never rounds down to zero, while zero remains zero', () => {
+  const input = { origin: origin5, star: 5, level: 1, classCode: 'WARRIOR' };
+  assert.equal(progressionFor({ ...input, hpPct: 0.0000001 }).hp, 1);
+  assert.equal(progressionFor({ ...input, hpPct: 0 }).hp, 0);
+});
+
 test('Combat v2 - progression recompute', async (t) => {
   await t.test('level 50 recomputes base stats from origin and training', () => {
     const snapshot = progressionFor({

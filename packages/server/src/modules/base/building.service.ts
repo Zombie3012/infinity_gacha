@@ -1,19 +1,21 @@
-import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, notInArray, lte, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { heroEffectiveMaxLevel, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
 import { db } from '../../database/db.js';
+import type { GameTransaction } from '../../database/transaction.js';
 import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.js';
 import { survivalService } from '../survival/survival.service.js';
+import { RETIRED_MAGIC_BUILDINGS, magicSnapshot, updateMagicProduction, collectMagic } from './magic-production.js';
 import {
   baseBuildings, baseProductionNodes, buildingTypes, buildingWorkerAssignments, heroLevelConfigs, heroes, masterItems, masters, worlds,
 } from '../../database/drizzle-schema.js';
 import {
   MAX_BASE_ZONES, PARTY_MANSION_REQUIRED_MASTER_LEVEL, PARTY_MANSION_UPGRADE_COST_SILVER,
-  accruedStored, buildingProductionForLevel, capacityForLevel, constructionSeconds, demolishRefundSilver,
+  accruedStored, buildingProductionForLevel, capacityForLevel, demolishRefundSilver,
   dormitoryRecoveryMultiplier, dormitoryResidentCapacity, expansionCostSilver, expansionRequiredWorldLevel,
   libraryMageExpPerHour, maxConstructibleCountForType, maxWorkersForBuildingLevel, plotsForZones,
   productionRatePerHour, recoveryCenterTreatmentSlots, requiredMasterLevelForFloor, unlockedLobbyFloorsForMasterLevel,
-  upgradeCostSilver, upgradeMaterials, upgradeSeconds, warehouseBonusSlotsForLevel, worldLevelForFloor,
+  upgradeCostSilver, upgradeMaterials, warehouseBonusSlotsForLevel, worldLevelForFloor,
 } from './base-rules.js';
 
 export class BaseError extends Error {
@@ -51,50 +53,53 @@ export class BuildingService {
     return master;
   }
 
-  /** Finish construction/upgrade timers whose deadline has passed. */
-  private async settle(masterId: string, now = new Date()) {
-    const pending = await db.select().from(baseBuildings).where(and(
-      eq(baseBuildings.masterId, masterId),
-      inArray(baseBuildings.status, ['CONSTRUCTING', 'UPGRADING']),
-    ));
-    const due = pending.filter(row => row.upgradeFinishesAt && row.upgradeFinishesAt <= now);
-    if (due.length === 0) return;
-
-    const typeCodes = [...new Set(due.map(row => row.buildingType))];
-    const types = await db.select().from(buildingTypes).where(inArray(buildingTypes.code, typeCodes));
-    const typeByCode = new Map(types.map(row => [row.code, row]));
-
-    for (const row of due) {
-      const type = typeByCode.get(row.buildingType);
-      if (row.status === 'CONSTRUCTING') {
-        await db.update(baseBuildings).set({ status: 'READY', upgradeFinishesAt: null, updatedAt: now })
-          .where(eq(baseBuildings.id, row.id));
-        const profile = buildingProductionForLevel(row.buildingType, 1) ?? asProfile(type?.production);
-        if (profile) {
-          await db.insert(baseProductionNodes).values({
-            id: uuidv4(),
-            buildingId: row.id,
-            resourceType: profile.resourceType,
-            baseRatePerHour: profile.ratePerHour,
-            currentStored: 0,
-            maxCapacity: profile.capacity,
-            lastHarvestAt: now,
-          }).onConflictDoNothing();
-        }
-      } else {
-        const level = Math.min(type?.maxLevel ?? 3, row.level + 1);
-        await db.update(baseBuildings).set({ status: 'READY', level, upgradeFinishesAt: null, updatedAt: now })
-          .where(eq(baseBuildings.id, row.id));
-        const profile = buildingProductionForLevel(row.buildingType, level) ?? asProfile(type?.production);
-        if (profile) {
-          await db.update(baseProductionNodes).set({
-            resourceType: profile.resourceType,
-            baseRatePerHour: profile.ratePerHour,
-            maxCapacity: profile.capacity,
-          }).where(eq(baseProductionNodes.buildingId, row.id));
-        }
-      }
+  /** Apply the new production profile without revaluing past production at the new rate. */
+  private async updateProduction(tx: GameTransaction, building: typeof baseBuildings.$inferSelect,
+    type: typeof buildingTypes.$inferSelect, level: number, now: Date) {
+    if (building.buildingType === 'HALL_OF_MAGIC') return updateMagicProduction(tx, building, level, now);
+    const profile = buildingProductionForLevel(building.buildingType, level) ?? asProfile(type.production);
+    if (!profile) return;
+    const [node] = await tx.select().from(baseProductionNodes).where(eq(baseProductionNodes.buildingId, building.id)).for('update');
+    let stored = 0;
+    if (node) {
+      const workers = await tx.select({ boost: buildingWorkerAssignments.efficiencyBoost, classCode: heroes.classCode })
+        .from(buildingWorkerAssignments).innerJoin(heroes, eq(heroes.id, buildingWorkerAssignments.heroInstanceId))
+        .where(eq(buildingWorkerAssignments.buildingId, building.id));
+      const oldProfile = buildingProductionForLevel(building.buildingType, building.level);
+      const boosts = workers.map(worker => worker.boost);
+      const share = boosts.reduce((sum, boost) => sum + Math.max(0, boost - 1), 0);
+      const rate = building.buildingType === 'LIBRARY' && !workers.some(worker => worker.classCode === 'MAGE') ? 0
+        : oldProfile ? oldProfile.ratePerHour * (1 + share) : productionRatePerHour(node.baseRatePerHour, building.level, boosts);
+      stored = accruedStored(node.currentStored, rate, node.lastHarvestAt, node.maxCapacity, now).stored;
     }
+    const capacity = buildingProductionForLevel(building.buildingType, level) ? profile.capacity : capacityForLevel(profile.capacity, level);
+    await tx.insert(baseProductionNodes).values({ id: node?.id ?? uuidv4(), buildingId: building.id,
+      resourceType: profile.resourceType, baseRatePerHour: profile.ratePerHour,
+      maxCapacity: capacity, currentStored: Math.min(stored, capacity), lastHarvestAt: now,
+    }).onConflictDoUpdate({ target: [baseProductionNodes.buildingId], set: {
+      resourceType: profile.resourceType, baseRatePerHour: profile.ratePerHour, maxCapacity: capacity,
+      currentStored: Math.min(stored, capacity), lastHarvestAt: now,
+    } });
+  }
+
+  /** Complete legacy pending jobs immediately, once, regardless of their old deadline. */
+  private async settle(masterId: string, now = new Date()) {
+    const [pending] = await db.select({ id: baseBuildings.id }).from(baseBuildings)
+      .where(and(eq(baseBuildings.masterId, masterId), inArray(baseBuildings.status, ['CONSTRUCTING', 'UPGRADING']))).limit(1);
+    if (!pending) return;
+    await db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      const rows = await tx.select().from(baseBuildings)
+        .where(and(eq(baseBuildings.masterId, masterId), inArray(baseBuildings.status, ['CONSTRUCTING', 'UPGRADING']))).for('update');
+      for (const row of rows) {
+        const [type] = await tx.select().from(buildingTypes).where(eq(buildingTypes.code, row.buildingType)).limit(1);
+        if (!type) throw new BaseError('Building type not found.', 404);
+        const level = row.status === 'UPGRADING' ? Math.min(type.maxLevel, row.level + 1) : row.level;
+        await this.updateProduction(tx, row, type, level, now);
+        await tx.update(baseBuildings).set({ status: 'READY', level, upgradeFinishesAt: null, updatedAt: now })
+          .where(eq(baseBuildings.id, row.id));
+      }
+    });
   }
 
   async overview(masterId: string) {
@@ -102,7 +107,7 @@ export class BuildingService {
     const master = await this.master(masterId);
     const world = await this.world(masterId);
     const worldLevel = worldLevelForFloor(world.currentFloor);
-    const types = await db.select().from(buildingTypes).orderBy(asc(buildingTypes.code));
+    const types = await db.select().from(buildingTypes).where(notInArray(buildingTypes.code, RETIRED_MAGIC_BUILDINGS)).orderBy(asc(buildingTypes.code));
     const buildings = await db.select().from(baseBuildings)
       .where(eq(baseBuildings.masterId, masterId)).orderBy(asc(baseBuildings.plotIndex));
     const nodes = buildings.length === 0 ? [] : await db.select().from(baseProductionNodes)
@@ -131,6 +136,19 @@ export class BuildingService {
 
     const typeByCode = new Map(types.map(type => [type.code, type]));
     const plots = Array.from({ length: plotsForZones(world.baseZones) }, (_, index) => index + 1);
+    const magic = new Map(await Promise.all(buildings.filter(b => b.buildingType === 'HALL_OF_MAGIC').map(async b => {
+      let snapshot = await magicSnapshot(db,b.id,now);
+      if (snapshot.length !== 2 || snapshot.some(n => n.resourceType !== buildingProductionForLevel(n.wing,b.level)?.resourceType
+          || n.baseRatePerHour !== buildingProductionForLevel(n.wing,b.level)?.ratePerHour)) {
+        await db.transaction(async tx => {
+          await tx.select({id:masters.id}).from(masters).where(eq(masters.id,masterId)).for('update');
+          const [fresh] = await tx.select().from(baseBuildings).where(eq(baseBuildings.id,b.id));
+          if (fresh) await updateMagicProduction(tx,fresh,fresh.level,new Date());
+        });
+        snapshot = await magicSnapshot(db,b.id,new Date());
+      }
+      return [b.id,snapshot] as const;
+    })));
     const rows = buildings.map(building => {
       const type = typeByCode.get(building.buildingType);
       const node = nodeByBuilding.get(building.id);
@@ -156,6 +174,7 @@ export class BuildingService {
         ? accruedStored(node.currentStored, rate, node.lastHarvestAt, capacity, now)
         : { stored: 0, atCapacity: false, hoursElapsed: 0 };
       const maxWorkers = maxWorkersForBuildingLevel(building.buildingType, building.level, type?.maxWorkers ?? 0);
+      const magicProduction = magic.get(building.id);
       return {
         ...building,
         typeName: type?.name ?? building.buildingType,
@@ -176,6 +195,9 @@ export class BuildingService {
         treatmentSlots: building.buildingType === 'MEDICAL' ? recoveryCenterTreatmentSlots(building.level) : 0,
         warehouseBonusSlots: building.buildingType === 'WAREHOUSE' ? warehouseBonusSlotsForLevel(building.level) : 0,
         workers,
+        ...(magicProduction ? { magicProduction, stored:magicProduction.reduce((s,n)=>s+n.stored,0),
+          capacity:magicProduction.reduce((s,n)=>s+n.capacity,0),ratePerHour:magicProduction.reduce((s,n)=>s+n.ratePerHour,0),
+          resourceType:'MAGIC_OUTPUT',atCapacity:magicProduction.some(n=>n.atCapacity) } : {}),
       };
     });
 
@@ -238,33 +260,37 @@ export class BuildingService {
   async construct(masterId: string, buildingTypeCode: unknown, plotIndexInput: unknown) {
     await this.settle(masterId);
     const code = typeof buildingTypeCode === 'string' ? buildingTypeCode : '';
+    if (RETIRED_MAGIC_BUILDINGS.includes(code)) throw new BaseError('Chức năng này đã gộp vào Đại Sảnh Ma Thuật.',404);
     const plotIndex = Number(plotIndexInput);
     if (!Number.isInteger(plotIndex) || plotIndex < 1) throw new BaseError('plotIndex không hợp lệ.');
 
-    const master = await this.master(masterId);
-    const world = await this.world(masterId);
-    const worldLevel = worldLevelForFloor(world.currentFloor);
-    const [type] = await db.select().from(buildingTypes).where(eq(buildingTypes.code, code)).limit(1);
-    if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
-    if (type.code === 'PARTY_MANSION' && master.level < PARTY_MANSION_REQUIRED_MASTER_LEVEL) {
-      throw new BaseError(`Party Mansion cần Master đạt cấp ${PARTY_MANSION_REQUIRED_MASTER_LEVEL}.`, 409);
-    }
-    if (worldLevel < type.requiredWorldLevel && master.level < requiredMasterLevelForFloor(type.requiredWorldLevel + 1)) {
-      throw new BaseError(`Công trình cần World Level ${type.requiredWorldLevel}.`, 409);
-    }
-    const maxCount = maxConstructibleCountForType(type.code, master.level);
-    if (maxCount !== null) {
-      const existingOfType = await db.select({ id: baseBuildings.id }).from(baseBuildings)
-        .where(and(eq(baseBuildings.masterId, masterId), eq(baseBuildings.buildingType, type.code)));
-      if (existingOfType.length >= maxCount) {
-        throw new BaseError(`Đã đạt giới hạn tối đa ${maxCount} công trình ${type.name} ở cấp Master hiện tại.`, 409);
-      }
-    }
-    const maxUnlockedPlots = plotsForZones(Math.max(world.baseZones, unlockedLobbyFloorsForMasterLevel(master.level)));
-    if (plotIndex > maxUnlockedPlots) throw new BaseError('Ô đất chưa được mở khóa.', 409);
-
     const now = new Date();
-    const created = await db.transaction(async tx => {
+    return db.transaction(async tx => {
+      const [master] = await tx.select().from(masters).where(eq(masters.id, masterId)).for('update');
+      if (!master) throw new BaseError('Master not found.', 404);
+      const [world] = await tx.select().from(worlds).where(eq(worlds.masterId, masterId)).limit(1);
+      if (!world) throw new BaseError('World not found.', 404);
+      const worldLevel = worldLevelForFloor(world.currentFloor);
+      const [type] = await tx.select().from(buildingTypes).where(eq(buildingTypes.code, code)).limit(1);
+      if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
+      if (type.code === 'PARTY_MANSION' && master.level < PARTY_MANSION_REQUIRED_MASTER_LEVEL) {
+        throw new BaseError(`Party Mansion cần Master đạt cấp ${PARTY_MANSION_REQUIRED_MASTER_LEVEL}.`, 409);
+      }
+      const requiredMasterLevel = type.code === 'HALL_OF_MAGIC' ? 15 : requiredMasterLevelForFloor(type.requiredWorldLevel + 1);
+      if (worldLevel < type.requiredWorldLevel && master.level < requiredMasterLevel) {
+        throw new BaseError(`Công trình cần World Level ${type.requiredWorldLevel}.`, 409);
+      }
+      const maxCount = maxConstructibleCountForType(type.code, master.level);
+      if (maxCount !== null) {
+        const existingOfType = await tx.select({ id: baseBuildings.id }).from(baseBuildings)
+          .where(and(eq(baseBuildings.masterId, masterId), eq(baseBuildings.buildingType, type.code)));
+        if (existingOfType.length >= maxCount) {
+          throw new BaseError(`Đã đạt giới hạn tối đa ${maxCount} công trình ${type.name} ở cấp Master hiện tại.`, 409);
+        }
+      }
+      const maxUnlockedPlots = plotsForZones(Math.max(world.baseZones, unlockedLobbyFloorsForMasterLevel(master.level)));
+      if (plotIndex > maxUnlockedPlots) throw new BaseError('Ô đất chưa được mở khóa.', 409);
+
       const [existing] = await tx.select({ id: baseBuildings.id }).from(baseBuildings)
         .where(and(eq(baseBuildings.masterId, masterId), eq(baseBuildings.plotIndex, plotIndex))).limit(1);
       if (existing) throw new BaseError('Ô đất đã có công trình.', 409);
@@ -279,44 +305,44 @@ export class BuildingService {
         plotIndex,
         level: 1,
         durability: 100,
-        status: 'CONSTRUCTING',
-        upgradeFinishesAt: new Date(now.getTime() + constructionSeconds(1) * 1000),
+        status: 'READY',
+        upgradeFinishesAt: null,
         createdAt: now,
         updatedAt: now,
       }).returning();
-      return building;
+      await this.updateProduction(tx, building, type, 1, now);
+      return { building, silverSpent: type.buildCostSilver };
     });
-
-    return { building: created, silverSpent: type.buildCostSilver };
   }
 
   async upgrade(masterId: string, buildingId: string) {
     await this.settle(masterId);
-    const master = await this.master(masterId);
-    const [building] = await db.select().from(baseBuildings)
-      .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
-    if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
-    if (building.status !== 'READY') throw new BaseError('Công trình đang trong quá trình thi công.', 409);
-
-    const [type] = await db.select().from(buildingTypes).where(eq(buildingTypes.code, building.buildingType)).limit(1);
-    if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
-    const targetLevel = building.level + 1;
-    const maxLevel = Math.min(3, type.maxLevel ?? 3);
-    if (targetLevel > maxLevel) throw new BaseError(`Công trình đã đạt cấp tối đa ${maxLevel}.`, 409);
-
-    const silverCost = upgradeCostSilver(type.buildCostSilver, targetLevel);
-    if (master.silverCoins < BigInt(silverCost)) throw new BaseError('Không đủ Xu Bạc để nâng cấp.', 409);
-    const materials = upgradeMaterials(targetLevel);
-    const owned = await db.select().from(masterItems)
-      .where(and(eq(masterItems.masterId, masterId), inArray(masterItems.itemId, materials.map(row => row.itemId))));
-    const ownedByItem = new Map(owned.map(row => [row.itemId, row.quantity]));
-    const missing = materials.filter(row => (ownedByItem.get(row.itemId) ?? 0) < row.quantity);
-    if (missing.length > 0) {
-      throw new BaseError(`Thiếu nguyên liệu: ${missing.map(row => `${row.itemId} ×${row.quantity}`).join(', ')}.`, 409);
-    }
-
     const now = new Date();
-    const updated = await db.transaction(async tx => {
+    return db.transaction(async tx => {
+      const [master] = await tx.select().from(masters).where(eq(masters.id, masterId)).for('update');
+      if (!master) throw new BaseError('Master not found.', 404);
+      const [building] = await tx.select().from(baseBuildings)
+        .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).for('update').limit(1);
+      if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
+      if (building.status !== 'READY') throw new BaseError('Công trình đang trong quá trình thi công.', 409);
+
+      const [type] = await tx.select().from(buildingTypes).where(eq(buildingTypes.code, building.buildingType)).limit(1);
+      if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
+      const targetLevel = building.level + 1;
+      const maxLevel = Math.min(3, type.maxLevel ?? 3);
+      if (targetLevel > maxLevel) throw new BaseError(`Công trình đã đạt cấp tối đa ${maxLevel}.`, 409);
+
+      const silverCost = upgradeCostSilver(type.buildCostSilver, targetLevel);
+      if (master.silverCoins < BigInt(silverCost)) throw new BaseError('Không đủ Xu Bạc để nâng cấp.', 409);
+      const materials = upgradeMaterials(targetLevel);
+      const owned = await tx.select().from(masterItems)
+        .where(and(eq(masterItems.masterId, masterId), inArray(masterItems.itemId, materials.map(row => row.itemId)))).for('update');
+      const ownedByItem = new Map(owned.map(row => [row.itemId, row.quantity]));
+      const missing = materials.filter(row => (ownedByItem.get(row.itemId) ?? 0) < row.quantity);
+      if (missing.length > 0) {
+        throw new BaseError(`Thiếu nguyên liệu: ${missing.map(row => `${row.itemId} ×${row.quantity}`).join(', ')}.`, 409);
+      }
+
       await tx.update(masters).set({ silverCoins: sql`${masters.silverCoins} - ${silverCost}`, updatedAt: now })
         .where(eq(masters.id, masterId));
       for (const material of materials) {
@@ -324,35 +350,35 @@ export class BuildingService {
           .where(and(eq(masterItems.masterId, masterId), eq(masterItems.itemId, material.itemId)));
       }
       const [row] = await tx.update(baseBuildings).set({
-        status: 'UPGRADING',
-        upgradeFinishesAt: new Date(now.getTime() + upgradeSeconds(targetLevel) * 1000),
+        status: 'READY',
+        level: targetLevel,
+        upgradeFinishesAt: null,
         updatedAt: now,
       }).where(eq(baseBuildings.id, building.id)).returning();
-      return row;
+      await this.updateProduction(tx, building, type, targetLevel, now);
+      return { building: row, silverSpent: silverCost, materialsSpent: materials, targetLevel };
     });
-
-    return { building: updated, silverSpent: silverCost, materialsSpent: materials, targetLevel };
   }
 
   async demolish(masterId: string, buildingId: string) {
     await this.settle(masterId);
-    const [building] = await db.select().from(baseBuildings)
-      .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
-    if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
-    if (building.status !== 'READY') throw new BaseError('Không thể phá dỡ công trình đang thi công.', 409);
+    return db.transaction(async tx => {
+      await tx.select({id:masters.id}).from(masters).where(eq(masters.id,masterId)).for('update');
+      const [building] = await tx.select().from(baseBuildings)
+        .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
+      if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
+      if (building.status !== 'READY') throw new BaseError('Không thể phá dỡ công trình đang thi công.', 409);
 
-    const [type] = await db.select().from(buildingTypes).where(eq(buildingTypes.code, building.buildingType)).limit(1);
-    if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
-    const refund = demolishRefundSilver(type.buildCostSilver, building.level);
-    const now = new Date();
+      const [type] = await tx.select().from(buildingTypes).where(eq(buildingTypes.code, building.buildingType)).limit(1);
+      if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
+      const refund = demolishRefundSilver(type.buildCostSilver, building.level);
+      const now = new Date();
 
-    await db.transaction(async tx => {
       await tx.delete(baseBuildings).where(eq(baseBuildings.id, building.id));
       await tx.update(masters).set({ silverCoins: sql`${masters.silverCoins} + ${refund}`, updatedAt: now })
-        .where(eq(masters.id, masterId));
+          .where(eq(masters.id, masterId));
+      return { demolished: building.id, refundSilver: refund };
     });
-
-    return { demolished: building.id, refundSilver: refund };
   }
 
   async configureProduction(masterId: string, buildingId: string, resourceType: unknown) {
@@ -390,6 +416,12 @@ export class BuildingService {
     const [building] = await db.select().from(baseBuildings)
       .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
     if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
+    if (building.buildingType === 'HALL_OF_MAGIC') {
+      const result = await collectMagic(masterId, building.id);
+      if (!result) throw new BaseError('Đại sảnh chưa sẵn sàng.',409);
+      const shift = result.collected > 0 ? await survivalService.applyShift(masterId,result.workerIds) : {ejected:[]};
+      return {...result,ejectedWorkers:shift.ejected};
+    }
     const [node] = await db.select().from(baseProductionNodes).where(eq(baseProductionNodes.buildingId, building.id)).limit(1);
     if (!node) throw new BaseError('Công trình chưa có cấu hình sản xuất.', 409);
 
@@ -448,35 +480,39 @@ export class BuildingService {
   async assignWorker(masterId: string, buildingId: string, heroId: unknown) {
     await this.settle(masterId);
     if (typeof heroId !== 'string' || !heroId) throw new BaseError('heroId là bắt buộc.');
-    const [building] = await db.select().from(baseBuildings)
-      .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
-    if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
-    if (building.status !== 'READY') throw new BaseError('Công trình chưa sẵn sàng.', 409);
+    return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      const [building] = await tx.select().from(baseBuildings)
+        .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
+      if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
+      if (building.status !== 'READY') throw new BaseError('Công trình chưa sẵn sàng.', 409);
 
-    const [type] = await db.select().from(buildingTypes).where(eq(buildingTypes.code, building.buildingType)).limit(1);
-    const maxWorkers = maxWorkersForBuildingLevel(building.buildingType, building.level, type?.maxWorkers ?? 0);
-    if (maxWorkers <= 0) throw new BaseError('Công trình này không nhận Hero làm việc.', 409);
+      const [type] = await tx.select().from(buildingTypes).where(eq(buildingTypes.code, building.buildingType)).limit(1);
+      const maxWorkers = maxWorkersForBuildingLevel(building.buildingType, building.level, type?.maxWorkers ?? 0);
+      if (maxWorkers <= 0) throw new BaseError('Công trình này không nhận Hero làm việc.', 409);
 
-    const [hero] = await db.select().from(heroes)
-      .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).limit(1);
-    if (!hero) throw new BaseError('Không tìm thấy Hero.', 404);
-    if (hero.state === 'DEAD') throw new BaseError('Hero đã tử trận.', 409);
+      const [hero] = await tx.select().from(heroes)
+        .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).for('update').limit(1);
+      if (!hero) throw new BaseError('Không tìm thấy Hero.', 404);
+      if (hero.state === 'DEAD' || hero.state === 'DISABLED' || hero.hp <= 0) throw new BaseError('Hero không còn sống hoặc đang chờ hồi sinh.', 409);
 
-    if (building.buildingType === 'LIBRARY' && String(hero.classCode ?? '').toUpperCase() !== 'MAGE') {
-      throw new BaseError('Chỉ Hero hệ Pháp Sư (MAGE) mới được phân công vào Thư Viện Ma Thuật.', 409);
-    }
+      if (building.buildingType === 'LIBRARY' && String(hero.classCode ?? '').toUpperCase() !== 'MAGE') {
+        throw new BaseError('Chỉ Hero hệ Pháp Sư (MAGE) mới được phân công vào Thư Viện Ma Thuật.', 409);
+      }
 
-    const current = await db.select().from(buildingWorkerAssignments).where(eq(buildingWorkerAssignments.buildingId, building.id));
-    if (current.length >= maxWorkers) throw new BaseError(`Công trình chỉ nhận tối đa ${maxWorkers} Hero ở cấp hiện tại.`, 409);
-    const [already] = await db.select({ id: buildingWorkerAssignments.id }).from(buildingWorkerAssignments)
-      .where(eq(buildingWorkerAssignments.heroInstanceId, hero.id)).limit(1);
-    if (already) throw new BaseError('Hero đang làm việc ở công trình khác.', 409);
+      const current = await tx.select().from(buildingWorkerAssignments).where(eq(buildingWorkerAssignments.buildingId, building.id));
+      if (current.length >= maxWorkers) throw new BaseError(`Công trình chỉ nhận tối đa ${maxWorkers} Hero ở cấp hiện tại.`, 409);
+      const [already] = await tx.select({ id: buildingWorkerAssignments.id }).from(buildingWorkerAssignments)
+        .where(eq(buildingWorkerAssignments.heroInstanceId, hero.id)).limit(1);
+      if (already) throw new BaseError('Hero đang làm việc ở công trình khác.', 409);
 
-    const [assignment] = await db.insert(buildingWorkerAssignments).values({
-      id: uuidv4(), buildingId: building.id, heroInstanceId: hero.id,
-      efficiencyBoost: workerBoostForLevel(hero.level), assignedAt: new Date(),
-    }).returning();
-    return { assignment, boost: assignment.efficiencyBoost };
+      if (building.buildingType === 'HALL_OF_MAGIC') await updateMagicProduction(tx,building,building.level,new Date());
+      const [assignment] = await tx.insert(buildingWorkerAssignments).values({
+        id: uuidv4(), buildingId: building.id, heroInstanceId: hero.id,
+        efficiencyBoost: workerBoostForLevel(hero.level), assignedAt: new Date(),
+      }).returning();
+      return { assignment, boost: assignment.efficiencyBoost };
+    });
   }
 
   /**
@@ -591,14 +627,17 @@ export class BuildingService {
   }
 
   async removeWorker(masterId: string, buildingId: string, heroId: string) {
-    const [building] = await db.select({ id: baseBuildings.id }).from(baseBuildings)
-      .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
-    if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
-    const deleted = await db.delete(buildingWorkerAssignments)
-      .where(and(eq(buildingWorkerAssignments.buildingId, buildingId), eq(buildingWorkerAssignments.heroInstanceId, heroId)))
-      .returning({ id: buildingWorkerAssignments.id });
-    if (deleted.length === 0) throw new BaseError('Hero không làm việc tại công trình này.', 404);
-    return { removed: heroId };
+    return db.transaction(async tx => {
+      await tx.select({id:masters.id}).from(masters).where(eq(masters.id,masterId)).for('update');
+      const [building] = await tx.select().from(baseBuildings)
+        .where(and(eq(baseBuildings.id,buildingId),eq(baseBuildings.masterId,masterId))).limit(1);
+      if (!building) throw new BaseError('Không tìm thấy công trình.',404);
+      if (building.buildingType === 'HALL_OF_MAGIC') await updateMagicProduction(tx,building,building.level,new Date());
+      const deleted = await tx.delete(buildingWorkerAssignments)
+        .where(and(eq(buildingWorkerAssignments.buildingId,buildingId),eq(buildingWorkerAssignments.heroInstanceId,heroId))).returning();
+      if (!deleted.length) throw new BaseError('Hero không làm việc tại công trình này.',404);
+      return {removed:heroId};
+    });
   }
 
   async expand(masterId: string) {

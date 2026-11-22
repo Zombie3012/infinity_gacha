@@ -1,3 +1,5 @@
+> Updated contract (2026-11-22): [Hero Chronicle, mortality and 1-7 star rarity](../HERO_CHRONICLE.md) supersedes the legacy origin-based death/duplicate rules and Divine Grace sections below. All Heroes die as DEAD and drop equipped gear; one RESURRECTION_GEM_7 revives to full HP with no Silver fee or escalating cycle. NORMAL/SPECIAL/LIMITED remain payment/banner types only.
+
 # Use Case Specifications - P0 Draft
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -338,7 +340,7 @@ flowchart LR
   2. Initialize the selected Heroes and editable sample enemy templates using World difficulty and Floor scaling.
   3. Resolve one automatic round at a time in descending Speed order; each actor attacks a deterministic randomly selected living target using the existing defense damage formula.
   4. Apply the active Tactical Buff to Hero combat stats; enforce the server-side 15-second change cooldown.
-- **Postconditions:** Every round is persisted; terminal results and turn logs are saved. Victory grants sample-configured Silver and distributes sample EXP across surviving Heroes. Normal casualties become DEAD; Special/Limited casualties become DISABLED.
+- **Postconditions:** Every round is persisted; terminal results and turn logs are saved. Victory grants sample-configured Silver and distributes sample EXP across surviving Heroes. All casualties become DEAD and drop equipped gear; one seven-star gem can revive any existing deceased instance.
 - **Alternate/exception paths:** Skills, critical hits, status effects, production enemy/reward balance, Hero EXP thresholds, and equipment drops remain unimplemented/TBD.
 - **Covered Functions:**
 

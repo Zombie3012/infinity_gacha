@@ -34,7 +34,7 @@ func _update_ui() -> void:
 	level_label.text = "Lv." + str(GameState.master_level)
 	silver_label.text = "🪙 Bạc: " + str(GameState.silver_coins)
 	gems_label.text = "💎 Gem: " + str(GameState.gem_stones)
-	hero_count_label.text = "Số Tướng sở hữu: " + str(GameState.heroes.size())
+	hero_count_label.text = "Số Tướng sở hữu: " + str(GameState.owned_hero_count())
 
 func _on_currency_updated(silver: int, gems: int) -> void:
 	silver_label.text = "🪙 Bạc: " + str(silver)

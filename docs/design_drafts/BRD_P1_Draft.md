@@ -1,3 +1,5 @@
+> Updated contract (2026-11-22): [Hero Chronicle, mortality and 1-7 star rarity](../HERO_CHRONICLE.md) supersedes the legacy origin-based death/duplicate rules and Divine Grace sections below. All Heroes die as DEAD and drop equipped gear; one RESURRECTION_GEM_7 revives to full HP with no Silver fee or escalating cycle. NORMAL/SPECIAL/LIMITED remain payment/banner types only.
+
 # Business Requirements Document (BRD) — Phase P1
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -71,12 +73,10 @@ Tài liệu Đặc tả Yêu cầu Nghiệp vụ (BRD) Giai đoạn **P1: Hero &
 ## 4. Các quy tắc nghiệp vụ đã chốt (Confirmed P1 Business Rules)
 
 ### BR-P1-001: Cơ chế Hồi sinh & Y tế (Resurrection & Recovery)
-- **Truyền thuyết**: Hero Limited và Special sở hữu ấn ký của Thần Cứu Trợ (God's Grace). Khi HP về 0 trong chiến trận, Hero không bị tiêu biến mà lập tức được chuyển về Viện Y Tế tại Căn cứ ở trạng thái Vô Hiệu Hóa (`DISABLED`).
-- **Điều kiện hồi sinh**:
-  1. Phải sở hữu Viện Y Tế trong căn cứ.
-  2. Phải thu thập đủ các nguyên liệu đặc biệt (Special Divine Materials) theo công thức quy định.
-- **Quy tắc chi phí lũy tiến**: Chi phí nguyên liệu hồi sinh tăng dần sau mỗi lần thực hiện.
-- **Chu kỳ reset chi phí**: Đúng **30 ngày** kể từ lần đầu tiên hồi sinh một Hero, chi phí hồi sinh sẽ được đặt lại (reset) về mức cơ bản ban đầu.
+- Mọi Hero tử trận chuyển sang `DEAD` và rơi trang bị đang mặc, không phân biệt nguồn triệu hồi.
+- Hồ sơ và tiểu sử được giữ trong **Sử Điện Anh Hùng** (`HERO_CHRONICLE`).
+- Dùng **1 Ngọc hồi sinh 7★** (`RESURRECTION_GEM_7`) cho một Hero tử trận: trở lại `HEALTHY`, 100% HP, không mất Silver và không tăng chi phí theo số lần.
+- Không tái tạo trang bị đã rơi. Điều trị thường không hồi sinh. Chi tiết và giới hạn dữ liệu cũ: [quy tắc hiện hành](../HERO_CHRONICLE.md).
 
 ### BR-P1-002: Lòng trung thành & Bất tuân lệnh (Hero Loyalty)
 - **Nguyên tắc bất biến**: **HERO KHÔNG BAO GIỜ RỜI BỎ MASTER DƯỚI MỌI HÌNH THỨC**. Dù điểm Loyalty rơi xuống mức tối thiểu, Hero vẫn vĩnh viễn thuộc quyền sở hữu của Master.

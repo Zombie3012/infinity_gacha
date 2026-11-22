@@ -13,6 +13,9 @@ test('HTTP liveops: quests, events and leaderboards', { skip: skipReason }, asyn
   });
 
   await setSilver(master.masterId, 100_000);
+  const spendSku = 'TEST_SPEND_' + master.masterId.replaceAll('-','').toUpperCase();
+  await sql("insert into shop_items(code,name,description,item_id,category,price_silver) values($1,'Test spending','Isolated quest fixture','FOOD','CONSUMABLE',500)",[spendSku]);
+  t.after(()=>sql('delete from shop_items where code=$1',[spendSku]));
 
   await t.test('quest board instantiates daily and weekly cycles', async () => {
     const quests = await harness.request('/api/quests', { token: master.token });
@@ -25,7 +28,7 @@ test('HTTP liveops: quests, events and leaderboards', { skip: skipReason }, asyn
 
   await t.test('shop spending advances the daily spend quest and pays out', async () => {
     await harness.request('/api/shop/purchase', {
-      method: 'POST', token: master.token, body: { itemCode: 'STAMINA_POTION', quantity: 2 },
+      method: 'POST', token: master.token, body: { itemCode: spendSku, quantity: 2 },
     });
     const quests = await harness.request('/api/quests', { token: master.token });
     const spendQuest = quests.body.daily.find(row => row.code === 'DAILY_SPEND_1000');

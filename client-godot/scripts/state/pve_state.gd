@@ -121,7 +121,7 @@ func refresh() -> bool:
 		var event_notice := _event_notice(kind, event_data)
 		if not event_notice.is_empty():
 			notice = event_notice
-		if kind in ["RESOURCE_COLLECTED", "BATTLE_COMPLETED", "MAP_CLEARED", "SQUAD_DEPLOYED"]:
+		if kind in ["RESOURCE_COLLECTED", "CONSUMABLES_RECOVERED", "BATTLE_STARTED", "BATTLE_COMPLETED", "MAP_CLEARED", "SQUAD_DEPLOYED"]:
 			refresh_game = true
 		if kind == "BATTLE_COMPLETED":
 			battle_completed.emit(str(event_data.get("battleId", "")))
@@ -139,6 +139,10 @@ func _event_notice(kind: String, data: Dictionary) -> Dictionary:
 	var squad := squad_by_id(str(data.get("squadId", "")))
 	var team := str(squad.get("name", "Đội chinh phạt"))
 	match kind:
+		"BATTLE_STARTED":
+			return {"message": "%s bắt đầu giao chiến thủ công. Mở trận để điều khiển trong 10 giây.%s" % [team, " Đội bị phục kích!" if bool(data.get("ambush", false)) else ""]}
+		"CONSUMABLES_RECOVERED":
+			return {"message": "%s đã nhặt vật phẩm tiêu hao rơi trên map." % team}
 		"RESOURCE_COLLECTED":
 			return {"message": "%s đã thu %d %s." % [team, int(data.get("quantity", 0)), str(data.get("itemId", ""))]}
 		"BATTLE_COMPLETED":
@@ -254,6 +258,26 @@ func _load_pending() -> void:
 
 static func error_message(code: String) -> String:
 	var messages := {
+		"ERR_COMBAT_STALE_TURN": "Lượt đã thay đổi. Hãy chọn hành động cho lượt hiện tại.",
+		"ERR_PVE_BATTLE_FINISHED": "Trận đã kết thúc hoặc chuyển sang tự động.",
+		"ERR_COMBAT_ITEM_LIMIT": "Mỗi lượt chỉ dùng hai loại khác nhau, mỗi loại một viên.",
+		"ERR_COMBAT_SKILL_UNAVAILABLE": "Kỹ năng chưa sẵn sàng hoặc không đủ MP.",
+		"ERR_COMBAT_TARGET": "Chọn mục tiêu còn sống phù hợp với hành động.",
+		"ERR_COMBAT_MP_FULL": "Hero đã đầy MP hoặc không có MP.",
+		"ERR_COMBAT_HP_FULL": "Hero đã đầy HP và không có thương tích.",
+		"ERR_COMBAT_BUFF_ACTIVE": "Hero đang có hiệu ứng cường lực, không thể cộng dồn.",
+		"ERR_CONSUMABLE_STOCK": "Không đủ vật phẩm tiêu hao trong kho hoặc ô đã chọn.",
+		"ERR_CONSUMABLE_CONFIG": "Mỗi Hero có năm ô, mỗi ô tối đa bốn vật phẩm cùng loại.",
+		"ERR_PVE_RECALL_LOCKED": "Tầng này cấm thu hồi và dùng Đá dịch chuyển tới khi hoàn thành mục tiêu.",
+		"ERR_PVE_TELEPORT_STONE_REQUIRED": "Cần 1 Đá dịch chuyển để tạo điểm thu hồi.",
+		"ERR_PVE_RECALL_POINT_EXISTS": "Ô này đã có điểm thu hồi, không cần dùng thêm đá.",
+		"ERR_PVE_SQUAD_MUST_STOP": "Đội cần dừng di chuyển trước khi dùng Đá dịch chuyển.",
+		"ERR_PVE_DEV_ONLY": "Reset tháp chỉ được bật trên server phát triển.",
+		"ERR_PVE_CATCHUP_PENDING": "Đang xử lý tiến độ khi bạn vắng mặt. Đợi đồng bộ rồi thử lại lệnh.",
+		"ERR_PVE_AREA_MISMATCH": "Đội đã đổi khu vực. Hãy đồng bộ map và ra lệnh lại.",
+		"ERR_PVE_INVALID_PORTAL": "Đội phải đứng đúng cửa trước khi đi qua.",
+		"ERR_PVE_INVALID_DESTINATION": "Không có đường đi hợp lệ qua vùng đã khám phá tới ô này.",
+		"ERR_PVE_SQUAD_PURSUED": "Quái đang truy đuổi hoặc tìm kiếm đội. Hãy thoát truy đuổi trước khi thu hồi.",
 		"ERR_INSUFFICIENT_RATIONS": "Thiếu lương thực. Mỗi lần triển khai cần 10 FOOD cho mỗi Hero.",
 		"ERR_PVE_SQUAD_LIMIT": "Đã triển khai tối đa 3 đội. Hãy thu hồi một đội trước.",
 		"ERR_PVE_HERO_DEPLOYED": "Hero đang được triển khai. Hãy thu hồi đội trước khi thay đổi.",

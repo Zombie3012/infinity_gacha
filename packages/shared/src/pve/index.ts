@@ -2,7 +2,12 @@ import { GAME_CONSTANTS } from '../constants/index.js';
 import { mulberry32 } from '../combat/stats.js';
 
 export type PveTargetPriority = 'FRONTLINE' | 'LOWEST_HP' | 'HIGHEST_ATK';
-export type PveTileKind = 'CAMP' | 'EMPTY' | 'RESOURCE' | 'ENEMY' | 'BOSS';
+export const PVE_TELEPORT_STONE = 'TELEPORT_STONE';
+export type PveRecallPolicy = 'FREE' | 'UNTIL_COMPLETE';
+export function defaultPveRecallPolicy(floor: number): PveRecallPolicy {
+  return floor % 5 === 0 ? 'UNTIL_COMPLETE' : 'FREE';
+}
+export type PveTileKind = 'CAMP' | 'EMPTY' | 'RESOURCE' | 'ENEMY' | 'BOSS' | 'WALL' | 'ROCK';
 export type PveSquadStatus = 'IDLE' | 'MOVING' | 'FIGHTING' | 'WITHDRAWN' | 'DEFEATED';
 export interface PvePoint { x: number; y: number }
 export interface PveFormationMember {
@@ -11,6 +16,7 @@ export interface PveFormationMember {
   skillOrder: string[];
 }
 export interface PvePlan {
+  battleMode?: 'AUTO' | 'MANUAL';
   targetPriority: PveTargetPriority;
   members: PveFormationMember[];
 }
@@ -18,7 +24,7 @@ export interface PveTile extends PvePoint {
   id: number;
   kind: PveTileKind;
   seed: number;
-  resource?: { itemId: 'WOOD' | 'STONE' | 'FOOD'; quantity: number };
+  resource?: { itemId: 'WOOD' | 'STONE' | 'FOOD' | 'ALCHEMY_HERB_1'; quantity: number };
 }
 export interface PveLayout {
   algorithmVersion: number;
@@ -119,7 +125,7 @@ export function validatePvePlan(value: unknown, heroIds: readonly string[]): Pve
     throw new PveRuleError('ERR_PVE_INVALID_PARTY');
   }
   const plan = value as Partial<PvePlan> | null;
-  if (!plan || !['FRONTLINE', 'LOWEST_HP', 'HIGHEST_ATK'].includes(plan.targetPriority ?? '')
+  if (!plan || (plan.battleMode !== undefined && !['AUTO','MANUAL'].includes(plan.battleMode)) || !['FRONTLINE', 'LOWEST_HP', 'HIGHEST_ATK'].includes(plan.targetPriority ?? '')
     || !Array.isArray(plan.members) || plan.members.length !== heroIds.length) {
     throw new PveRuleError('ERR_PVE_INVALID_PLAN');
   }
@@ -133,7 +139,7 @@ export function validatePvePlan(value: unknown, heroIds: readonly string[]): Pve
     }
     ids.add(member.heroId); slots.add(member.slotIndex);
   }
-  return { targetPriority: plan.targetPriority!, members: plan.members.map(member => ({
+  return { battleMode: plan.battleMode ?? 'AUTO', targetPriority: plan.targetPriority!, members: plan.members.map(member => ({
     heroId: member.heroId, slotIndex: member.slotIndex, skillOrder: [...member.skillOrder],
   })) };
 }

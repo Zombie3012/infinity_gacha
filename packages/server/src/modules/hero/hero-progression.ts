@@ -114,7 +114,7 @@ export function progressionFor(input: {
     base,
     derived,
     maxHp: derived.maxHp,
-    hp: Math.max(0, Math.min(derived.maxHp, Math.round(derived.maxHp * hpPct))),
+    hp: Math.max(hpPct > 0 ? 1 : 0, Math.min(derived.maxHp, Math.round(derived.maxHp * hpPct))),
     maxMp: derived.maxMp,
     mp: Math.max(0, Math.min(derived.maxMp, Math.round(derived.maxMp * mpPct))),
     attack: derived.atk,

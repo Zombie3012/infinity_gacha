@@ -31,7 +31,7 @@ var _selected_fodder_ids: Array[String] = []
 var _preview_data: Dictionary = {}
 var _hero_imprints: Array = []
 var _active_profile_tab: int = 0 # 0: Stats, 1: Skills, 2: Imprints, 3: Equipment
-var _roster_filter_mode: int = 0 # 0: All, 1: Party, 2: 4-5★, 3: 1-3★
+var _roster_filter_mode: int = 0 # 0-3: living filters, 4: awaiting resurrection, 5: death archive
 var _selected_exp_book_id: String = "SAMPLE_HERO_EXP_100"
 var _equipment_selected_slot: String = "HELMET"
 var _equipment_inspected_item_id: String = ""
@@ -147,13 +147,7 @@ func _get_rarity_border_color(star: int) -> Color:
 	return Color(0.68, 0.52, 0.36, 0.90)
 
 func _get_rarity_rank_name(star: int) -> String:
-	if star >= 5:
-		return "S"
-	elif star == 4:
-		return "A"
-	elif star == 3:
-		return "B"
-	return "C"
+	return str(clampi(star, 1, 7)) + "\u2605"
 
 func _ready() -> void:
 	hero_item_list.item_selected.connect(_on_hero_selected)
@@ -165,6 +159,7 @@ func _ready() -> void:
 
 	promote_panel.visible = false
 	_setup_enhanced_layout()
+	EventBus.heroes_updated.connect(func(_heroes: Array): _refresh_hero_list(str(_selected_hero.get("id", ""))))
 	await _sync_all_roster_data()
 
 func _process(delta: float) -> void:
@@ -267,7 +262,7 @@ func _setup_enhanced_layout() -> void:
 		grid_ctrl_row.add_theme_constant_override("separation", 8)
 		_grid_view_container.add_child(grid_ctrl_row)
 
-		var filter_names := ["Tất cả", "⚔️ Đội PvE", "🌟 4-5★", "⭐ 1-3★"]
+		var filter_names := ["Tất cả", "⚔️ Đội PvE", "🌟 4-7★", "⭐ 1-3★", "Tử trận"]
 		_filter_buttons.clear()
 		for i in range(filter_names.size()):
 			var fbtn := Button.new()
@@ -1653,6 +1648,15 @@ func _refresh_hero_list(preserve_hero_id: String = "") -> void:
 	for h in GameState.heroes:
 		if not (h is Dictionary):
 			continue
+		var life_state := str(h.get("state", ""))
+		if _roster_filter_mode == 4:
+			if life_state not in ["DEAD", "DISABLED"]:
+				continue
+		elif _roster_filter_mode == 5:
+			if life_state != "DEAD":
+				continue
+		elif not GameState.is_hero_alive(h):
+			continue
 		var hid := str(h.get("id", ""))
 		var star := int(h.get("rarity", 1))
 		var in_party := GameState.active_party_ids.has(hid)
@@ -1692,7 +1696,7 @@ func _refresh_hero_list(preserve_hero_id: String = "") -> void:
 		var is_locked := bool(h.get("isLocked", false))
 		var state_str := str(h.get("state", "ALIVE"))
 		var prefix := ("⚔️ " if in_party else "") + ("🔒 " if is_locked else "")
-		var state_tag := " [TỬ TRẬN]" if state_str == "DEAD" else (" [THƯƠNG NẶNG]" if state_str == "DISABLED" else "")
+		var state_tag := " [TỬ TRẬN]" if state_str == "DEAD" else (" [CHỜ HỒI SINH]" if state_str == "DISABLED" else "")
 		var txt := "%s%s %s (Lv.%d/%d)%s" % [
 			prefix,
 			"★".repeat(clampi(star, 1, 7)),
@@ -1871,7 +1875,7 @@ func _display_hero_details(h: Dictionary) -> void:
 	# Determine milestone: Breakthrough vs Star Promotion
 	var is_at_max_lvl := (level >= max_lvl)
 	var needs_breakthrough := (star_ceiling > max_lvl)
-	var can_star_promote := (star < 5 and not needs_breakthrough)
+	var can_star_promote := (star < 7 and not needs_breakthrough)
 
 	if is_at_max_lvl:
 		if needs_breakthrough:
@@ -1882,7 +1886,7 @@ func _display_hero_details(h: Dictionary) -> void:
 			open_promote_btn.text = "🌟 Khai Mở Nghi Thức Thăng Lên %d★ (Pick Me Up)!" % (star + 1)
 		else:
 			open_promote_btn.disabled = true
-			open_promote_btn.text = "🌟 Đã Đạt Cấp Độ & Phẩm Chất Tối Đa (5★ Lv.%d)" % max_lvl
+			open_promote_btn.text = "🌟 Đã Đạt Cấp Độ & Phẩm Chất Tối Đa (7★ Lv.%d)" % max_lvl
 	else:
 		if needs_breakthrough:
 			open_promote_btn.disabled = false
@@ -1892,8 +1896,11 @@ func _display_hero_details(h: Dictionary) -> void:
 			open_promote_btn.text = "★ Xem Nghi Thức Thăng Lên %d★ (Cần đạt Lv.%d — Hiện tại: Lv.%d)" % [star + 1, max_lvl, level]
 		else:
 			open_promote_btn.disabled = true
-			open_promote_btn.text = "🌟 Đã Đạt Phẩm Chất Sao Tối Đa (5★)"
+			open_promote_btn.text = "🌟 Đã Đạt Phẩm Chất Sao Tối Đa (7★)"
 
+	if not GameState.is_hero_alive(h):
+		open_promote_btn.disabled = true
+		open_promote_btn.text = GameState.hero_life_label(h)
 	_update_3d_pedestal_hero(h)
 	_render_active_profile_tab()
 	_fetch_hero_imprints_async(hid)
@@ -1932,6 +1939,12 @@ func _render_active_profile_tab() -> void:
 		child.queue_free()
 
 	if _selected_hero.is_empty():
+		return
+	if not GameState.is_hero_alive(_selected_hero):
+		var life_note := Label.new()
+		life_note.text = "Hero đã tử trận. Đến Sử Điện Anh Hùng dùng 1 Ngọc hồi sinh 7★ để hồi sinh về 100% HP. Điều trị thường không thể hồi sinh."
+		life_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_tab_content_vbox.add_child(life_note)
 		return
 
 	match _active_profile_tab:

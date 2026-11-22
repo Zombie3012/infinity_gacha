@@ -27,10 +27,10 @@ ON CONFLICT (level) DO UPDATE SET
     stat_growth_multiplier = EXCLUDED.stat_growth_multiplier,
     is_sample = EXCLUDED.is_sample;
 
--- Promotion sample expands the Hero level cap by 10 per rank, up to level 50.
+-- Promotion sample expands the Hero level cap by 10 per rank, up to level 70.
 INSERT INTO hero_level_configs (level, cumulative_exp_required, stat_growth_multiplier, is_sample)
-SELECT level, ROUND(100 * (POWER(1.5, level - 1) - 1) / 0.5)::BIGINT, 1.05, TRUE
-FROM generate_series(21, 50) AS level
+SELECT level, ROUND(100 * (POWER(1.5::numeric, level - 1) - 1) / 0.5)::BIGINT, 1.05, TRUE
+FROM generate_series(21, 70) AS level
 ON CONFLICT (level) DO UPDATE SET
     cumulative_exp_required = EXCLUDED.cumulative_exp_required,
     stat_growth_multiplier = EXCLUDED.stat_growth_multiplier,

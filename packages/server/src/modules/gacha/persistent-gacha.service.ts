@@ -6,7 +6,7 @@ import { db } from '../../database/db.js';
 import {
   currencyTransactions,
   banners, heroes, heroElementAffinities, heroTemplates, masterItems,
-  masterSummonInventory, masters, summonHistory, summonRewardPool, summonSessions,
+  masterSummonInventory, masters, itemTemplates, summonHistory, summonRewardPool, summonSessions,
 } from '../../database/drizzle-schema.js';
 import { affinityColumns, buildSummonedHero, HERO_STAR_LOCKED } from '../hero/hero-generation.js';
 
@@ -27,7 +27,7 @@ function weightedPick<T extends { weight: number }>(rows: T[]): T {
   return rows[rows.length - 1];
 }
 
-function originForBanner(bannerType: string): 'NORMAL' | 'SPECIAL' | 'LIMITED' {
+function paymentTypeForBanner(bannerType: string): 'NORMAL' | 'SPECIAL' | 'LIMITED' {
   if (bannerType === 'STANDARD' || bannerType === 'NORMAL') return 'NORMAL';
   if (bannerType === 'SPECIAL') return 'SPECIAL';
   if (bannerType === 'LIMITED') return 'LIMITED';
@@ -35,7 +35,7 @@ function originForBanner(bannerType: string): 'NORMAL' | 'SPECIAL' | 'LIMITED' {
 }
 
 function scrollForBanner(bannerType: string): 'NORMAL' | 'SPECIAL' | 'LIMITED' {
-  return originForBanner(bannerType);
+  return paymentTypeForBanner(bannerType);
 }
 
 export interface SummonedHeroPayload {
@@ -80,7 +80,6 @@ export class PersistentGachaService {
         throw new SummonError('Banner không tồn tại hoặc hiện không hoạt động.', 404);
       }
 
-      const origin = originForBanner(banner.bannerType);
       const scrollType = scrollForBanner(banner.bannerType);
       const isGemBanner = banner.bannerType === 'SPECIAL';
       const costGems = BigInt(SPECIAL_BANNER_GEM_COST_PER_ROLL * rollCount);
@@ -101,7 +100,7 @@ export class PersistentGachaService {
 
       const poolRows = await tx.select().from(summonRewardPool)
         .where(and(eq(summonRewardPool.bannerId, bannerId), eq(summonRewardPool.isActive, true)));
-      const heroesPool = poolRows.filter(row => row.rewardType === 'HERO' && row.rarity !== null && row.rarity >= 1 && row.rarity <= 5);
+      const heroesPool = poolRows.filter(row => row.rewardType === 'HERO' && row.rarity !== null && row.rarity >= 1 && row.rarity <= 7);
       const materialsPool = poolRows.filter(row => row.rewardType === 'MATERIAL');
       if (!heroesPool.length || !materialsPool.length || poolRows.some(row => row.weight <= 0)) {
         throw new SummonError('Banner chưa được cấu hình đầy đủ pool Hero và nguyên liệu.', 409);
@@ -120,136 +119,108 @@ export class PersistentGachaService {
         const picked = weightedPick(poolRows);
         const wasFiveStar = picked.rewardType === 'HERO' && picked.rarity === 5;
 
-        let wasDuplicate = false;
-        let thienMenhGranted = 0;
+        const wasDuplicate = false;
+        const thienMenhGranted = 0;
         let summonedRewardName = picked.rewardName;
         let heroPayload: SummonedHeroPayload | undefined;
+        let rewardRarity = picked.rarity ?? 1;
 
         if (picked.rewardType === 'HERO') {
           const pickedRarity = picked.rarity ?? 1;
           const templateCode = picked.heroTemplateCode;
           const isProceduralPool = !templateCode || templateCode.startsWith('PROCEDURAL_');
-          const isFixedSpecial5Star = !isProceduralPool && (origin === 'SPECIAL' || origin === 'LIMITED') && pickedRarity >= 5;
+          const isFixedTemplate = !isProceduralPool;
 
           const [template] = templateCode
             ? await tx.select().from(heroTemplates).where(eq(heroTemplates.code, templateCode)).limit(1)
             : [undefined];
-          if (isFixedSpecial5Star && templateCode && (!template || template.defaultRarity !== pickedRarity)) {
+          if (isFixedTemplate && templateCode && (!template || template.defaultRarity !== pickedRarity)) {
             throw new SummonError(`Hero template '${templateCode}' chưa có hoặc không khớp rarity.`, 409);
           }
 
-          let owned = null;
-          if (isFixedSpecial5Star && templateCode) {
-            [owned] = await tx.select().from(heroes)
-              .where(and(eq(heroes.masterId, masterId), eq(heroes.configId, templateCode))).for('update').limit(1);
-          }
-
-          wasDuplicate = Boolean(owned);
-          if (owned) {
-            thienMenhGranted = 1;
-            summonedRewardName = owned.name;
-            await tx.update(heroes).set({ thienMenh: sql`${heroes.thienMenh} + 1`, updatedAt: now }).where(eq(heroes.id, owned.id));
-            heroPayload = {
-              id: owned.id,
-              name: owned.name,
-              rarity: owned.rarity,
-              level: owned.level,
-              classCode: owned.classCode,
-              combatRole: owned.combatRole,
-              element: 'NEUTRAL',
-              baseStr: owned.baseStr,
-              baseInt: owned.baseInt,
-              baseSta: owned.baseSta,
-              baseAgi: owned.baseAgi,
-              hp: owned.hp,
-              maxHp: owned.maxHp,
-              attack: owned.attack,
-              defense: owned.defense,
-              speed: owned.speed,
-            };
-          } else {
-            const heroId = uuidv4();
-            const isProcedural = !isFixedSpecial5Star;
-            let build;
-            try {
-              build = buildSummonedHero({
-                star: pickedRarity,
-                template: isProcedural ? null : (template ?? null),
-                procedural: isProcedural,
-                bannerKind: banner.bannerType,
-              });
-            } catch (error) {
-              if ((error as Error).message === HERO_STAR_LOCKED) {
-                throw new SummonError('Phẩm cấp Hero này chưa được mở.', 409);
-              }
-              throw error;
-            }
-            const finalHeroName = isProcedural ? build.name : (template?.name ?? build.name);
-            const finalConfigId = isProcedural ? `PROCEDURAL_${build.star}S` : (template?.code ?? `PROCEDURAL_${build.star}S`);
-            summonedRewardName = finalHeroName;
-
-            if (finalConfigId.startsWith('PROCEDURAL_')) {
-              await tx.insert(heroTemplates).values({
-                id: `procedural-${build.star}s`,
-                code: finalConfigId,
-                name: `Procedural Hero ${build.star}★`,
-                defaultRarity: build.star,
-                heroClass: 'WARRIOR',
-                element: 'FIRE',
-                baseHp: 200,
-                baseAttack: 30,
-                baseDefense: 15,
-                baseSpeed: 60,
-              }).onConflictDoNothing();
-            }
-
-            await tx.insert(heroes).values({
-              id: heroId, masterId, configId: finalConfigId, name: finalHeroName,
-              rarity: build.star, category: origin, state: 'HEALTHY', level: 1,
-              exp: 0n,
-              hp: build.derived.maxHp, maxHp: build.derived.maxHp,
-              attack: build.derived.atk, defense: build.derived.def, speed: build.legacySpeed,
-              baseStr: build.base.str, baseInt: build.base.int,
-              baseSta: build.base.sta, baseAgi: build.base.agi,
-              classCode: build.classCode, combatRole: build.combatRole,
-              trainingStats: { str: 0, int: 0, sta: 0, agi: 0 },
-              originStats: build.base,
-              mp: build.derived.maxMp, maxMp: build.derived.maxMp,
-              currentHpPct: 1, currentMpPct: 1,
-              talentPoints: 0, thienMenh: 0, hunger: 0, fatigue: 0, loyalty: 100,
-              createdAt: now, updatedAt: now,
+          const heroId = uuidv4();
+          const isProcedural = !isFixedTemplate;
+          let build;
+          try {
+            build = buildSummonedHero({
+              star: pickedRarity,
+              template: isProcedural ? null : (template ?? null),
+              procedural: isProcedural,
+              bannerKind: banner.bannerType,
             });
-            if (build.elementAffinity) {
-              await tx.insert(heroElementAffinities).values({
-                heroId, ...affinityColumns(build.elementAffinity), updatedAt: now,
-              });
+          } catch (error) {
+            if ((error as Error).message === HERO_STAR_LOCKED) {
+              throw new SummonError('Phẩm cấp Hero này chưa được mở.', 409);
             }
-
-            const strongestElement = build.elementAffinity
-              ? Object.entries(build.elementAffinity).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] ?? 'NEUTRAL'
-              : 'NEUTRAL';
-
-            heroPayload = {
-              id: heroId,
-              name: finalHeroName,
-              rarity: build.star,
-              level: 1,
-              classCode: build.classCode,
-              combatRole: build.combatRole,
-              element: strongestElement,
-              baseStr: build.base.str,
-              baseInt: build.base.int,
-              baseSta: build.base.sta,
-              baseAgi: build.base.agi,
-              hp: build.derived.maxHp,
-              maxHp: build.derived.maxHp,
-              attack: build.derived.atk,
-              defense: build.derived.def,
-              speed: build.legacySpeed,
-              elementAffinities: build.elementAffinity,
-            };
+            throw error;
           }
+          const finalHeroName = isProcedural ? build.name : (template?.name ?? build.name);
+          const finalConfigId = isProcedural ? `PROCEDURAL_${build.star}S` : (template?.code ?? `PROCEDURAL_${build.star}S`);
+          summonedRewardName = finalHeroName;
+
+          if (finalConfigId.startsWith('PROCEDURAL_')) {
+            await tx.insert(heroTemplates).values({
+              id: `procedural-${build.star}s`,
+              code: finalConfigId,
+              name: `Procedural Hero ${build.star}★`,
+              defaultRarity: build.star,
+              heroClass: 'WARRIOR',
+              element: 'FIRE',
+              baseHp: 200,
+              baseAttack: 30,
+              baseDefense: 15,
+              baseSpeed: 60,
+            }).onConflictDoNothing();
+          }
+
+          await tx.insert(heroes).values({
+            id: heroId, masterId, configId: finalConfigId, name: finalHeroName,
+            rarity: build.star, category: 'HERO', state: 'HEALTHY', level: 1,
+            exp: 0n,
+            hp: build.derived.maxHp, maxHp: build.derived.maxHp,
+            attack: build.derived.atk, defense: build.derived.def, speed: build.legacySpeed,
+            baseStr: build.base.str, baseInt: build.base.int,
+            baseSta: build.base.sta, baseAgi: build.base.agi,
+            classCode: build.classCode, combatRole: build.combatRole,
+            trainingStats: { str: 0, int: 0, sta: 0, agi: 0 },
+            originStats: build.base,
+            mp: build.derived.maxMp, maxMp: build.derived.maxMp,
+            currentHpPct: 1, currentMpPct: 1,
+            talentPoints: 0, thienMenh: 0, hunger: 0, fatigue: 0, loyalty: 100,
+            createdAt: now, updatedAt: now,
+          });
+          if (build.elementAffinity) {
+            await tx.insert(heroElementAffinities).values({
+              heroId, ...affinityColumns(build.elementAffinity), updatedAt: now,
+            });
+          }
+
+          const strongestElement = build.elementAffinity
+            ? Object.entries(build.elementAffinity).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] ?? 'NEUTRAL'
+            : 'NEUTRAL';
+
+          heroPayload = {
+            id: heroId,
+            name: finalHeroName,
+            rarity: build.star,
+            level: 1,
+            classCode: build.classCode,
+            combatRole: build.combatRole,
+            element: strongestElement,
+            baseStr: build.base.str,
+            baseInt: build.base.int,
+            baseSta: build.base.sta,
+            baseAgi: build.base.agi,
+            hp: build.derived.maxHp,
+            maxHp: build.derived.maxHp,
+            attack: build.derived.atk,
+            defense: build.derived.def,
+            speed: build.legacySpeed,
+            elementAffinities: build.elementAffinity,
+          };
         } else {
+          const [item] = await tx.select({ rarity: itemTemplates.rarity }).from(itemTemplates).where(eq(itemTemplates.code, picked.rewardId)).limit(1);
+          rewardRarity = Math.max(1, Math.min(7, item?.rarity ?? picked.rarity ?? 1));
           await tx.insert(masterItems).values({ id: uuidv4(), masterId, itemId: picked.rewardId, quantity: 1, updatedAt: now })
             .onConflictDoUpdate({
               target: [masterItems.masterId, masterItems.itemId],
@@ -260,8 +231,8 @@ export class PersistentGachaService {
         const [historyRow] = await tx.insert(summonHistory).values({
           id: uuidv4(), sessionId, masterId, bannerId, rollNumber, pityNumber: 0,
           rewardType: picked.rewardType, rewardId: picked.rewardId, rewardName: summonedRewardName,
-          rarity: picked.rarity ?? 0, wasFiveStar, wasDuplicate, thienMenhGranted,
-          summonOrigin: picked.rewardType === 'HERO' ? origin : null, createdAt: now,
+          rarity: rewardRarity, wasFiveStar, wasDuplicate, thienMenhGranted,
+          summonOrigin: picked.rewardType === 'HERO' ? 'HERO' : null, createdAt: now,
         }).returning();
         results.push({ row: historyRow, hero: heroPayload });
       }

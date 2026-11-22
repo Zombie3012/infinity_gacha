@@ -1,3 +1,5 @@
+> Updated contract (2026-11-22): [Hero Chronicle, mortality and 1-7 star rarity](../HERO_CHRONICLE.md) supersedes the legacy origin-based death/duplicate rules and Divine Grace sections below. All Heroes die as DEAD and drop equipped gear; one RESURRECTION_GEM_7 revives to full HP with no Silver fee or escalating cycle. NORMAL/SPECIAL/LIMITED remain payment/banner types only.
+
 # Acceptance Criteria Specification — Phase P1
 
 > **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
@@ -98,25 +100,22 @@ Tài liệu này xác định các tiêu chí nghiệm thu chi tiết, rõ ràng
 
 ---
 
-### UC-P1-06: Resurrect Disabled Hero via Divine Grace
+### UC-P1-06: Resurrect a deceased Hero at Hero Chronicle
 **Functions:** `FUN-04-04-005` through `FUN-04-04-008`
 
-#### Scenario 6.1: Hồi sinh Hero Limited/Special với chi phí lũy tiến
-- **Given** Hero Limited tử trận ở trạng thái `DISABLED` trong Viện Y Tế.
-- **When** người chơi yêu cầu hồi sinh lần đầu tiên trong chu kỳ.
-- **Then** hệ thống tiêu hao 1 viên `DIVINE_TEAR` và 10,000 Xu Bạc.
-- **And** Hero hồi sinh về `status = 'ALIVE'` với 50% HP.
-- **And** ghi nhận mốc bắt đầu chu kỳ 30 ngày (`cycle_start_time = NOW()`), lần hồi sinh tiếp theo trong chu kỳ sẽ yêu cầu 2 viên `DIVINE_TEAR`.
+#### Scenario 6.1: All summon sources share one resurrection rule
+- **Given** any owned Hero instance is DEAD with zero HP and the Master owns one RESURRECTION_GEM_7.
+- **When** the player uses resurrection from Hero Chronicle.
+- **Then** exactly one gem is consumed; Hero becomes HEALTHY at 100% HP, without a Silver fee or recreated equipment.
+- **And** the existing biography is preserved and RESURRECTED is appended to the timeline.
 
-#### Scenario 6.2: Reset chi phí hồi sinh sau 30 ngày
-- **Given** Hero đã từng hồi sinh 3 lần trong chu kỳ và đã trôi qua 31 ngày kể từ `cycle_start_time`.
-- **When** người chơi thực hiện hồi sinh tiếp theo.
-- **Then** hệ thống tự động reset chu kỳ về mốc 1, chi phí trở về mức cơ bản (1 viên `DIVINE_TEAR`).
+#### Scenario 6.2: Cost is constant on later deaths
+- **Given** a Hero has died and revived before.
+- **Then** resurrection still costs one gem, with no 30-day pricing cycle.
 
-#### Scenario 6.3: Cấm hồi sinh Hero Normal (Permadeath)
-- **Given** Hero Normal tử trận với `status = 'DEAD'`.
-- **When** người chơi yêu cầu hồi sinh.
-- **Then** hệ thống từ chối với lỗi `ERR_RESURRECTION_NORMAL_PERMADEATH`.
+#### Scenario 6.3: Retry, ownership and consumed instances
+- **Then** concurrent requests can consume at most one gem per death; retries after success return 409.
+- **And** another Master's record is inaccessible; living or consumed instances cannot resurrect.
 
 ---
 
@@ -131,7 +130,7 @@ Tài liệu này xác định các tiêu chí nghiệm thu chi tiết, rõ ràng
 #### Scenario 7.2: Nâng cấp công trình căn cứ
 - **Given** Nông trại Cấp 1 đang hoạt động.
 - **When** người chơi nộp đủ gỗ và đá để nâng cấp lên Cấp 2.
-- **Then** công trình chuyển sang `UPGRADING` có đồng hồ đếm ngược, sau khi hoàn thành sản lượng lương thực tăng từ 50/h lên 80/h.
+- **Then** công trình tăng cấp ngay, giữ trạng thái `READY` và áp dụng sản lượng cấp mới trong cùng giao dịch; không có đồng hồ đếm ngược. Xem [quy tắc hiện hành](../BASE_CONSTRUCTION.md).
 
 ---
 

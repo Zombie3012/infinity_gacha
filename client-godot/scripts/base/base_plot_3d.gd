@@ -1,6 +1,9 @@
 extends Node3D
 class_name BasePlot3D
 
+const LabelStyle = preload("res://scripts/base/building_label_style.gd")
+var _detail_caption := ""
+
 ## Represents one of the 18 Building Plots across the 6 Vertically Stacked Floors in the Isometric 3D Base.
 ## Renders procedural 3D architecture for the authentic Pick Me Up building catalogue:
 ## - HOUSE (Dormitory) & PARTY_MANSION (Lv.30 upgrade)
@@ -38,6 +41,7 @@ var _anim_hammer_pivot: Node3D = null
 var _anim_dummies: Array[Node3D] = []
 var _anim_magic_rings: Array[Node3D] = []
 var _anim_floating_prop: Node3D = null
+var _airship_root: Node3D = null
 var _anim_floating_base_y: float = 2.4
 var _facility_lights: Array[OmniLight3D] = []
 
@@ -51,8 +55,10 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_bob_time += delta * 3.2
-	if harvest_badge.visible:
-		harvest_badge.position.y = 3.75 + sin(_bob_time) * 0.16
+	_fit_caption_to_camera()
+	if _airship_root != null and is_instance_valid(_airship_root):
+		_airship_root.position.y = 0.12 + sin(_bob_time * 0.35) * 0.08
+		_airship_root.rotation.z = sin(_bob_time * 0.25) * 0.025
 
 	if not is_on_active_floor:
 		return
@@ -95,12 +101,14 @@ func set_hovered(hovered: bool) -> void:
 		return
 	is_hovered = hovered
 	_apply_pad_material()
+	_update_caption()
 
 func set_selected(selected: bool) -> void:
 	if is_selected == selected:
 		return
 	is_selected = selected
 	_apply_pad_material()
+	_update_caption()
 
 func set_grid_rotation_deg(rot_deg: int) -> void:
 	if structure_root != null:
@@ -185,11 +193,6 @@ func _refresh_visuals(force_rebuild: bool) -> void:
 		harvest_badge.visible = false
 		return
 
-	var type_name := str(building_data.get("typeName", b_type))
-	var max_lvl := int(building_data.get("maxLevel", 3))
-	title_label.text = "%s %s (Lv.%d/%d)" % [_icon_for_type(b_type), type_name, b_lvl, max_lvl]
-	title_label.modulate = Color(1.0, 0.92, 0.58)
-
 	var workers: Array = building_data.get("workers", [])
 	var max_w := int(building_data.get("maxWorkers", 0))
 	var stored := float(building_data.get("stored", 0.0))
@@ -220,10 +223,51 @@ func _refresh_visuals(force_rebuild: bool) -> void:
 			harvest_badge.text = "🌾 THU HOẠCH +%d %s!" % [int(floor(stored)), _icon_for_resource(res_type)]
 		else:
 			harvest_badge.visible = false
+	_detail_caption = sub_label.text
+	_update_caption()
+
+func _update_caption() -> void:
+	if title_label == null or building_data.is_empty(): return
+	var code := str(building_data.get("buildingType", ""))
+	var focused := is_selected or is_hovered
+	title_label.text = str(LabelStyle.NAMES.get(code, building_data.get("typeName", code)))
+	LabelStyle.apply(title_label, 56 if focused else 48)
+	LabelStyle.apply(sub_label, 30)
+	title_label.modulate = Color(1.0, 0.86, 0.42) if focused else Color(1.0, 0.98, 0.92)
+	var level_text := "Cấp %d" % int(building_data.get("level", 1))
+	sub_label.text = level_text + ("\n" + _detail_caption if focused else "")
+	sub_label.modulate = Color(1.0, 0.86, 0.48)
+	title_label.position.y = 3.55 if code == "SHOP_AIRSHIP" else 3.15
+	sub_label.position.y = title_label.position.y - 0.42
+	LabelStyle.apply(harvest_badge, 36)
+	_fit_caption_to_camera()
+
+func _fit_caption_to_camera() -> void:
+	if not is_inside_tree() or is_queued_for_deletion() or building_data.is_empty(): return
+	for label in [title_label, sub_label, harvest_badge]:
+		if not is_instance_valid(label) or not label.is_inside_tree() or label.is_queued_for_deletion(): return
+	var viewport := get_viewport()
+	if viewport == null: return
+	var camera := viewport.get_camera_3d()
+	if not is_instance_valid(camera) or not camera.is_inside_tree() or camera.is_queued_for_deletion(): return
+	var focused := is_selected or is_hovered
+	var density := LabelStyle.fit(title_label, camera, 20.0 if focused else 18.0)
+	var readable := focused or density * 4.0 >= 56.0
+	title_label.visible = readable
+	sub_label.visible = readable
+	LabelStyle.fit(sub_label, camera, 11.0 if focused else 13.0)
+	sub_label.global_position = title_label.global_position - camera.global_basis.y * (26.0 / density)
+	harvest_badge.visible = readable and float(building_data.get("stored", 0.0)) >= 1.0 and str(building_data.get("status", "READY")) == "READY"
+	LabelStyle.fit(harvest_badge, camera, 14.0)
+	harvest_badge.global_position = title_label.global_position + camera.global_basis.y * ((25.0 + sin(_bob_time) * 2.0) / density)
 
 func _role_subtitle_for_type(b_type: String, b_lvl: int = 1) -> String:
 	var lvl := clampi(b_lvl, 1, 3)
 	match b_type:
+		"SHOP_AIRSHIP":
+			return "🎈 Cửa hàng • Vật phẩm & Trang bị"
+		"HERO_CHRONICLE":
+			return "📖 Tiểu sử • Tưởng niệm • Hồi sinh"
 		"FORGE":
 			return "⚒️ Rèn & Cường Hóa Trang Bị"
 		"TRAINING_CENTER":
@@ -291,6 +335,7 @@ func _rebuild_structure_mesh(b_type: String, b_lvl: int, b_status: String) -> vo
 	_anim_dummies.clear()
 	_anim_magic_rings.clear()
 	_anim_floating_prop = null
+	_airship_root = null
 	_facility_lights.clear()
 
 	if not is_unlocked:
@@ -328,6 +373,42 @@ func _rebuild_structure_mesh(b_type: String, b_lvl: int, b_status: String) -> vo
 	var roof_mat := StandardMaterial3D.new()
 
 	match b_type:
+		"SHOP_AIRSHIP":
+			_airship_root = Node3D.new()
+			_airship_root.name = "Airship"
+			structure_root.add_child(_airship_root)
+			var basket := BoxMesh.new()
+			basket.size = Vector3(1.35, 0.55, 1.1)
+			main_mesh.mesh = basket
+			main_mesh.position.y = 0.7
+			main_mat.albedo_color = Color(0.48, 0.26, 0.1)
+			var balloon := SphereMesh.new()
+			balloon.radius = 0.88
+			balloon.height = 1.76
+			balloon.radial_segments = 32
+			balloon.rings = 16
+			roof_mesh.mesh = balloon
+			roof_mesh.scale = Vector3(1.05, 1.2, 1.0)
+			roof_mesh.position.y = 2.3
+			roof_mat.albedo_color = Color(0.92, 0.65, 0.22)
+			for x in [-0.5, 0.5]:
+				for z in [-0.4, 0.4]:
+					_airship_root.add_child(_make_cyl_part(0.025, 0.025, 1.2, Vector3(x, 1.45, z), Color(0.25, 0.17, 0.09)))
+			for y in [-0.35, 0.0, 0.35]:
+				var band := MeshInstance3D.new()
+				var torus := TorusMesh.new()
+				var radius := 0.88 * sqrt(1.0 - pow(y / 1.056, 2))
+				torus.inner_radius = radius - 0.015
+				torus.outer_radius = radius + 0.025
+				band.mesh = torus
+				band.scale.x = 1.05
+				band.position.y = 2.3 + y
+				var fabric := StandardMaterial3D.new()
+				fabric.albedo_color = Color(0.08, 0.38, 0.48)
+				band.material_override = fabric
+				_airship_root.add_child(band)
+			_airship_root.add_child(_make_box_part(Vector3(1.45, 0.12, 1.2), Vector3(0, 1.02, 0), Color(0.65, 0.39, 0.15)))
+			_airship_root.add_child(_make_box_part(Vector3(0.35, 0.35, 0.35), Vector3(0.3, 1.2, 0), Color(0.22, 0.56, 0.51)))
 		"FORGE":
 			# Blacksmith stone workshop + blast furnace chimney + glowing magma core + Anvil & swinging Hammer
 			var box := BoxMesh.new()
@@ -593,6 +674,21 @@ func _rebuild_structure_mesh(b_type: String, b_lvl: int, b_status: String) -> vo
 			structure_root.add_child(cross_root)
 			_anim_floating_prop = cross_root
 
+		"HERO_CHRONICLE":
+			var box := BoxMesh.new()
+			box.size = Vector3(1.8, 0.5, 1.7)
+			main_mesh.mesh = box
+			main_mesh.position.y = 0.25
+			main_mat.albedo_color = Color(0.24, 0.24, 0.35)
+			var roof := PrismMesh.new()
+			roof.size = Vector3(2.05, 0.65, 1.95)
+			roof_mesh.mesh = roof
+			roof_mesh.position.y = 2.05
+			roof_mat.albedo_color = Color(0.7, 0.53, 0.22)
+			for x in [-0.7, 0.7]:
+				for z in [-0.6, 0.6]:
+					structure_root.add_child(_make_box_part(Vector3(0.2, 1.5, 0.2), Vector3(x, 1.1, z), Color(0.8, 0.78, 0.67)))
+			structure_root.add_child(_make_box_part(Vector3(0.7, 0.16, 0.5), Vector3(0, 0.92, 0.2), Color(0.92, 0.82, 0.48), true, 0.6))
 		_: # HOUSE (Dormitory) & default
 			var box := BoxMesh.new()
 			box.size = Vector3(1.78, 1.32, 1.62) * scale_factor
@@ -613,8 +709,9 @@ func _rebuild_structure_mesh(b_type: String, b_lvl: int, b_status: String) -> vo
 
 	main_mesh.material_override = main_mat
 	roof_mesh.material_override = roof_mat
-	structure_root.add_child(main_mesh)
-	structure_root.add_child(roof_mesh)
+	var structure_parent: Node3D = _airship_root if _airship_root != null else structure_root
+	structure_parent.add_child(main_mesh)
+	structure_parent.add_child(roof_mesh)
 
 	if b_status == "CONSTRUCTING" or b_status == "UPGRADING":
 		var scaffold := MeshInstance3D.new()
@@ -676,6 +773,8 @@ func _add_facility_light(pos: Vector3, col: Color, energy: float, rng: float) ->
 
 func _icon_for_type(b_type: String) -> String:
 	match b_type:
+		"SHOP_AIRSHIP":
+			return "🎈"
 		"FORGE":
 			return "⚒️"
 		"TRAINING_CENTER":

@@ -6,6 +6,8 @@ VALUES
     ('hero-dev-promotion-02', 'PROMOTION', 2, 'SAMPLE_HERO_PROMOTION_SEAL', 10, 20, 1, 30, 1.05, TRUE),
     ('hero-dev-promotion-03', 'PROMOTION', 3, 'SAMPLE_HERO_PROMOTION_SEAL', 15, 30, 2, 40, 1.05, TRUE),
     ('hero-dev-promotion-04', 'PROMOTION', 4, 'SAMPLE_HERO_PROMOTION_SEAL', 20, 40, 3, 50, 1.05, TRUE),
+    ('hero-dev-promotion-05', 'PROMOTION', 5, 'SAMPLE_HERO_PROMOTION_SEAL', 25, 50, 4, 60, 1.05, TRUE),
+    ('hero-dev-promotion-06', 'PROMOTION', 6, 'SAMPLE_HERO_PROMOTION_SEAL', 30, 60, 5, 70, 1.05, TRUE),
     ('hero-dev-awakening-01', 'AWAKENING', 1, 'SAMPLE_HERO_AWAKENING_CORE', 3, 1, 1, 20, 1.05, TRUE),
     ('hero-dev-awakening-02', 'AWAKENING', 2, 'SAMPLE_HERO_AWAKENING_CORE', 6, 1, 2, 20, 1.05, TRUE),
     ('hero-dev-awakening-03', 'AWAKENING', 3, 'SAMPLE_HERO_AWAKENING_CORE', 9, 1, 3, 20, 1.05, TRUE),
