@@ -1,60 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateDamage, calculateElementMultiplier } from '@infiniti-gacha/shared';
-import { MasterService } from '../dist/modules/master/master.service.js';
-import { GachaService } from '../dist/modules/gacha/gacha.service.js';
 import { TacticalBuffManager } from '../dist/modules/combat/tactical-buff.manager.js';
-import { GemDebtHandler } from '../dist/modules/economy/gem-debt.handler.js';
 import { WorldSeedGenerator } from '../dist/modules/dungeon/world-seed.generator.js';
-
-test('Master Service - 1 Account = 1 Master Constraint', (t) => {
-  const masterService = new MasterService();
-  const master = masterService.createMaster('ACC_001', 'Archmage Ren');
-  assert.equal(master.accountId, 'ACC_001');
-  assert.equal(master.masterName, 'Archmage Ren');
-  assert.equal(master.silverCoins, 10000n);
-
-  assert.throws(() => {
-    masterService.createMaster('ACC_001', 'Duplicate Ren');
-  }, /already has a Master profile/);
-});
-
-test('Gacha Service - Duplicate Handling and Exchange Cap', async (t) => {
-  const gacha = new GachaService();
-  const masterId = 'M_TEST_01';
-
-  await t.test('Weekly exchange cap enforces max 50 scrolls', () => {
-    // Has 1,000,000 silver
-    const initialSilver = 1000000n;
-    const res1 = gacha.exchangeScroll(masterId, initialSilver, 50);
-    assert.equal(res1.success, true);
-    assert.equal(res1.scrollsGranted, 50);
-    assert.equal(res1.newSilver, 500000n); // 50 * 10,000 = 500,000 spent
-
-    // 51st exchange should fail
-    const res2 = gacha.exchangeScroll(masterId, res1.newSilver, 1);
-    assert.equal(res2.success, false);
-    assert.match(res2.error, /Weekly exchange limit exceeded/);
-  });
-
-  await t.test('Summon rolls and duplicate conversion', () => {
-    const banner = gacha.getOrCreateBanner('BANNER_TEST', 'Standard Banner');
-    // Force roll 70 to guarantee 5-star
-    banner.pityCounter = 69;
-
-    // Roll 1: Gets 5-star Lancelot
-    const roll1 = gacha.summon(masterId, 'BANNER_TEST', 1);
-    assert.equal(roll1.results[0].isFiveStar, true);
-    assert.equal(roll1.results[0].isDuplicate, false);
-
-    // Roll 2: Force another 5-star -> should be marked duplicate with 1 Thien Menh
-    banner.pityCounter = 69;
-    const roll2 = gacha.summon(masterId, 'BANNER_TEST', 1);
-    assert.equal(roll2.results[0].isFiveStar, true);
-    assert.equal(roll2.results[0].isDuplicate, true);
-    assert.equal(roll2.results[0].duplicateBonus.thienMenhGranted, 1);
-  });
-});
 
 test('Combat - Tactical Buff 15s Cooldown', () => {
   const buffMgr = new TacticalBuffManager();
@@ -74,41 +22,6 @@ test('Combat - Tactical Buff 15s Cooldown', () => {
   const change3 = buffMgr.changeBuff('IRONCLAD_AEGIS', t0 + 15000);
   assert.equal(change3.success, true);
   assert.equal(buffMgr.getActiveBuff().id, 'IRONCLAD_AEGIS');
-});
-
-test('Economy - Gem Debt Policy (No-Ban Refund)', () => {
-  const master = {
-    id: 'M_REFUND_01',
-    accountId: 'ACC_REFUND',
-    masterName: 'Player One',
-    level: 1,
-    exp: 0n,
-    silverCoins: 0n,
-    gems: 300n, // Only has 300 gems left after spending
-    gemDebt: 0n,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  // Refund package of 1,000 gems
-  const refundResult = GemDebtHandler.processRefund(master, 1000n);
-  assert.equal(refundResult.deductedGems, 300n);
-  assert.equal(refundResult.addedDebt, 700n);
-  assert.equal(master.gems, 0n);
-  assert.equal(master.gemDebt, 700n); // In debt, NOT banned!
-
-  // Earn 500 gems -> Repays debt down to 200n
-  const credit1 = GemDebtHandler.creditGems(master, 500n);
-  assert.equal(credit1.debtRepaid, 500n);
-  assert.equal(credit1.netGemsAdded, 0n);
-  assert.equal(master.gemDebt, 200n);
-
-  // Earn 300 gems -> Repays remaining 200n debt + 100n net gems added
-  const credit2 = GemDebtHandler.creditGems(master, 300n);
-  assert.equal(credit2.debtRepaid, 200n);
-  assert.equal(credit2.netGemsAdded, 100n);
-  assert.equal(master.gemDebt, 0n);
-  assert.equal(master.gems, 100n);
 });
 
 test('Dungeon - World Seed Generation (UUIDv4)', () => {

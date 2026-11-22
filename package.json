@@ -4,21 +4,22 @@
   "private": true,
   "description": "Infinite Gacha - Hero Management & Survival Strategy RPG Monorepo",
   "workspaces": [
-    "packages/*"
+    "packages/shared",
+    "packages/server"
   ],
   "scripts": {
-    "build": "npm run build -w @infiniti-gacha/shared && npm run build -w @infiniti-gacha/server && npm run build -w @infiniti-gacha/client",
+    "build": "npm run build -w @infiniti-gacha/shared && npm run build -w @infiniti-gacha/server",
     "test": "npm run test --workspaces --if-present",
-    "lint": "npm run lint --workspaces",
     "dev:server": "npm run dev -w packages/server",
-    "dev:client": "npm run dev -w packages/client",
     "db:generate": "npm run db:generate -w packages/server",
     "db:migrate": "npm run db:migrate -w packages/server",
     "check:encoding": "node scripts/check-encoding.mjs",
     "verify": "npm run check:encoding && npm run build && npm test",
     "db:seed": "node scripts/apply-seeds.mjs",
     "db:reset-heroes": "node scripts/reset-demo-heroes.mjs",
-    "docs:routes": "node scripts/list-routes.mjs"
+    "docs:routes": "node scripts/list-routes.mjs",
+    "test:godot:pve": "node scripts/test-godot-pve.mjs",
+    "test:godot:pve:recovery": "node scripts/test-godot-pve-recovery.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

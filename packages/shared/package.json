@@ -1,11 +1,11 @@
 {
   "name": "@infiniti-gacha/shared",
   "version": "0.1.0",
-  "description": "Shared models, enums, formulas, and constants for Infinite Gacha",
+  "description": "Combat types, formulas, generation rules and game constants for Infinite Gacha",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "node ../../scripts/clean-dist.mjs shared && tsc",
     "test": "node --test"
   },
   "devDependencies": {

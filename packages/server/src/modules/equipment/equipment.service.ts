@@ -82,6 +82,8 @@ export class EquipmentService {
 
   public async unequip(masterId: string, itemId: string) {
     return db.transaction(async tx => {
+      // Follow the same Master -> Hero/item order as PvE settlement and equip.
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update').limit(1);
       const [item] = await tx.select().from(equipmentInstances)
         .where(and(eq(equipmentInstances.id, itemId), eq(equipmentInstances.masterId, masterId), eq(equipmentInstances.location, 'EQUIPPED')))
         .for('update').limit(1);
@@ -183,6 +185,7 @@ export class EquipmentService {
 
   public async quickUnequip(masterId: string, heroId: string) {
     return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update').limit(1);
       const [hero] = await tx.select().from(heroes)
         .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).for('update').limit(1);
       if (!hero) throw new EquipmentError('Hero not found for this Master.', 404);

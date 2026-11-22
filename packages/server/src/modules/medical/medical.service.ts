@@ -1,3 +1,4 @@
+import type { GameDatabase } from '../../database/transaction.js';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
@@ -30,75 +31,80 @@ export interface InjuredHeroView {
 }
 
 export class MedicalService {
-  private async facilityRow(masterId: string) {
-    const [row] = await db.select().from(baseBuildings)
+  private async facilityRow(masterId: string, database: GameDatabase = db) {
+    const [row] = await database.select().from(baseBuildings)
       .where(and(eq(baseBuildings.masterId, masterId), eq(baseBuildings.buildingType, FACILITY_TYPE))).limit(1);
     return row;
   }
 
-  private async itemQuantity(masterId: string, itemId: string): Promise<number> {
-    const [row] = await db.select().from(masterItems)
+  private async itemQuantity(masterId: string, itemId: string, database: GameDatabase = db): Promise<number> {
+    const [row] = await database.select().from(masterItems)
       .where(and(eq(masterItems.masterId, masterId), eq(masterItems.itemId, itemId))).limit(1);
     return row?.quantity ?? 0;
   }
 
   /** Natural healing and treatment timers resolve lazily on the next read. */
   async settle(masterId: string, now = new Date()) {
-    const expired = await db.select().from(heroInjuries)
-      .where(and(eq(heroInjuries.masterId, masterId), isNull(heroInjuries.healedAt)));
-    for (const injury of expired) {
-      if (injury.naturalHealAt > now) continue;
-      await db.update(heroInjuries).set({ healedAt: now, healedBy: 'NATURAL' }).where(eq(heroInjuries.id, injury.id));
-    }
-
-    const active = await db.select().from(heroTreatments)
-      .where(and(eq(heroTreatments.masterId, masterId), eq(heroTreatments.status, 'ACTIVE')));
-    for (const treatment of active) {
-      if (!treatment.finishesAt || treatment.finishesAt > now) continue;
-      await db.update(heroTreatments).set({ status: 'COMPLETED', completedAt: now }).where(eq(heroTreatments.id, treatment.id));
-      if (treatment.injuryId) {
-        await db.update(heroInjuries).set({ healedAt: now, healedBy: 'TREATMENT' })
-          .where(and(eq(heroInjuries.id, treatment.injuryId), isNull(heroInjuries.healedAt)));
+    return db.transaction(async tx => {
+      // Completing a treatment and healing its Hero must precede any new deployment.
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      const expired = await tx.select().from(heroInjuries)
+        .where(and(eq(heroInjuries.masterId, masterId), isNull(heroInjuries.healedAt)));
+      for (const injury of expired) {
+        if (injury.naturalHealAt > now) continue;
+        await tx.update(heroInjuries).set({ healedAt: now, healedBy: 'NATURAL' }).where(eq(heroInjuries.id, injury.id));
       }
-      const remaining = await db.select({ id: heroInjuries.id }).from(heroInjuries)
-        .where(and(eq(heroInjuries.heroId, treatment.heroId), isNull(heroInjuries.healedAt)));
-      await db.update(heroes).set({
-        state: remaining.length === 0 ? 'HEALTHY' : 'INJURED',
-        hp: sql`${heroes.maxHp}`,
-        updatedAt: now,
-      }).where(eq(heroes.id, treatment.heroId));
-    }
 
-    // Auto-promote QUEUED treatments to ACTIVE if bed capacity is available
-    const facility = await this.facilityRow(masterId);
-    if (facility) {
-      const capacity = bedCapacityForLevel(facility.level);
-      const currentActive = await db.select({ id: heroTreatments.id }).from(heroTreatments)
-        .where(and(eq(heroTreatments.masterId, masterId), eq(heroTreatments.status, 'ACTIVE'), eq(heroTreatments.treatmentType, 'INJURY')));
-      let freeBeds = Math.max(0, capacity - currentActive.length);
-      if (freeBeds > 0) {
-        const queued = await db.select().from(heroTreatments)
-          .where(and(eq(heroTreatments.masterId, masterId), eq(heroTreatments.status, 'QUEUED'), eq(heroTreatments.treatmentType, 'INJURY')))
-          .orderBy(asc(heroTreatments.startedAt));
-        for (const q of queued) {
-          if (freeBeds <= 0) break;
-          let sec = 180;
-          if (q.injuryId) {
-            const [inj] = await db.select().from(heroInjuries).where(eq(heroInjuries.id, q.injuryId)).limit(1);
-            if (inj) {
-              const remainingSeconds = Math.max(0, (inj.naturalHealAt.getTime() - now.getTime()) / 1000);
-              sec = treatmentSeconds(remainingSeconds, facility.level);
+      const active = await tx.select().from(heroTreatments)
+        .where(and(eq(heroTreatments.masterId, masterId), eq(heroTreatments.status, 'ACTIVE')));
+      for (const treatment of active) {
+        if (!treatment.finishesAt || treatment.finishesAt > now) continue;
+        await tx.update(heroTreatments).set({ status: 'COMPLETED', completedAt: now }).where(eq(heroTreatments.id, treatment.id));
+        if (treatment.injuryId) {
+          await tx.update(heroInjuries).set({ healedAt: now, healedBy: 'TREATMENT' })
+            .where(and(eq(heroInjuries.id, treatment.injuryId), isNull(heroInjuries.healedAt)));
+        }
+        const remaining = await tx.select({ id: heroInjuries.id }).from(heroInjuries)
+          .where(and(eq(heroInjuries.heroId, treatment.heroId), isNull(heroInjuries.healedAt)));
+        await tx.update(heroes).set({
+          state: remaining.length === 0 ? 'HEALTHY' : 'INJURED',
+          hp: sql`${heroes.maxHp}`,
+          currentHpPct: 1,
+          updatedAt: now,
+        }).where(eq(heroes.id, treatment.heroId));
+      }
+
+      // Auto-promote QUEUED treatments to ACTIVE if bed capacity is available
+      const facility = await this.facilityRow(masterId, tx);
+      if (facility) {
+        const capacity = bedCapacityForLevel(facility.level);
+        const currentActive = await tx.select({ id: heroTreatments.id }).from(heroTreatments)
+          .where(and(eq(heroTreatments.masterId, masterId), eq(heroTreatments.status, 'ACTIVE'), eq(heroTreatments.treatmentType, 'INJURY')));
+        let freeBeds = Math.max(0, capacity - currentActive.length);
+        if (freeBeds > 0) {
+          const queued = await tx.select().from(heroTreatments)
+            .where(and(eq(heroTreatments.masterId, masterId), eq(heroTreatments.status, 'QUEUED'), eq(heroTreatments.treatmentType, 'INJURY')))
+            .orderBy(asc(heroTreatments.startedAt));
+          for (const q of queued) {
+            if (freeBeds <= 0) break;
+            let sec = 180;
+            if (q.injuryId) {
+              const [inj] = await tx.select().from(heroInjuries).where(eq(heroInjuries.id, q.injuryId)).limit(1);
+              if (inj) {
+                const remainingSeconds = Math.max(0, (inj.naturalHealAt.getTime() - now.getTime()) / 1000);
+                sec = treatmentSeconds(remainingSeconds, facility.level);
+              }
             }
+            await tx.update(heroTreatments).set({
+              status: 'ACTIVE',
+              startedAt: now,
+              finishesAt: new Date(now.getTime() + sec * 1000),
+            }).where(eq(heroTreatments.id, q.id));
+            freeBeds -= 1;
           }
-          await db.update(heroTreatments).set({
-            status: 'ACTIVE',
-            startedAt: now,
-            finishesAt: new Date(now.getTime() + sec * 1000),
-          }).where(eq(heroTreatments.id, q.id));
-          freeBeds -= 1;
         }
       }
-    }
+    });
   }
 
   /** Multipliers applied to combat stats for every Hero carrying an active injury. */
@@ -114,13 +120,12 @@ export class MedicalService {
   }
 
   /** Called after a battle resolves; records injuries for survivors below 50% HP. */
-  async recordBattleInjuries(masterId: string, survivors: { id: string; hp: number; maxHp: number }[]) {
+  async recordBattleInjuries(masterId: string, survivors: { id: string; hp: number; maxHp: number }[], database: GameDatabase = db, now = new Date()) {
     if (survivors.length === 0) return { injured: 0 };
     const ids = survivors.map(row => row.id);
-    const existing = await db.select().from(heroInjuries)
+    const existing = await database.select().from(heroInjuries)
       .where(and(inArray(heroInjuries.heroId, ids), isNull(heroInjuries.healedAt)));
     const alreadyInjured = new Set(existing.map(row => row.heroId));
-    const now = new Date();
     let injured = 0;
 
     for (const survivor of survivors) {
@@ -129,7 +134,7 @@ export class MedicalService {
       const hpPercent = (survivor.hp / survivor.maxHp) * 100;
       const profile = classifyInjury(hpPercent);
       if (!profile) continue;
-      await db.insert(heroInjuries).values({
+      await database.insert(heroInjuries).values({
         id: uuidv4(),
         heroId: survivor.id,
         masterId,
@@ -138,7 +143,7 @@ export class MedicalService {
         naturalHealAt: new Date(now.getTime() + profile.naturalHealSeconds * 1000),
         startedAt: now,
       });
-      await db.update(heroes).set({ state: 'INJURED', updatedAt: now })
+      await database.update(heroes).set({ state: 'INJURED', updatedAt: now })
         .where(and(eq(heroes.id, survivor.id), eq(heroes.masterId, masterId)));
       injured += 1;
     }
@@ -388,7 +393,7 @@ export class MedicalService {
       }
       await tx.update(heroTreatments).set({ status: 'COMPLETED', completedAt: now })
         .where(and(eq(heroTreatments.heroId, heroId), inArray(heroTreatments.status, ['ACTIVE', 'QUEUED'])));
-      await tx.update(heroes).set({ state: 'HEALTHY', hp: sql`${heroes.maxHp}`, updatedAt: now })
+      await tx.update(heroes).set({ state: 'HEALTHY', hp: sql`${heroes.maxHp}`, currentHpPct: 1, updatedAt: now })
         .where(and(eq(heroes.id, heroId)));
     });
     return { heroId, healed: true, medicineUsed: 1 };
@@ -424,28 +429,28 @@ export class MedicalService {
 
   async resurrect(masterId: string, heroId: string) {
     await this.settle(masterId);
-    const [hero] = await db.select().from(heroes)
-      .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).limit(1);
-    if (!hero) throw new MedicalError('Không tìm thấy Hero.', 404);
-    // Scenario 6.3: Normal Heroes die permanently.
-    if (hero.category === 'NORMAL') throw new MedicalError('ERR_RESURRECTION_NORMAL_PERMADEATH', 409);
-    if (hero.state === 'HEALTHY' || hero.state === 'INJURED') throw new MedicalError('Hero vẫn còn sống.', 409);
+    return db.transaction(async tx => {
+      const [master] = await tx.select({ silverCoins: masters.silverCoins }).from(masters).where(eq(masters.id, masterId)).for('update');
+      const [hero] = await tx.select().from(heroes)
+        .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).for('update');
+      if (!hero) throw new MedicalError('Không tìm thấy Hero.', 404);
+      // Scenario 6.3: Normal Heroes die permanently.
+      if (hero.category === 'NORMAL') throw new MedicalError('ERR_RESURRECTION_NORMAL_PERMADEATH', 409);
+      if (hero.state === 'HEALTHY' || hero.state === 'INJURED') throw new MedicalError('Hero vẫn còn sống.', 409);
 
-    const now = new Date();
-    const [cycle] = await db.select().from(heroResurrectionCycles).where(eq(heroResurrectionCycles.heroId, heroId)).limit(1);
-    const quote = resurrectionQuote(cycle?.resurrectionCount ?? 0, cycle?.cycleStartAt ?? now, now);
-    const tearsOwned = await this.itemQuantity(masterId, DIVINE_TEAR_ITEM);
-    if (tearsOwned < quote.tears) throw new MedicalError(`Cần ${quote.tears} ${DIVINE_TEAR_ITEM}.`, 409);
-    const [master] = await db.select({ silverCoins: masters.silverCoins }).from(masters).where(eq(masters.id, masterId)).limit(1);
-    if (!master || master.silverCoins < BigInt(quote.silver)) throw new MedicalError('Không đủ Xu Bạc để hồi sinh.', 409);
+      const now = new Date();
+      const [cycle] = await tx.select().from(heroResurrectionCycles).where(eq(heroResurrectionCycles.heroId, heroId)).limit(1);
+      const quote = resurrectionQuote(cycle?.resurrectionCount ?? 0, cycle?.cycleStartAt ?? now, now);
+      const tearsOwned = await this.itemQuantity(masterId, DIVINE_TEAR_ITEM, tx);
+      if (tearsOwned < quote.tears) throw new MedicalError(`Cần ${quote.tears} ${DIVINE_TEAR_ITEM}.`, 409);
+      if (!master || master.silverCoins < BigInt(quote.silver)) throw new MedicalError('Không đủ Xu Bạc để hồi sinh.', 409);
 
-    const revivedHp = Math.max(1, Math.floor(hero.maxHp * revivedHpPercent()));
-    await db.transaction(async tx => {
+      const revivedHp = Math.max(1, Math.floor(hero.maxHp * revivedHpPercent()));
       await tx.update(masters).set({ silverCoins: sql`${masters.silverCoins} - ${quote.silver}`, updatedAt: now })
         .where(eq(masters.id, masterId));
       await tx.update(masterItems).set({ quantity: sql`${masterItems.quantity} - ${quote.tears}`, updatedAt: now })
         .where(and(eq(masterItems.masterId, masterId), eq(masterItems.itemId, DIVINE_TEAR_ITEM)));
-      await tx.update(heroes).set({ state: 'HEALTHY', hp: revivedHp, updatedAt: now }).where(eq(heroes.id, heroId));
+      await tx.update(heroes).set({ state: 'HEALTHY', hp: revivedHp, currentHpPct: revivedHp / Math.max(1, hero.maxHp), updatedAt: now }).where(eq(heroes.id, heroId));
       const nextCount = quote.cycleCount + 1;
       await tx.insert(heroResurrectionCycles).values({
         heroId, cycleStartAt: quote.cycleReset ? now : (cycle?.cycleStartAt ?? now),
@@ -470,9 +475,8 @@ export class MedicalService {
         finishesAt: now, completedAt: now, costSilver: BigInt(quote.silver),
         costItems: { [DIVINE_TEAR_ITEM]: quote.tears },
       });
+      return { heroId, hp: revivedHp, tearsUsed: quote.tears, silverSpent: quote.silver, cycleCount: quote.cycleCount + 1, cycleReset: quote.cycleReset };
     });
-
-    return { heroId, hp: revivedHp, tearsUsed: quote.tears, silverSpent: quote.silver, cycleCount: quote.cycleCount + 1, cycleReset: quote.cycleReset };
   }
 
   async history(masterId: string) {

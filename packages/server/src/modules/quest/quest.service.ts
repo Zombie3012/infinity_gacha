@@ -1,4 +1,5 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import type { GameDatabase } from '../../database/transaction.js';
+import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
@@ -149,15 +150,15 @@ export class QuestService {
   }
 
   /** Push gameplay events into active quests and lifetime achievements. */
-  async recordEvent(masterId: string, objectiveType: ObjectiveType, amount = 1, now = new Date()) {
-    const rows = await db.select({ progress: questProgress, definition: questDefinitions })
+  async recordEvent(masterId: string, objectiveType: ObjectiveType, amount = 1, now = new Date(), database: GameDatabase = db) {
+    const rows = await database.select({ progress: questProgress, definition: questDefinitions })
       .from(questProgress).innerJoin(questDefinitions, eq(questDefinitions.code, questProgress.questCode))
-      .where(and(eq(questProgress.masterId, masterId), eq(questProgress.status, 'ACTIVE'), eq(questDefinitions.objectiveType, objectiveType)));
+      .where(and(eq(questProgress.masterId, masterId), eq(questProgress.status, 'ACTIVE'), eq(questDefinitions.objectiveType, objectiveType), lte(questProgress.acceptedAt, now)));
     let updated = 0;
     for (const row of rows) {
       const nextProgress = clampProgress(row.progress.progress, amount, row.definition.targetCount);
       const nextStatus = statusFor(nextProgress, row.definition.targetCount, row.progress.status as QuestStatus);
-      await db.update(questProgress).set({
+      await database.update(questProgress).set({
         progress: nextProgress,
         status: nextStatus,
         ...(nextStatus === 'COMPLETED' && row.progress.status !== 'COMPLETED' ? { completedAt: now } : {}),
@@ -165,14 +166,14 @@ export class QuestService {
       updated += 1;
     }
 
-    const achievementRows = await db.select().from(achievements)
+    const achievementRows = await database.select().from(achievements)
       .where(and(eq(achievements.isActive, true), eq(achievements.metric, objectiveType)));
     for (const achievement of achievementRows) {
-      const [stored] = await db.select().from(achievementProgress)
+      const [stored] = await database.select().from(achievementProgress)
         .where(and(eq(achievementProgress.masterId, masterId), eq(achievementProgress.achievementCode, achievement.code))).limit(1);
       const nextProgress = Math.min(achievement.threshold, (stored?.progress ?? 0) + Math.max(0, amount));
       const unlocked = nextProgress >= achievement.threshold;
-      await db.insert(achievementProgress).values({
+      await database.insert(achievementProgress).values({
         masterId, achievementCode: achievement.code, progress: nextProgress,
         unlockedAt: unlocked ? (stored?.unlockedAt ?? now) : null,
       }).onConflictDoUpdate({

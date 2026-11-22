@@ -297,6 +297,7 @@ func _on_switch_hero_pressed() -> void:
 		existing.queue_free()
 
 	var modal = HeroPickerModalScript.new()
+	modal.exclude_deployed = true
 	modal.name = "HeroPickerModal"
 	modal.configure(
 		"Chọn Hero Mặc / Tháo Trang Bị",

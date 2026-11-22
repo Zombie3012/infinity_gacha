@@ -58,13 +58,18 @@ func _init() -> void:
 	add_theme_constant_override("separation", 10)
 
 func _ready() -> void:
-	_build_component_layout()
+	_ensure_component_layout()
+
+func _ensure_component_layout() -> void:
+	if header_title_label == null:
+		_build_component_layout()
 
 # ==============================================================================
 # CONFIGURATION & INITIALIZATION API
 # ==============================================================================
 
 func configure_header(title: String, pills: Array = []) -> void:
+	_ensure_component_layout()
 	if header_title_label != null:
 		header_title_label.text = title
 	filter_pills.clear()
@@ -73,17 +78,20 @@ func configure_header(title: String, pills: Array = []) -> void:
 	_rebuild_filter_pills()
 
 func set_items(items: Array, preserve_selection: bool = false) -> void:
+	_ensure_component_layout()
 	all_items = items
 	if not preserve_selection:
 		selected_item_ids.clear()
 	apply_filter_and_sort()
 
 func set_action_button(label_text: String, badge_prefix: String = "Hành động") -> void:
+	_ensure_component_layout()
 	if confirm_action_btn != null:
 		confirm_action_btn.text = label_text
 	_update_action_bar()
 
 func add_extra_action_button(title: String, action_code: String, btn_color: Color = Color.WHITE) -> Button:
+	_ensure_component_layout()
 	var btn := Button.new()
 	btn.text = title
 	btn.custom_minimum_size = Vector2(0, 36)

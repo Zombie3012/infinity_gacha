@@ -4,7 +4,7 @@
   "description": "Infinite Gacha Game Server Engine & API",
   "main": "./dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "node ../../scripts/clean-dist.mjs server && tsc",
     "start": "node dist/server.js",
     "dev": "node --watch dist/server.js",
     "test": "node --test --test-concurrency=1",

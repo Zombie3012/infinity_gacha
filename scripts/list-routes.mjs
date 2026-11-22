@@ -22,7 +22,7 @@ const lines = [
   '# API route inventory',
   '',
   `Generated from \`packages/server/src/server.ts\` (${rows.length} routes).`,
-  'All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response schemas for Combat v2 live in `openapi.combat-v2.yaml`; this inventory is the source list for the remaining OpenAPI coverage.',
+  'Errors use `{ "error": string }`; the string may be an error code or a readable message. Detailed schemas: [private PvE map](openapi.pve.yaml) and [Combat v2](openapi.combat-v2.yaml). PvE mutations require `Idempotency-Key`; map reads settle due arrivals. This inventory lists the remaining API coverage.',
   '',
   '| Method | Path | Auth | Feature |',
   '|---|---|---|---|',

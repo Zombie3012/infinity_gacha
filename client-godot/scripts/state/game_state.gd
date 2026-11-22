@@ -262,6 +262,10 @@ func get_hero_by_id(id: String) -> Dictionary:
 			return h
 	return {}
 
+static func is_hero_pve_deployed(hero: Dictionary) -> bool:
+	var deployment: Variant = hero.get("pveDeployment")
+	return deployment is Dictionary and not deployment.is_empty()
+
 ## Returns a Dictionary mapping heroInstanceId -> { "building": Dictionary, "slotIndex": int }
 func get_worker_assignment_map() -> Dictionary:
 	var result: Dictionary = {}
@@ -344,6 +348,7 @@ func _save_floor_assignments() -> void:
 		file.store_string(JSON.stringify(floor_assigned_hero_ids))
 
 func clear() -> void:
+	PveState.deactivate()
 	account_id = ""
 	master_id = ""
 	master_name = ""

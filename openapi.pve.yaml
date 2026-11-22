@@ -1,0 +1,565 @@
+openapi: 3.0.3
+info:
+  title: Infinite Gacha — private PvE map API
+  version: '1.0'
+  description: >-
+    Authenticated prototype using Combat v2, a persistent 12x12 map and at most
+    three deployed squads. Each squad has one to five Heroes on nine formation
+    cells. Four-way movement takes one second per cell. State reads and new
+    commands settle due arrivals under a per-Master transaction lock. Replay is
+    read-only and has no effect on movement or rewards. All mutations require
+    Idempotency-Key. Failed transactions do not consume their key. A committed
+    key replays its saved result; a changed operation or body returns 409.
+servers:
+  - url: http://localhost:3000
+security:
+  - bearerAuth: []
+tags:
+  - name: PvE
+paths:
+  /api/pve/state:
+    get:
+      tags: [PvE]
+      summary: Settle arrivals and read map, squads, parties and new events
+      description: >-
+        Poll about every second while the map or replay is open. Unknown
+        tile contents and encounter seeds are omitted. Pass both cursor and
+        mapId from the prior response. A cursor from another map resets to zero.
+        Events are limited to 100 per response; continue with the returned cursor
+        until caught up. The snapshot always describes the latest settled state.
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: mapId
+          in: query
+          description: Map to which the event cursor belongs, not a map selector
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current map or null before first entry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/State' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/pve/enter:
+    post:
+      tags: [PvE]
+      summary: Enter the current World floor or return its active map
+      description: >-
+        The server chooses the World, seed, version, floor and encounter catalogue.
+        An active legacy dungeon/combat session blocks entry. A boss victory
+        advances the World floor; entry into that next map remains explicit.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Active private map
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mapId, floor, status]
+                properties:
+                  mapId: { type: string }
+                  floor: { type: integer, minimum: 1 }
+                  status: { type: string, enum: [ACTIVE] }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/pve/parties:
+    post:
+      tags: [PvE]
+      summary: Create party membership and PvE configuration atomically
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PartyWrite' }
+      responses:
+        '201': { $ref: '#/components/responses/PartySaved' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/pve/parties/{partyId}:
+    put:
+      tags: [PvE]
+      summary: Update party membership, name and PvE configuration atomically
+      description: A deployed party cannot be edited. An empty party can be repaired after casualties.
+      parameters:
+        - $ref: '#/components/parameters/PartyId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PartyWrite' }
+      responses:
+        '200': { $ref: '#/components/responses/PartySaved' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/pve/parties/{partyId}/plan:
+    put:
+      tags: [PvE]
+      summary: Save formation and tactics without changing existing membership
+      parameters:
+        - $ref: '#/components/parameters/PartyId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Plan' }
+      responses:
+        '200': { $ref: '#/components/responses/PartySaved' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/pve/parties/{partyId}/deploy:
+    post:
+      tags: [PvE]
+      summary: Freeze a party plan, charge rations and reserve its Heroes
+      description: >-
+        Charges 10 FOOD per Hero in the same transaction as deployment. At most
+        three squads may be active. Heroes must be alive, dispatchable and free
+        of other PvE reservations, work, active treatment and expedition duties.
+        Deployment starts at (0,0). Membership, equipment and progression changes
+        are rejected while a Hero remains reserved.
+      parameters:
+        - $ref: '#/components/parameters/PartyId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Squad deployed once
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [squadId, mapId, rationsConsumed]
+                properties:
+                  squadId: { type: string }
+                  mapId: { type: string }
+                  rationsConsumed: { type: integer, minimum: 10, maximum: 50 }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/pve/squads/{squadId}/move:
+    post:
+      tags: [PvE]
+      summary: Order server pathfinding or retry the encounter on the occupied cell
+      description: >-
+        Known intermediate cells only; one unknown frontier destination is allowed.
+        The server chooses the route and timestamps. Replacing a route preserves
+        its next arrival time when the first step is unchanged. An uncleared enemy
+        interrupts movement and resolves automatically. Moving to the currently
+        occupied enemy cell retries a previous loss/draw with a new command key.
+        The client cannot supply enemy units, RNG seeds or results.
+      parameters:
+        - $ref: '#/components/parameters/SquadId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Point' }
+      responses:
+        '200':
+          description: Persisted route or completed encounter retry
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [squadId, mapId, route, nextStepAt, secondsPerTile]
+                    properties:
+                      squadId: { type: string }
+                      mapId: { type: string }
+                      route: { type: array, items: { $ref: '#/components/schemas/Point' } }
+                      nextStepAt: { type: string, format: date-time }
+                      secondsPerTile: { type: integer, enum: [1] }
+                  - type: object
+                    required: [squadId, mapId]
+                    properties:
+                      squadId: { type: string }
+                      mapId: { type: string }
+                      battleId: { type: string, nullable: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/pve/squads/{squadId}/recall:
+    post:
+      tags: [PvE]
+      summary: Withdraw a squad and release its Hero reservations
+      description: Cancels its route. Cannot be used for a squad in FIGHTING state.
+      parameters:
+        - $ref: '#/components/parameters/SquadId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Withdrawal acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [squadId, status]
+                properties:
+                  squadId: { type: string }
+                  status: { type: string, enum: [WITHDRAWN] }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/pve/squads/{squadId}/auto:
+    post:
+      tags: [PvE]
+      summary: Enable or stop automatic exploration for one squad
+      description: >-
+        The server explores discovered unvisited cells, collects resources and
+        automatically fights. A loss, draw or exhaustion stops auto. Disabling
+        auto cancels its current route; a manual move also disables auto.
+      parameters:
+        - $ref: '#/components/parameters/SquadId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200': { description: Auto mode updated }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/pve/battles:
+    get:
+      tags: [PvE]
+      summary: Read owned battle history in stable reverse chronological order
+      parameters:
+        - name: before
+          in: query
+          description: Battle ID returned as nextCursor; must belong to this Master
+          schema: { type: string }
+        - name: mapId
+          in: query
+          description: Optional map filter
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 30 }
+      responses:
+        '200':
+          description: Summaries without full combat logs
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [battles, nextCursor]
+                properties:
+                  battles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        mapId: { type: string }
+                        squadId: { type: string }
+                        name: { type: string }
+                        tileId: { type: integer }
+                        winner: { type: string, enum: [HERO, ENEMY, DRAW] }
+                        settlement: { $ref: '#/components/schemas/Settlement' }
+                        createdAt: { type: string, format: date-time }
+                  nextCursor: { type: string, nullable: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/pve/battles/{battleId}:
+    get:
+      tags: [PvE]
+      summary: Read one owned, already-settled encounter for replay
+      parameters:
+        - name: battleId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Immutable report and committed settlement
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, masterId, mapId, squadId, tileId, combatSessionId, report, settlement, createdAt]
+                properties:
+                  id: { type: string }
+                  masterId: { type: string }
+                  mapId: { type: string }
+                  squadId: { type: string }
+                  tileId: { type: integer }
+                  combatSessionId: { type: string }
+                  report: { $ref: '#/components/schemas/Report' }
+                  settlement: { $ref: '#/components/schemas/Settlement' }
+                  createdAt: { type: string, format: date-time }
+        '404': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 80, pattern: '^[\x21-\x7e]+$' }
+    PartyId:
+      name: partyId
+      in: path
+      required: true
+      schema: { type: string }
+    SquadId:
+      name: squadId
+      in: path
+      required: true
+      schema: { type: string }
+  responses:
+    Error:
+      description: >-
+        Request rejected; response is {error:string}. PvE domain errors normally
+        use ERR_PVE_ codes; auth, feature gates and other modules can return a
+        readable message. 409 includes reservation conflicts, insufficient
+        rations, stale squad/map state and reused keys with different requests.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error: { type: string }
+    PartySaved:
+      description: Party membership and plan committed
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [partyId, plan]
+            properties:
+              partyId: { type: string }
+              plan: { $ref: '#/components/schemas/Plan' }
+  schemas:
+    Point:
+      type: object
+      required: [x, y]
+      properties:
+        x: { type: integer, minimum: 0, maximum: 11 }
+        y: { type: integer, minimum: 0, maximum: 11 }
+    Plan:
+      type: object
+      required: [targetPriority, members]
+      properties:
+        targetPriority: { type: string, enum: [FRONTLINE, LOWEST_HP, HIGHEST_ATK] }
+        members:
+          type: array
+          minItems: 1
+          maxItems: 5
+          description: All current party members exactly once; Hero IDs and slots must be distinct
+          items:
+            type: object
+            required: [heroId, slotIndex, skillOrder]
+            properties:
+              heroId: { type: string }
+              slotIndex: { type: integer, minimum: 0, maximum: 8, description: 'Row-major; 0–2 face the enemy' }
+              skillOrder:
+                type: array
+                maxItems: 20
+                uniqueItems: true
+                items: { type: string }
+                description: Unlocked skill codes; unavailable actions are skipped during combat
+    PartyWrite:
+      type: object
+      required: [name, heroIds]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60, description: 'Letters, numbers, spaces, underscore and hyphen; unique per Master' }
+        heroIds: { type: array, minItems: 1, maxItems: 5, uniqueItems: true, items: { type: string } }
+        plan:
+          allOf: [{ $ref: '#/components/schemas/Plan' }]
+          description: Omit for FRONTLINE with default slots 0,2,4,6,8
+    Resource:
+      type: object
+      required: [itemId, quantity]
+      properties:
+        itemId: { type: string, enum: [WOOD, STONE, FOOD] }
+        quantity: { type: integer, minimum: 1 }
+    Tile:
+      allOf:
+        - $ref: '#/components/schemas/Point'
+        - type: object
+          required: [id, kind]
+          properties:
+            id: { type: integer, minimum: 0, maximum: 143 }
+            kind: { type: string, enum: [UNKNOWN, CAMP, EMPTY, RESOURCE, ENEMY, BOSS] }
+            cleared: { type: boolean }
+            collected: { type: boolean }
+            resource: { $ref: '#/components/schemas/Resource' }
+    Squad:
+      type: object
+      required: [id, mapId, name, plan, status, x, y, route, nextStepAt, lastBattleId]
+      properties:
+        id: { type: string }
+        masterId: { type: string }
+        mapId: { type: string }
+        partyId: { type: string, nullable: true }
+        name: { type: string }
+        leaderHeroId: { type: string, nullable: true, description: 'First surviving party member, used as the squad avatar' }
+        autoExplore: { type: boolean }
+        plan: { $ref: '#/components/schemas/Plan' }
+        status: { type: string, enum: [IDLE, MOVING, FIGHTING, WITHDRAWN, DEFEATED] }
+        x: { type: integer, minimum: 0, maximum: 11 }
+        y: { type: integer, minimum: 0, maximum: 11 }
+        route: { type: array, items: { $ref: '#/components/schemas/Point' } }
+        nextStepAt: { type: string, format: date-time, nullable: true }
+        lastBattleId: { type: string, nullable: true }
+        deployedAt: { type: string, format: date-time }
+        withdrawnAt: { type: string, format: date-time, nullable: true }
+    State:
+      type: object
+      required: [serverNow, map, squads, parties, events, cursor]
+      properties:
+        serverNow: { type: string, format: date-time }
+        map:
+          type: object
+          nullable: true
+          required: [id, floor, status, width, height, algorithmVersion, tiles, revision]
+          properties:
+            id: { type: string }
+            floor: { type: integer, minimum: 1 }
+            status: { type: string, enum: [ACTIVE, CLEARED] }
+            width: { type: integer, enum: [12] }
+            height: { type: integer, enum: [12] }
+            algorithmVersion: { type: integer, enum: [1] }
+            tiles: { type: array, minItems: 144, maxItems: 144, items: { $ref: '#/components/schemas/Tile' } }
+            revision: { type: integer, minimum: 0 }
+        squads: { type: array, items: { $ref: '#/components/schemas/Squad' } }
+        parties:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              isDefault: { type: boolean }
+              plan: { allOf: [{ $ref: '#/components/schemas/Plan' }], nullable: true }
+              members:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    partyId: { type: string }
+                    heroId: { type: string }
+                    name: { type: string }
+                    state: { type: string }
+                    hp: { type: integer }
+                    rarity: { type: integer }
+                    skills: { type: array, items: { type: string } }
+        events:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [id, mapId, revision, kind, data, occurredAt]
+            properties:
+              id: { type: string }
+              masterId: { type: string }
+              mapId: { type: string }
+              revision: { type: integer }
+              kind:
+                type: string
+                enum: [MAP_ENTERED, SQUAD_DEPLOYED, MOVE_ORDERED, SQUAD_ARRIVED, RESOURCE_COLLECTED, BATTLE_COMPLETED, SQUAD_EXHAUSTED, SQUAD_RECALLED, MAP_CLEARED, AUTO_CHANGED, AUTO_STOPPED]
+              data: { type: object, additionalProperties: true }
+              occurredAt: { type: string, format: date-time }
+        cursor: { type: integer, minimum: 0 }
+        food: { type: integer, description: Present once a map exists }
+        secondsPerTile: { type: integer, enum: [1] }
+        maxSquads: { type: integer, enum: [3] }
+    UnitSnapshot:
+      type: object
+      required: [id, name, side, slotIndex, hp, maxHp, mp, maxMp, alive]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        side: { type: string, enum: [HERO, ENEMY] }
+        slotIndex: { type: integer, minimum: 0, maximum: 8 }
+        hp: { type: integer, minimum: 0 }
+        maxHp: { type: integer, minimum: 1 }
+        mp: { type: integer, minimum: 0 }
+        maxMp: { type: integer, minimum: 0 }
+        alive: { type: boolean }
+    Report:
+      type: object
+      required: [winner, rounds, totalDamage, initialUnits, units, log]
+      properties:
+        winner: { type: string, enum: [HERO, ENEMY, DRAW] }
+        rounds: { type: integer, minimum: 1, maximum: 30 }
+        totalDamage: { type: integer, minimum: 0 }
+        initialUnits: { type: array, items: { $ref: '#/components/schemas/UnitSnapshot' } }
+        units: { type: array, items: { $ref: '#/components/schemas/UnitSnapshot' } }
+        log:
+          type: array
+          items:
+            type: object
+            required: [round, actorId, actorName, action]
+            properties:
+              round: { type: integer }
+              actorId: { type: string }
+              actorName: { type: string }
+              action: { type: string }
+              actionType: { type: string }
+              targetId: { type: string, nullable: true }
+              targetName: { type: string }
+              damage: { type: integer }
+              heal: { type: integer }
+              targetHp: { type: integer }
+              actorHp: { type: integer }
+              actorMp: { type: integer }
+              hit: { type: boolean }
+              crit: { type: boolean }
+              blocked: { type: boolean }
+              imprintCode: { type: string }
+              note: { type: string }
+    Settlement:
+      type: object
+      required: [silverReward, heroExpReward, masterExpReward, deaths, heroProgress, masterProgress, floor, nextFloor, bossCleared]
+      properties:
+        silverReward: { type: integer, minimum: 0 }
+        heroExpReward: { type: integer, minimum: 0 }
+        masterExpReward: { type: integer, minimum: 0 }
+        deaths:
+          type: array
+          items:
+            type: object
+            properties:
+              heroId: { type: string }
+              name: { type: string }
+              state: { type: string, enum: [DEAD, DISABLED] }
+              droppedEquipmentIds: { type: array, items: { type: string } }
+        heroProgress:
+          type: array
+          items:
+            type: object
+            properties:
+              heroId: { type: string }
+              expGranted: { type: integer }
+              fromLevel: { type: integer }
+              toLevel: { type: integer }
+        masterProgress:
+          type: object
+          properties:
+            fromLevel: { type: integer }
+            toLevel: { type: integer }
+            exp: { type: string, pattern: '^\d+$' }
+        floor: { type: integer }
+        nextFloor: { type: integer }
+        bossCleared: { type: boolean }

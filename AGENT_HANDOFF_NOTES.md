@@ -669,3 +669,73 @@ Signed: Antigravity Assistant
   4. Prefixed unused local variable `hid` with underscore `_hid` in `_on_unequip_pressed` (Line 4122).
   5. Prefixed unused local variable `hid` with underscore `_hid` in `_on_enhance_eq_pressed` (Line 4135).
 - Verified Godot engine syntax check (0 errors, 0 warnings) and encoding check (clean).
+
+
+## Update - 2026-11-22 (UTC+7)
+
+Signed: Codex, project assistant
+
+### Cleanup and current documentation
+
+- Removed the retired React/Vite client (`packages/client`) from source and npm workspaces, along with its dependencies and development/build commands. The Godot client is the active client; operator APIs remain available without the old Web console.
+- Audited the server entrypoint import graph and removed the three unreachable prototype modules: in-memory MasterService, in-memory GachaService, and GemDebtHandler. Persistent Master creation, summon transactions and payment settlement remain in the active services.
+- Removed the unused shared prototype enums/interfaces (including the army model), Pity-70 formula/exports/constants and tests of retired implementations. Preserved combat/movement tests in `combat.test.mjs` and existing production payment tests.
+- Removed the unused pity runtime reader, retired `GACHA_PITY` creation/activation, and removed `averagePityAtFiveStar` from analytics. Existing database history/schema and migrations are retained; new flat-rate summons write historical pity fields as zero.
+- Centralized the SPECIAL banner cost of 100 Gems in shared game constants. Added HTTP regression coverage for flat pool rates, scroll/Gem charging, insufficient balance and idempotent retries.
+- Added clean workspace builds that remove stale compiler output and composite build metadata before TypeScript compilation. Confirmed deleted service outputs are no longer emitted.
+- Rewrote root README, Godot README and Godot backlog against current code. Corrected Combat v2 PvP/procedural duplicate notes, regenerated the 216-route inventory, and labelled historical P0?P3 design drafts explicitly as archived references.
+- Godot PvE still calls simulation with a demo fallback; connecting persistent session start/advance and the reward/progress loop is the next implementation priority. No Godot scene/runtime validation was performed in this cleanup.
+
+### Validation and local limitation
+
+- `npm run verify` passed with PostgreSQL reachable: shared 65/65 and server 390/390, zero failures and zero skipped tests. Encoding and clean TypeScript builds passed.
+- Current-document links and `git diff --check` passed; all remaining server source modules are reachable from the entrypoint import graph.
+- Automatic approval review rejected PowerShell deletion of ignored local Web build artifacts (`packages/client/dist` and `packages/client/tsconfig.tsbuildinfo`) with `blocked by policy`. Source/workspace cleanup is complete; those local artifacts remain outside the active build.
+
+## Update - 2026-11-22 (UTC+7): private PvE map loop
+
+Signed: Codex, project assistant
+
+### Implementation
+
+- Implemented the approved `thaoluan.md` plan: a separate persistent 12×12 map, three independently deployed squads of 1–5 Heroes, nine-cell formations, four-way server-timed movement at five seconds/cell, fog, one-time resources, automatic Combat v2 encounters and explicit next-floor entry after boss victory.
+- Added shared generation/path/formation rules; seven private PvE tables; migrations 0045–0047; authenticated `/api/pve` commands/state/history/report APIs; canonical-body idempotency; exclusive Hero reservations and legacy mutation guards. Existing dungeon/session APIs and migrations remain, with a gate preventing simultaneous legacy/private progression.
+- Encounter inputs, version and RNG seed are captured server-side. Reports, rewards/ledger, EXP/level caps, HP/MP, Normal permadeath/floor gear drops, Special/Limited disable/gear retention, node clearance, quests/events and boss advancement share one transaction. Resources and enemy nodes settle in stable chronological order under a per-Master lock.
+- Added the Godot strategic map, party/formation/tactics editor, ETA, notifications, battle history and read-only arena replay. Replay reads authoritative Combat v2 reports, including heal/revive and final resources; it does not simulate a demo battle, hold rewards or pause another squad. Mid-playback return to map is verified.
+- Added persisted pending command recovery without tokens, retained editor drafts on errors, account isolation and stale-response rejection. Controls wait for both a preexisting poll and post-command synchronization. Deployed Heroes are marked in the DTO/cards and excluded from conflicting base selections; empty authenticated rosters do not spawn preview residents.
+- Fixed shared combat defense selection by attack type, heal skipping, skill upgrade scaling, lethal-hit/revive log ordering and MP/cooldown costs on evaded actions. PvE timeout is DRAW; the legacy HP-comparison timeout rule remains the default outside PvE.
+- Reused atomic combat settlement for legacy v2 advancement. Transaction-bound unit loading avoids global service calls that can deadlock on another connection. Survival/medical completion serialize with PvE, and v2 recovery restores stored HP percentages. Concurrent resurrection charges once.
+- Aligned equipment/star-promotion locking with Master-before-Hero order. Fixed a legacy breakthrough race that could overwrite newly earned PvE Silver with a pre-transaction balance. A controlled PostgreSQL lock queue reproduced the loss before the fix and verifies preservation afterward.
+
+### Verification
+
+- Final `npm run verify` passed against PostgreSQL: **421/421 server and 69/69 shared tests**, zero failures and zero skipped tests; encoding and clean builds passed. Log: `logs/pve-final-verify.log`.
+- Actual Godot **4.7.2.stable.official.ed1daf0bf**, headless: **48 UI/replay/base-availability/notification checks**, **29 real HTTP gameplay checks**, **20 recovery checks**, all passed. Recovery runs three client processes with two API restarts and a proxy that drops a committed deployment response. Project headless editor import completed without script errors.
+- Database coverage includes two separate API worker processes; resource/enemy/boss arrival collisions; strict rations; reservation/work/treatment/expedition conflicts; frozen gear/skills; targeting/skill order; draw/loss/death; gear retention/drop; empty-party repair; ownership/history pagination; a 251-event backlog; injected reward-write rollback; medical recovery into a v2 encounter; and the concurrent reward/breakthrough Silver regression.
+- Three-hour real-clock run: six players × three squads, **402 cleared maps, 62,684 requests, 6,690 duplicate replies, 116 API restarts, 408 successful audits, zero failures**. A subsequent 20-minute frozen-build run added **42 maps, 6,943 requests, 752 duplicate replies, 35 restarts and 48 audits**, zero failures. Summaries: `logs/pve-soak-3h-summary.json` and `logs/pve-soak-20m-summary.json`.
+- Runs freeze compiled builds for repeatability; later input-snapshot and breakthrough refinements are covered by targeted regressions and final full verification. Restarts in the soak occurred while routes were active, with zero interrupted HTTP requests; the recovery proxy separately tests a committed write with a lost response.
+- Validated `openapi.pve.yaml`, regenerated the 226-route inventory, checked current-document links and `git diff --check`. Updated root/Godot READMEs, backlog, Combat v2 spec and `docs/PVE_IMPLEMENTATION.md`. This entry supersedes the prior note that persistent Godot PvE was still the next priority.
+
+### Local database and scope
+
+- Backed up local development DB `infinite_gacha` to `logs/infinite-gacha-before-pve.dump`, verified its 491-entry archive and applied migrations through 0047. No full seed reset was run on this DB.
+- Existing counts remain **2 accounts, 190 Heroes and 2 Worlds**, with zero private maps created for those players. Restoring the backup into a temporary audit DB confirmed matching row counts/content checksums across **93 legacy tables**, excluding only the documented enemy boss flag. Audit: `logs/pve-migration-data-audit.json`.
+- PostgreSQL test fixtures used isolated `_test` databases and disposable accounts. The temporary migration-audit DB was removed after comparison. Soak/engine helper API processes were stopped after their checks.
+- No commit or deployment. Existing uncommitted cleanup work is preserved. No new PvP mechanics, cross-squad combos, ambushes, morale system, Redis workers or economy expansion.
+- Remaining product work is graphical playtesting, prototype balance/assets/audio and platform exports. Headless engine validation does not prove visual quality or player balance. See `docs/PVE_IMPLEMENTATION.md` for reproducible commands and prototype limits.
+
+## Update - 2026-11-22 (UTC+7): PvE auto exploration and leader avatar
+
+Signed: Codex, project assistant
+
+- Added per-squad auto exploration with an idempotent `/api/pve/squads/:squadId/auto` command. Server-side auto chooses nearby discovered unvisited cells, collects resources and engages enemies/boss; it stops on defeat, draw or exhaustion. Manual movement disables auto. A different squad can attack an uncleared enemy after another squad loses.
+- PvE movement and client polling now use one second. Existing moving squads are capped to one second for their next step by migration 0048; PvP expedition speed is unchanged. Local development DB was backed up to `logs/infinite-gacha-before-auto-0048.dump` and migrated without seeding; account/Hero/World counts remain 2/190/2.
+- The first surviving Hero in party membership order is exposed as `leaderHeroId`. Godot displays that Hero's existing 3D actor model as the squad portrait, including multiple squads on one cell, and switches leaders after a casualty.
+- Updated root/Godot documentation, route inventory and OpenAPI. Godot headless checks: UI 50, HTTP gameplay 31, recovery 20 passed; targeted database tests cover auto collection/boss, stop/loss and leader replacement. Full and final targeted verification are recorded in `logs/pve-auto-verify.log` and `logs/pve-auto-db-final.log`.
+
+## Update - 2026-11-22 (UTC+7): test execution rule and current checkpoint
+
+Signed: Codex, project assistant
+
+- User rule: do not run the full test suite unless explicitly requested. Recorded in root `AGENTS.md`; use relevant targeted checks when necessary.
+- User requested a commit of the current work, including cleanup, private PvE, auto exploration, one-second movement, leader avatars, migrations, tests and documentation. No test suite was rerun for this checkpoint commit.

@@ -17,6 +17,7 @@ var max_selection: int = 1
 var context_mode: int = 0
 var allowed_classes: Array = []
 var excluded_hero_ids: Array = []
+var exclude_deployed: bool = false
 var filter_pills: Array = ["Tất cả", "Trong Đội PvE", "Đang phân công", "Chưa xếp"]
 var modal_title: String = "Chọn Anh Hùng"
 var modal_subtitle: String = "Bấm vào thẻ Hero để chọn thao tác"
@@ -179,6 +180,8 @@ func _populate_browser() -> void:
 			continue
 		var hid := str(h.get("id", ""))
 		if excluded_hero_ids.has(hid):
+			continue
+		if exclude_deployed and GameState.is_hero_pve_deployed(h):
 			continue
 
 		if not allowed_classes.is_empty():

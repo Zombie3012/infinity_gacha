@@ -1,5 +1,7 @@
 # P0 Implementation Checklist
 
+> **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
+
 ## Project Context
 - Scope Document: `Phase_Scope_Matrix_P0.csv`
 - Specification Reference: `Use_Case_Spec_P0_Draft.md` & `Data_Model_P0_Draft.md`

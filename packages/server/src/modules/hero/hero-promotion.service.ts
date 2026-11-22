@@ -203,6 +203,8 @@ export class HeroPromotionService {
     fodderHeroIds: string[],
   ): Promise<StarPromotionResult> {
     return await db.transaction(async tx => {
+      // Match PvE's Master -> Hero lock order before touching target/fodders.
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update').limit(1);
       // 1. Fetch & lock Target Hero
       const [hero] = await tx.select().from(heroes)
         .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId)))

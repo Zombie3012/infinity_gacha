@@ -3,8 +3,10 @@ info:
   title: Infinite Gacha — Combat v2 API
   version: "1.0"
   description: >
-    Auth dùng Bearer JWT lấy từ /api/auth/login. Mọi lỗi trả { "error": "ERR_CODE" }.
-    PvP/expedition vẫn dùng legacy stats; các endpoint dưới đây là Combat v2.
+    Auth dùng Bearer JWT lấy từ /api/auth/login. Lỗi trả { "error": string };
+    có thể là mã ERR_ hoặc thông báo. Hero-vs-Hero PvP dùng Combat v2;
+    guardian/Wonder vẫn có luồng so sánh sức mạnh riêng. Gameplay PvE map dùng
+    /api/pve (xem openapi.pve.yaml), tách khỏi session legacy bên dưới.
 servers:
   - url: http://localhost:3000
 security:

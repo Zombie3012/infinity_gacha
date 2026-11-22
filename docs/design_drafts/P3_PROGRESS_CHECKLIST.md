@@ -1,5 +1,7 @@
 # P3 Implementation Checklist
 
+> **L?u tr? thi?t k? l?ch s?.** Checklist v? k?t qu? ki?m tra ph?n ?nh th?i ?i?m vi?t; c?c m? t? Web/Unity, pity v? duplicate c? th? ?? ???c thay th?. Xem [README hi?n h?nh](../../README.md) v? [backlog Godot](../../GODOT_BACKLOG.md), c?p nh?t 22/11/2026 (UTC+7).
+
 ## Project Context
 - Scope Document: `Phase_Scope_Matrix_P3.csv` (37 functions, 7 modules, 1 domain DM-13)
 - Specification Reference: `BRD_P3_Draft.md`, `Use_Case_Spec_P3_Draft.md`, `Data_Model_P3_Draft.md`, `Acceptance_Criteria_P3_Draft.md`

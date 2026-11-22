@@ -1,7 +1,7 @@
 # API route inventory
 
-Generated from `packages/server/src/server.ts` (205 routes).
-All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response schemas for Combat v2 live in `openapi.combat-v2.yaml`; this inventory is the source list for the remaining OpenAPI coverage.
+Generated from `packages/server/src/server.ts` (227 routes).
+Errors use `{ "error": string }`; the string may be an error code or a readable message. Detailed schemas: [private PvE map](openapi.pve.yaml) and [Combat v2](openapi.combat-v2.yaml). PvE mutations require `Idempotency-Key`; map reads settle due arrivals. This inventory lists the remaining API coverage.
 
 | Method | Path | Auth | Feature |
 |---|---|---|---|
@@ -80,7 +80,9 @@ All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response sch
 | POST | `/api/base/buildings` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/collect` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/demolish` | Bearer | — |
+| POST | `/api/base/buildings/:buildingId/mage-study` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/production` | Bearer | — |
+| POST | `/api/base/buildings/:buildingId/promote-mansion` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/upgrade` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/workers` | Bearer | — |
 | DELETE | `/api/base/buildings/:buildingId/workers/:heroId` | Bearer | — |
@@ -119,15 +121,21 @@ All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response sch
 | POST | `/api/equipment/:itemId/pickup` | Bearer | EQUIPMENT |
 | POST | `/api/equipment/:itemId/unequip` | Bearer | EQUIPMENT |
 | GET | `/api/equipment/floor-drops` | Bearer | EQUIPMENT |
+| PUT | `/api/equipment/heroes/:heroId/quick-equip` | Bearer | EQUIPMENT |
+| POST | `/api/equipment/heroes/:heroId/quick-unequip` | Bearer | EQUIPMENT |
 | GET | `/api/events` | Bearer | — |
 | POST | `/api/events/missions/:missionId/claim` | Bearer | — |
 | GET | `/api/gacha/banners` | Bearer | SUMMON |
 | GET | `/api/gacha/banners/:bannerId` | Bearer | SUMMON |
 | GET | `/api/gacha/history` | Bearer | SUMMON |
 | POST | `/api/gacha/summon` | Bearer | SUMMON |
+| POST | `/api/giftcodes/redeem` | Bearer | — |
 | GET | `/api/hero-templates` | Bearer | HERO_COLLECTION |
 | GET | `/api/heroes` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/awaken` | Bearer | HERO_COLLECTION |
+| GET | `/api/heroes/:heroId/awaken/preview` | Bearer | HERO_COLLECTION |
+| POST | `/api/heroes/:heroId/breakthrough` | Bearer | HERO_COLLECTION |
+| GET | `/api/heroes/:heroId/breakthrough/preview` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/class-change` | Bearer | HERO_COLLECTION |
 | GET | `/api/heroes/:heroId/imprints` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/level-up` | Bearer | HERO_COLLECTION |
@@ -135,6 +143,7 @@ All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response sch
 | POST | `/api/heroes/:heroId/promote` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/promote-star` | Bearer | HERO_COLLECTION |
 | GET | `/api/heroes/:heroId/promote-star/preview` | Bearer | HERO_COLLECTION |
+| GET | `/api/heroes/:heroId/promote/preview` | Bearer | HERO_COLLECTION |
 | PATCH | `/api/heroes/:heroId/skills/:skillCode/behavior` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/skills/:skillCode/unlock` | Bearer | HERO_COLLECTION |
 | POST | `/api/heroes/:heroId/skills/:skillCode/upgrade` | Bearer | HERO_COLLECTION |
@@ -152,14 +161,16 @@ All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response sch
 | GET | `/api/mailbox` | Bearer | — |
 | POST | `/api/mailbox/:messageId/claim` | Bearer | — |
 | GET | `/api/master/features` | Bearer | — |
-| POST | `/api/master/init` | Bearer | — |
 | GET | `/api/master/skills` | Bearer | MASTER_SKILLS |
 | GET | `/api/me` | Bearer | — |
 | GET | `/api/medical` | Bearer | — |
 | POST | `/api/medical/emergency` | Bearer | — |
+| POST | `/api/medical/emergency/batch` | Bearer | — |
 | GET | `/api/medical/history` | Bearer | — |
 | POST | `/api/medical/resurrect` | Bearer | — |
 | POST | `/api/medical/treatments` | Bearer | — |
+| DELETE | `/api/medical/treatments/:heroId` | Bearer | — |
+| POST | `/api/medical/treatments/batch` | Bearer | — |
 | GET | `/api/parties` | Bearer | PVE_COMBAT |
 | POST | `/api/parties` | Bearer | PVE_COMBAT |
 | DELETE | `/api/parties/:partyId` | Bearer | PVE_COMBAT |
@@ -170,6 +181,17 @@ All business errors use `{ "error": "ERR_CODE" }`. Detailed request/response sch
 | POST | `/api/personality/heroes/:heroId/loyalty` | Bearer | — |
 | GET | `/api/profile` | Bearer | — |
 | PATCH | `/api/profile` | Bearer | — |
+| GET | `/api/pve/battles` | Bearer | PVE_COMBAT |
+| GET | `/api/pve/battles/:battleId` | Bearer | PVE_COMBAT |
+| POST | `/api/pve/enter` | Bearer | PVE_COMBAT |
+| POST | `/api/pve/parties` | Bearer | PVE_COMBAT |
+| PUT | `/api/pve/parties/:partyId` | Bearer | PVE_COMBAT |
+| POST | `/api/pve/parties/:partyId/deploy` | Bearer | PVE_COMBAT |
+| PUT | `/api/pve/parties/:partyId/plan` | Bearer | PVE_COMBAT |
+| POST | `/api/pve/squads/:squadId/auto` | Bearer | PVE_COMBAT |
+| POST | `/api/pve/squads/:squadId/move` | Bearer | PVE_COMBAT |
+| POST | `/api/pve/squads/:squadId/recall` | Bearer | PVE_COMBAT |
+| GET | `/api/pve/state` | Bearer | PVE_COMBAT |
 | GET | `/api/quests` | Bearer | — |
 | POST | `/api/quests/:code/accept` | Bearer | — |
 | POST | `/api/quests/:code/claim` | Bearer | — |

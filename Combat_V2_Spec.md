@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Version | 1.0 |
-| Status | Implemented prototype; PvP/expedition still on legacy stats (decision b) |
+| Version | 1.2 — reviewed 2026-11-22 (UTC+7) |
+| Status | Implemented prototype; private PvE map uses server-settled encounters and Godot replays; Hero-vs-Hero territory PvP uses Combat v2; guardian/Wonder power resolution remains separate |
 | Code | `packages/shared/src/combat`, `packages/server/src/modules/combat`, `packages/server/src/modules/hero` |
-| Migrations | `0039_same_spyke.sql`, `0040_absurd_joshua_kane.sql`, `0041_curly_mandroid.sql`, `0042_woozy_drax.sql`, `0043_lying_hydra.sql` |
+| Migrations | Combat v2: 0039–0044; private PvE map: 0045–0047 |
 
 ## 1. Base stats
 Four persisted base stats: **STR, INT, STA, AGI**. Every other stat is derived at runtime.
@@ -67,16 +67,20 @@ Non-Mage casts at 1.0 and gets no affinity bonus.
 ## 7. Combat engine
 - One action per unit per round, order by **AGI** desc (tie: HERO first, slot asc).
 - Skills cost 20% Max MP (min 10), use configured cooldown; basic attack restores 5% Max MP.
-- Effects: DAMAGE_SINGLE, HEAL_LOWEST_ALLY; max 30 rounds; winner by side elimination or HP% at cap (DRAW on tie).
+- Effects: DAMAGE_SINGLE, HEAL_LOWEST_ALLY; default max 30 rounds. Private PvE uses DRAW when both sides survive the cap; legacy combat retains the HP%-comparison result.
+- PvE formations use distinct cells 0–8 (row-major, row zero in front), with at most five Heroes. Target policy FRONTLINE / LOWEST_HP / HIGHEST_ATK and per-Hero skill order are frozen on deployment. Heal skills skip when no ally needs HP.
+- Mitigation selects physical/magical defence from the attacker's damage type. Skill upgrades add their configured effect increment per level.
 - Pre-combat modifiers: equipment (HP/ATK/DEF, Speed→AGI), starvation, injury, loyalty, resonance.
 - Rewards on win: Silver, Hero EXP + level-up, Master EXP + level-up; injuries recorded; quests WIN_BATTLE/CLEAR_FLOOR; leaderboard floor. Normal Heroes die permanently and drop gear; Special/Limited become DISABLED.
 - Session advance is claimed atomically (`ACTIVE → RESOLVING → COMPLETED`) so rewards pay once.
+- Private PvE encounters use per-squad records, so three squads can fight independently. Encounter results, Hero HP/MP/EXP, death/gear drops, wallet/ledger, cleared nodes and boss progression share one transaction. They do not create an ACTIVE legacy session.
+- Reports contain `initialUnits`, final `units` and log entries with `targetHp`, `actorMp`, optional `actorHp`, `hit` and `actionType`. Lethal damage precedes its REVIVE event. Godot replays this persisted report; viewing has no settlement effect.
 
 ## 8. Data model (added)
 `heroes`: base_str/int/sta/agi, class_code, combat_role, training_stats, origin_stats, mp/max_mp, current_hp_pct/mp_pct.
 `hero_templates`: base stats, archetype_weights, class_options, class_code, combat_role, is_enabled.
 Tables: `hero_class_definitions`, `subclass_definitions`, `hero_subclasses`, `hero_element_affinities`.
-Legacy columns `hp/attack/defense/speed` remain as mirrored display data (decision b) until PvP/expedition move to v2.
+Legacy columns `hp/attack/defense/speed` remain in use for display, the older combat API, and aggregate combat-power calculations. Hero-vs-Hero territory attacks build v2 units and call `resolveBattleV2`; these columns cannot be removed just because v2 exists.
 
 ## 9. APIs
 - `POST /api/heroes/:heroId/train` `{stat, points}`
@@ -86,6 +90,7 @@ Legacy columns `hp/attack/defense/speed` remain as mirrored display data (decisi
 - `POST /api/combat/v2/session/start` `{heroIds, enemyCodes?, seed?, maxRounds?}`
 - `POST /api/combat/v2/session/:id/advance`
 - `GET /api/combat/v2/sessions`
+- Private map routes and schemas: [openapi.pve.yaml](openapi.pve.yaml). Godot gameplay uses `/api/pve`, while the legacy simulation/session API remains available for compatibility. Active private maps and legacy combat/dungeon sessions cannot overlap.
 
 ## 10. Imprints
 - `imprint_definitions`: rank **S/A/B**, tier, bonus STR/INT/STA/AGI/HP/ATK/DEF, ability text,
@@ -117,7 +122,7 @@ crowd-control skills exist; it is aggregated and reported but has no damage effe
 - Slot limits by star (1–2★: 1, 3★: 2, 4★: 3, 5★+: 4) are now dynamically unlocked via Star Promotion.
 
 ## 11. Star Promotion (Pick Me Up style)
-- **Concept:** Normal Heroes do not have unique template restrictions; multiple instances of the same template can be summoned with independent rolled base stats and used as fodder or specialized builds. Only 5★+ Heroes on SPECIAL/LIMITED banners convert duplicates to Thiên Mệnh. Star promotion consumes fodder Heroes of the **same star rating**.
+- **Concept:** Procedural Heroes always create independent instances with rolled base stats, including 5★ SPECIAL Heroes. Duplicate conversion to Thiên Mệnh applies only to fixed-template 5★+ Heroes on SPECIAL/LIMITED banners. Star promotion consumes fodder Heroes of the **same star rating**.
 - **Requirement:** Target Hero must be at current maximum level:
   - 1★: Max Level 10
   - 2★: Max Level 20
@@ -162,5 +167,8 @@ crowd-control skills exist; it is aggregated and reported but has no damage effe
 - **Alliance & Conquest Integration:**
   - Wonder Siege garrison power and Alliance War combat estimates now reflect aggregate Combat Power v2.
 
-## 14. Known gaps (Godot 4 backlog)
-Imprint Evolution UI, trait tiers, skill-choice UI, Godot star promotion cinematic/flow, equipment inventory / character sheet 2D/3D view, client UI/VFX, TTK tuning. See `GODOT_BACKLOG.md`.
+## 14. Private PvE loop
+
+See [PVE_IMPLEMENTATION.md](docs/PVE_IMPLEMENTATION.md) for map generation, movement, transactions, recovery and verification. Hero recovery updates persisted HP percentages as well as display HP, so a treated/revived v2 Hero starts the next encounter at the restored ratio. Normal permadeath and Special/Limited recovery retain their existing costs and rules.
+
+Remaining work includes visual playtesting, balance/TTK, assets/VFX/audio and platform exports, alongside the non-PvE UI backlog in `GODOT_BACKLOG.md`.

@@ -2018,7 +2018,7 @@ func _spawn_resident_heroes() -> void:
 	_hero_actors.clear()
 
 	var roster := GameState.heroes
-	if roster.is_empty():
+	if roster.is_empty() and not GameState.is_logged_in():
 		roster = [
 			{ "id": "preview-1", "name": "Aaron", "rarity": 4, "level": 12, "classCode": "WARRIOR", "hp": 420, "maxHp": 420 },
 			{ "id": "preview-2", "name": "Jenna", "rarity": 3, "level": 10, "classCode": "THIEF", "hp": 310, "maxHp": 310 },
@@ -2026,6 +2026,7 @@ func _spawn_resident_heroes() -> void:
 		]
 
 	var worker_map := GameState.get_worker_assignment_map()
+	roster = roster.filter(func(hero): return not GameState.is_hero_pve_deployed(hero) and str(hero.get("state", "HEALTHY")) not in ["DEAD", "DISABLED"])
 	var floor_heroes: Dictionary = { 1: [], 2: [] }
 	var assigned_hero_ids: Dictionary = {}
 
@@ -2035,7 +2036,7 @@ func _spawn_resident_heroes() -> void:
 			if assigned_hero_ids.has(hid):
 				continue
 			var h_data := GameState.get_hero_by_id(hid)
-			if not h_data.is_empty() and floor_heroes[f].size() < MAX_HEROES_PER_FLOOR:
+			if not h_data.is_empty() and not GameState.is_hero_pve_deployed(h_data) and str(h_data.get("state", "HEALTHY")) not in ["DEAD", "DISABLED"] and floor_heroes[f].size() < MAX_HEROES_PER_FLOOR:
 				floor_heroes[f].append(h_data)
 				assigned_hero_ids[hid] = f
 
@@ -2615,9 +2616,13 @@ func _get_or_pick_facility_hero() -> Dictionary:
 		return {}
 	if _selected_facility_hero_id != "":
 		var found := GameState.get_hero_by_id(_selected_facility_hero_id)
-		if not found.is_empty():
+		if not found.is_empty() and not GameState.is_hero_pve_deployed(found):
 			return found
-	var first: Dictionary = GameState.heroes[0]
+	var available: Array = GameState.heroes.filter(func(hero): return not GameState.is_hero_pve_deployed(hero))
+	if available.is_empty():
+		_selected_facility_hero_id = ""
+		return {}
+	var first: Dictionary = available[0]
 	_selected_facility_hero_id = str(first.get("id", ""))
 	return first
 
@@ -2681,6 +2686,7 @@ func _open_hero_picker_for_facility(ctx_mode: int = 0, allowed_classes: Array = 
 		existing.queue_free()
 
 	var modal = HeroPickerModalScript.new()
+	modal.exclude_deployed = true
 	modal.name = "HeroPickerModal"
 	modal.configure(
 		"Chọn Hero Cho Công Trình",
@@ -2706,6 +2712,7 @@ func _open_worker_assignment_modal(building_id: String, building_name: String, b
 	var ctx_mode: int = UniversalHeroCardScript.ContextMode.LIBRARY if building_code == "LIBRARY" else UniversalHeroCardScript.ContextMode.DEFAULT
 
 	var modal = HeroPickerModalScript.new()
+	modal.exclude_deployed = true
 	modal.name = "HeroPickerModal"
 	var sub := "Chọn Hero đảm nhận vị trí nhân sự tại công trình (Còn %d chỗ trống)" % remaining_slots
 	if building_code == "LIBRARY":
@@ -3141,6 +3148,8 @@ func _open_dormitory_modal(b_data: Dictionary) -> void:
 	)
 	modal.squad_rest_requested.connect(func(is_resting):
 		for hid in GameState.active_party_ids:
+			if GameState.is_hero_pve_deployed(GameState.get_hero_by_id(str(hid))):
+				continue
 			var hname := "Hero"
 			for h in GameState.heroes:
 				if h is Dictionary and str(h.get("id", "")) == hid:
@@ -5068,9 +5077,9 @@ func _on_barracks_pressed() -> void:
 func _on_enter_pve_pressed() -> void:
 	_switch_to_lobby_floor(1)
 	camera_rig.focus_action_unit(dungeon_portal_mesh.global_position, 8.5, 0.35)
-	status_banner_label.text = "🌀 Đang tiến vào Cổng Tháp PvE (Isometric 3D Combat v2)..."
+	status_banner_label.text = "🌀 Đang mở bản đồ chinh phạt PvE..."
 	await get_tree().create_timer(0.4).timeout
-	get_tree().change_scene_to_file("res://scenes/pve/isometric_pve_arena_3d.tscn")
+	get_tree().change_scene_to_file("res://scenes/pve/pve_map.tscn")
 
 const RecoveryCenterModalScript = preload("res://scripts/ui/recovery_center_modal.gd")
 

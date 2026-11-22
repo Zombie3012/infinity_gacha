@@ -1,5 +1,7 @@
 import { integer, pgTable, timestamp, unique, uniqueIndex, index, varchar, bigint, doublePrecision, boolean, jsonb, check, text, primaryKey } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { PveLayout, PvePlan, PvePoint } from '@infiniti-gacha/shared';
+import type { CombatV2Report } from '../modules/combat/combat-v2.engine.js';
 
 export const accounts = pgTable('accounts', {
   id: varchar('id', { length: 36 }).primaryKey(),
@@ -64,6 +66,7 @@ export const banners = pgTable('banners', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Historical schema retained for existing databases. Flat-rate summons do not read or update it.
 export const masterBannerPity = pgTable('master_banner_pity', {
   id: varchar('id', { length: 36 }).primaryKey(),
   masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
@@ -1268,3 +1271,107 @@ export const wonderHoldings = pgTable('wonder_holdings', {
   lastSettledAt: timestamp('last_settled_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+
+// --- Private PvE strategic maps (separate from global territories and legacy sessions) ---
+
+export const pveMaps = pgTable('pve_maps', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  worldId: varchar('world_id', { length: 36 }).notNull().references(() => worlds.id, { onDelete: 'cascade' }),
+  floor: integer('floor').notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('ACTIVE'),
+  layout: jsonb('layout').$type<PveLayout>().notNull(),
+  encounterCatalog: jsonb('encounter_catalog').$type<{
+    code: string; name: string; hp: number; attack: number; defense: number; agi: number;
+    silver: number; exp: number; boss: boolean;
+  }[]>().notNull(),
+  discovered: jsonb('discovered').$type<number[]>().notNull(),
+  cleared: jsonb('cleared').$type<number[]>().notNull().default([]),
+  collected: jsonb('collected').$type<number[]>().notNull().default([]),
+  revision: integer('revision').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  clearedAt: timestamp('cleared_at', { withTimezone: true }),
+}, table => [
+  unique('uq_pve_world_floor').on(table.worldId, table.floor),
+  uniqueIndex('uq_pve_active_master').on(table.masterId).where(sql`${table.status} = 'ACTIVE'`),
+  index('idx_pve_map_master_latest').on(table.masterId, table.createdAt, table.id),
+  check('ck_pve_map_status', sql`${table.status} IN ('ACTIVE', 'CLEARED')`),
+  check('ck_pve_floor', sql`${table.floor} >= 1`),
+]);
+
+export const pvePartyPlans = pgTable('pve_party_plans', {
+  partyId: varchar('party_id', { length: 36 }).primaryKey().references(() => masterParties.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  plan: jsonb('plan').$type<PvePlan>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const pveSquads = pgTable('pve_squads', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  mapId: varchar('map_id', { length: 36 }).notNull().references(() => pveMaps.id, { onDelete: 'cascade' }),
+  partyId: varchar('party_id', { length: 36 }).references(() => masterParties.id, { onDelete: 'set null' }),
+  name: varchar('name', { length: 60 }).notNull(),
+  plan: jsonb('plan').$type<PvePlan>().notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('IDLE'),
+  x: integer('x').notNull().default(0),
+  y: integer('y').notNull().default(0),
+  autoExplore: boolean('auto_explore').notNull().default(false),
+  route: jsonb('route').$type<PvePoint[]>().notNull().default([]),
+  nextStepAt: timestamp('next_step_at', { withTimezone: true }),
+  lastBattleId: varchar('last_battle_id', { length: 36 }),
+  deployedAt: timestamp('deployed_at', { withTimezone: true }).notNull().defaultNow(),
+  withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),
+}, table => [
+  uniqueIndex('uq_pve_deployed_party').on(table.partyId).where(sql`${table.status} IN ('IDLE', 'MOVING', 'FIGHTING')`),
+  index('idx_pve_due_steps').on(table.masterId, table.nextStepAt),
+  index('idx_pve_squad_map_arrival').on(table.mapId, table.nextStepAt, table.id),
+  check('ck_pve_squad_status', sql`${table.status} IN ('IDLE', 'MOVING', 'FIGHTING', 'WITHDRAWN', 'DEFEATED')`),
+  check('ck_pve_squad_position', sql`${table.x} BETWEEN 0 AND 11 AND ${table.y} BETWEEN 0 AND 11`),
+]);
+
+// Authoritative exclusive reservations. Guard triggers also protect older mutation paths.
+export const pveHeroReservations = pgTable('pve_hero_reservations', {
+  heroId: varchar('hero_id', { length: 36 }).primaryKey().references(() => heroes.id, { onDelete: 'cascade' }),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  mapId: varchar('map_id', { length: 36 }).notNull().references(() => pveMaps.id, { onDelete: 'cascade' }),
+  squadId: varchar('squad_id', { length: 36 }).notNull().references(() => pveSquads.id, { onDelete: 'cascade' }),
+  reservedAt: timestamp('reserved_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index('idx_pve_reservation_master').on(table.masterId),
+  index('idx_pve_reservation_squad').on(table.squadId),
+  index('idx_pve_reservation_map').on(table.mapId),
+]);
+
+export const pveBattles = pgTable('pve_battles', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  mapId: varchar('map_id', { length: 36 }).notNull().references(() => pveMaps.id, { onDelete: 'cascade' }),
+  squadId: varchar('squad_id', { length: 36 }).notNull().references(() => pveSquads.id, { onDelete: 'cascade' }),
+  tileId: integer('tile_id').notNull(),
+  combatSessionId: varchar('combat_session_id', { length: 36 }).notNull().unique().references(() => combatSessions.id, { onDelete: 'cascade' }),
+  report: jsonb('report').$type<CombatV2Report>().notNull(),
+  settlement: jsonb('settlement').$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [index('idx_pve_battle_master').on(table.masterId, table.createdAt, table.id)]);
+
+export const pveCommands = pgTable('pve_commands', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  key: varchar('key', { length: 80 }).notNull(),
+  operation: varchar('operation', { length: 100 }).notNull(),
+  requestHash: varchar('request_hash', { length: 64 }).notNull(),
+  result: jsonb('result').$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [unique('uq_pve_command_key').on(table.masterId, table.key)]);
+
+export const pveEvents = pgTable('pve_events', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  mapId: varchar('map_id', { length: 36 }).notNull().references(() => pveMaps.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull(),
+  kind: varchar('kind', { length: 30 }).notNull(),
+  data: jsonb('data').$type<Record<string, unknown>>().notNull(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [unique('uq_pve_event_revision').on(table.mapId, table.revision)]);

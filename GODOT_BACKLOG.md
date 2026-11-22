@@ -1,58 +1,61 @@
-# Godot 4 Client Backlog & Architecture Roadmap
+# Godot client: trạng thái và backlog
 
-> **Chuyển giao Kiến trúc**: Dự án chính thức dừng hoàn toàn phát triển Web UI (`packages/client`) và chuyển đổi engine phát triển Client chính thức từ Unity sang **Godot 4 (GDScript 2.0)**.
-> Backend REST API và Engine Combat v2 đã hoàn thiện 100%, sẵn sàng làm máy chủ backend độc lập cho Godot Client.
+Cập nhật: **22/11/2026 (UTC+7)**. Đối chiếu với code hiện tại; checklist thiết kế P0–P3 chỉ phản ánh phạm vi prototype tại thời điểm viết.
 
----
+## Đã có trong code
 
-## 1. Hero Awakening & Progression Presentation
-- **Imprint Evolution (Rank S/A/B, Trait/Ability)**: Backend đã cung cấp đầy đủ API ấn ký (`imprint_definitions`, `hero_imprints`) và 6 ability hooks (`LOW_HP_EMPOWER`, `PHOENIX_REVIVE`, `CC_RESISTANCE`, `CRIT_EVASION`, `ARCANE_EMPOWER`, `ACCURACY_EMPOWER`). Godot Client triển khai giao diện khảm ấn ký, mở khóa slot theo sao và hiển thị huy hiệu ấn ký.
-- **Trait Tiers**: Hiển thị thẻ đặc tính (trait card) nhận được khi thức tỉnh, so sánh chỉ số trước/sau, hiệu ứng hạt Particles2D khi thức tỉnh thành công.
-- **Skill Awakening Selection**: UI cho phép người chơi chọn kỹ năng muốn thức tỉnh thay vì mặc định kỹ năng đầu tiên.
-- **VFX / SFX**: Hiệu ứng chuyển động tweening, âm thanh nâng cấp và hoạt ảnh mở rộng sức mạnh.
+- Căn cứ 3D isometric, camera, tương tác ô đất/công trình, phân công Hero.
+- Action bar, thông tin/nâng cấp công trình và đếm ngược xây dựng.
+- Modal hồi phục, bếp/nhà ăn, ký túc xá, huấn luyện, lò rèn và kho.
+- Hero roster dạng thẻ, xem nhân vật 3D, huấn luyện, kỹ năng, thức tỉnh, ấn ký, trang bị và chọn phôi thăng sao.
+- HUD Master, hồ sơ, avatar, giftcode và gửi ticket hỗ trợ.
+- Gacha hai banner, chọn ngang, tỷ lệ lấy từ API, ×1/×10, hiệu ứng triệu hồi và thẻ kết quả.
+- Đấu trường PvE với diễn hoạt replay, tốc độ phát và dynamic camera.
+- REST client và đồng bộ profile, Hero, căn cứ, trang bị, vật phẩm, đội hình.
 
----
+## PvE đã triển khai theo `thaoluan.md`
 
-## 2. Thăng Sao Tướng (Star Promotion — Pick Me Up style)
-- **Backend Complete**: `GET /api/heroes/:heroId/promote-star/preview` và `POST /api/heroes/:heroId/promote-star`.
-  - Quy tắc: Tướng được nâng phải đạt Max Level hiện tại ($10 \times \text{Sao}$).
-  - Tiêu tốn $N$ tướng hiến tế cùng hạng $N$★.
-  - Tự động tháo trang bị của tướng hiến tế trả về túi đồ và dọn dẹp slot đội hình.
-  - Mở rộng ngân sách chỉ số gốc (`BASE_STAT_BUDGET`) theo sao mới và giữ nguyên tỷ lệ phân bổ archetype.
-- **Godot Client Scope**:
-  - Giao diện chọn tướng hiến tế (checklist fodder selection).
-  - Hoạt ảnh hiến tế (sacrifice animation/particles), thẻ bài tướng phát sáng và số sao tăng từ $N$ lên $N+1$.
-  - Popup so sánh các chỉ số STR/INT/STA/AGI, Max HP, ATK, DEF tăng lên vượt bậc.
+- [x] Map PvE riêng 12×12, fog, tài nguyên, boss và ba đội hoạt động độc lập qua `/api/pve`.
+- [x] Tạo/sửa party 1–5 Hero, xếp vị trí 0–8 và đặt ưu tiên mục tiêu/thứ tự kỹ năng.
+- [x] Di chuyển 1 giây/ô bằng thời gian server, ETA và polling khoảng một giây khi mở map/replay; bật/tắt tự khám phá từng đội.
+- [x] Tự giao chiến và quyết toán một lần; hiển thị chiến báo, thưởng và đồng bộ Hero/tài nguyên/tầng.
+- [x] Replay đọc báo cáo đã lưu, gồm HP/MP, heal, crit và revive; không còn simulation/fallback demo trong luồng này.
+- [x] Phục hồi lệnh chưa xác nhận sau mất phản hồi hoặc khởi động lại; giữ bản nháp đội hình khi lỗi.
+- [x] Hero triển khai được đánh dấu và loại khỏi chọn nhân sự/trang bị tại căn cứ.
+- [x] Kiểm thử headless bằng Godot thật và HTTP/PostgreSQL; có ca đổi tài khoản và khởi động lại cả API/client.
 
----
+PvE dùng map và encounter riêng theo đội, tái sử dụng Combat v2. Luồng session/dungeon cũ được giữ để tương thích và bị chặn khi có map mới đang ACTIVE. Không còn kế hoạch nối đấu trường vào luồng đánh từng phòng. Bằng chứng và giới hạn kiểm thử ở [PVE_IMPLEMENTATION.md](docs/PVE_IMPLEMENTATION.md).
 
-## 3. Đấu Trường & Replay Combat v2 (Combat v2 Arena)
-- **Đặc tả Combat v2**:
-  - Hiển thị thanh AGI Turn Order (danh sách avatar các tướng theo thứ tự lượt đánh).
-  - Thanh máu HP / năng lượng MP mượt mà (TextureProgressBar kết hợp Tween).
-  - Floating Combat Text: Nhảy số sát thương vật lý (cam/đỏ), sát thương phép (lam/tím), chữ CHÍ MẠNG (to, rung camera), NÉ TRÁNH, ĐỠ ĐÒN.
-  - Trình phát Timeline Replay: Đọc mảng `battleLog` trả về từ API (`/api/combat/v2/simulate`, `/api/combat/v2/session/...`, `/api/world/pvp/battles`), diễn hoạt lần lượt từng hiệp đánh chân thực.
-  - Hiệu ứng hồi sinh phượng hoàng (`PHOENIX_REVIVE`), kích hoạt khiên hộ thể và hút máu lifesteal.
+## Ưu tiên 1: chơi thử và cân bằng PvE
 
----
+- [ ] Chơi thử có hình bằng đội Hero thực tế; đánh giá độ khó, thời gian hạ địch, chữa trị và nhịp tài nguyên.
+- [ ] Đánh giá camera, hiệu ứng, âm thanh, chuột/phím và kích thước màn hình mục tiêu. Các kiểm thử headless không xác nhận chất lượng trực quan.
+- [ ] Thay các hình khối/asset prototype khi có bộ đồ họa thống nhất.
 
-## 4. Hệ Thống Trang Bị v2 (Equipment System v2)
-- **Multi-slot**: `MAIN_HAND`, `OFF_HAND`, `CHEST`, `HELMET`, `BOOTS`, `ACCESSORY`.
-- Giao diện Inventory / Character Equipment Sheet:
-  - Hiển thị 6 ô trang bị xung quanh nhân vật.
-  - Tooltip trang bị chi tiết: chỉ số cơ bản (+STR, +INT, +STA, +AGI), chỉ số phụ (+Matk, +Mdef, +HP), chỉ số chiến đấu đặc biệt (+CritRate%, +CritDamage%, +ArmorPen%, +Lifesteal%).
-  - Nút Trang bị nhanh / Tháo đồ đồng bộ tức thì với API `/api/equipment/equip` và `/api/equipment/unequip`.
+## Ưu tiên 2: hoàn thiện các luồng đã có UI
 
----
+- [ ] Kiểm thử gacha NORMAL dùng scroll và SPECIAL dùng 100 Gem/lượt, refresh ví, thiếu tài nguyên và gửi lại yêu cầu.
+- [ ] Kiểm thử toàn luồng xây/nâng cấp, rèn/cường hóa/ghép đồ, ăn/nghỉ/hồi phục.
+- [ ] Kiểm thử Hero bị khóa, chết, đang đi expedition, phôi thăng sao và thay trang bị.
+- [ ] Rà soát thao tác ấn ký, chọn kỹ năng thức tỉnh và thông báo điều kiện chưa đủ.
+- [ ] Kiểm tra layout, resize, input, tooltip và phản hồi lỗi trong engine.
 
-## 5. Bản Đồ Thế Giới & PvP Lãnh Thổ (World Grid 1000x1000)
-- **Bản đồ ô đất**: TileMap / TileMapLayer 2D tối ưu render ô đất, tài nguyên, quái gác cổng và thành trì của các Master khác.
-- **Hành quân & Thám hiểm**: Vẽ đường mũi tên hành quân (March line), hiển thị đồng hồ đếm ngược ETA di chuyển.
-- **Chiến báo PvP**: Modal xem danh sách các trận công/thủ lãnh thổ, xem lại Replay toàn bộ trận đánh PvP v2.
+Gacha hiện không có pity. Banner seed NORMAL ra 1–3★, SPECIAL ra 2–5★; Hero procedural luôn sinh instance riêng. Quy tắc đầy đủ ở [README](README.md#quy-tắc-gacha-hiện-hành).
 
----
+## Ưu tiên 3: đưa các API còn lại lên Godot
 
-## 6. Dịch Vụ Nền Tảng & Đóng Gói (Production Services)
-- Xác thực tài khoản: Đăng ký / Đăng nhập JWT Token lưu an toàn trong `user://auth.dat`.
-- Tối ưu hóa đa nền tảng: PC (Windows/macOS), Mobile (Android APK / iOS).
-- Âm thanh: AudioStreamPlayer cho BGM và SFX chiến đấu, mở thẻ gacha.
+- [ ] Nhiệm vụ, thành tựu, shop và mailbox.
+- [ ] LiveOps, mission sự kiện và bảng xếp hạng.
+- [ ] Bản đồ thế giới, lãnh thổ, expedition và chiến báo/replay PvP.
+- [ ] Liên minh, chat, chiến tranh và mùa chinh phục.
+- [ ] Luồng mua hàng sau khi tích hợp store thật; không coi receipt HMAC hiện tại là IAP sản xuất.
+
+## Ưu tiên 4: tài khoản và phát hành
+
+- [ ] Bỏ tự đăng nhập demo ở scene khởi động; hoàn thiện đăng nhập/đăng xuất và lưu phiên.
+- [ ] Thay dữ liệu mặc định trên client bằng trạng thái tải/lỗi rõ ràng.
+- [ ] Hoàn thiện BGM, SFX, asset nhân vật, VFX và tối ưu hiệu năng.
+- [ ] Thiết lập và kiểm thử export PC/mobile theo nền tảng đã chọn.
+- [ ] Bổ sung kiểm tra Godot vào quy trình xác minh; `npm run verify` hiện chỉ bao phủ Node/TypeScript.
+
+Backend còn dùng balance mẫu, một số timer giải quyết khi đọc dữ liệu, chưa kết nối Redis, OAuth/store còn mô phỏng. Không dùng tuyên bố “backend hoàn thiện 100%” làm điều kiện phát hành.

@@ -1,301 +1,209 @@
 extends Node3D
 
-## Isometric 3D PvE Arena & Dungeon Room Scene (Option 1)
-## Uses the exact same IsometricCameraRig and UnitActor3D as the Base Lobby,
-## adding Dynamic Action Camera Zoom on Skills/Crits and Turn-by-Turn Combat v2 Replay.
-
+## Read-only playback of a server-settled private PvE encounter.
+## Rewards and squad movement never depend on watching or finishing this replay.
 const UNIT_ACTOR_SCENE := preload("res://scenes/common/unit_actor_3d.tscn")
-
-# Tactical Isometric Formation Slots (Bottom-Left Heroes vs Top-Right Enemies)
-const HERO_SLOTS: Array[Vector3] = [
-	Vector3(-2.2, 0.0, 1.2),  # Slot 0: Frontline Left
-	Vector3(-1.0, 0.0, 2.4),  # Slot 1: Frontline Right
-	Vector3(-4.2, 0.0, 2.0),  # Slot 2: Backline Left
-	Vector3(-3.0, 0.0, 3.2),  # Slot 3: Backline Center
-	Vector3(-1.8, 0.0, 4.4),  # Slot 4: Backline Right
-]
-
-const ENEMY_SLOTS: Array[Vector3] = [
-	Vector3(2.2, 0.0, -1.2),  # Slot 0: Frontline Left
-	Vector3(1.0, 0.0, -2.4),  # Slot 1: Frontline Right
-	Vector3(3.6, 0.0, -2.6),  # Slot 2: Backline Center
-	Vector3(2.4, 0.0, -3.8),  # Slot 3: Backline Right
-	Vector3(4.6, 0.0, -1.4),  # Slot 4: Flank
-]
-
+const MAP_SCENE := "res://scenes/pve/pve_map.tscn"
 @onready var camera_rig: IsometricCameraRig = $IsometricCameraRig
 @onready var units_root: Node3D = $UnitsRoot
-
 @onready var floor_title_label: Label = %FloorTitleLabel
 @onready var turn_banner_label: Label = %TurnBannerLabel
 @onready var combat_log_label: RichTextLabel = %CombatLogLabel
-
 @onready var start_battle_btn: Button = %StartBattleBtn
 @onready var speed_toggle_btn: Button = %SpeedToggleBtn
 @onready var camera_mode_btn: Button = %CameraModeBtn
 @onready var back_base_btn: Button = %BackBaseBtn
 
 var _actors_by_id: Dictionary = {}
+var _battle: Dictionary = {}
+var _report: Dictionary = {}
 var _is_replaying: bool = false
+var _cancelled: bool = false
 var _playback_speed: float = 1.0
 var _dynamic_cam_enabled: bool = true
-var _current_room: int = 1
 
 func _ready() -> void:
+	start_battle_btn.text = "Xem diễn biến trận đấu"
+	start_battle_btn.disabled = true
+	back_base_btn.text = "Về bản đồ chinh phạt"
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	speed_toggle_btn.pressed.connect(_on_speed_toggle_pressed)
 	camera_mode_btn.pressed.connect(_on_camera_mode_pressed)
-	back_base_btn.pressed.connect(_on_back_base_pressed)
+	back_base_btn.pressed.connect(func(): get_tree().change_scene_to_file(MAP_SCENE))
+	_draw_formation_cells()
+	PveState.battle_completed.connect(func(battle_id: String):
+		if battle_id != PveState.selected_battle_id:
+			_append_log("[color=#8ce6b8]Một đội khác vừa kết thúc giao chiến. Trở về map để xem chiến báo mới.[/color]")
+	)
+	turn_banner_label.text = "Đang tải chiến báo đã lưu..."
+	if PveState.selected_battle_id.is_empty():
+		turn_banner_label.text = "Chọn một chiến báo từ bản đồ để xem lại trận đấu."
+		return
+	PveState.polling_enabled = true
+	var response: Dictionary = await ApiClient.get_req("/api/pve/battles/" + PveState.selected_battle_id.uri_encode())
+	if _cancelled:
+		return
+	if not response.get("ok", false) or not (response.get("data") is Dictionary):
+		turn_banner_label.text = "Không tải được chiến báo. Về bản đồ để thử lại."
+		return
+	_battle = response["data"]
+	_report = _battle.get("report", {})
+	if not _valid_report(_report):
+		turn_banner_label.text = "Chiến báo chưa đủ dữ liệu để phát lại. Kết quả vẫn được giữ trên server."
+		return
+	_setup_actors()
+	start_battle_btn.disabled = false
+	_show_summary()
 
-	_setup_initial_formation()
+func _exit_tree() -> void:
+	_cancelled = true
 
-func _setup_initial_formation() -> void:
+static func _valid_report(report: Dictionary) -> bool:
+	return report.get("log") is Array and report.get("units") is Array and report.get("initialUnits") is Array
+
+static func formation_position(side: String, cell: int) -> Vector3:
+	var row: int = clampi(cell, 0, 8) / 3
+	var column: int = clampi(cell, 0, 8) % 3
+	var forward := Vector3(1, 0, -1).normalized()
+	var right := Vector3(1, 0, 1).normalized()
+	if side == "ENEMY":
+		forward = -forward
+		right = -right
+	var center := Vector3(-3.2, 0, 3.2) if side == "HERO" else Vector3(3.2, 0, -3.2)
+	return center + forward * float(1 - row) * 1.9 + right * float(column - 1) * 1.9
+
+func _draw_formation_cells() -> void:
+	for side in ["HERO", "ENEMY"]:
+		for cell in range(9):
+			var marker := MeshInstance3D.new()
+			var mesh := BoxMesh.new()
+			mesh.size = Vector3(1.65, 0.04, 1.65)
+			marker.mesh = mesh
+			marker.position = formation_position(side, cell) + Vector3(0, 0.02, 0)
+			marker.rotation.y = PI / 4.0
+			var material := StandardMaterial3D.new()
+			material.albedo_color = Color(0.16, 0.30, 0.42) if side == "HERO" else Color(0.40, 0.22, 0.24)
+			marker.material_override = material
+			add_child(marker)
+
+func _setup_actors() -> void:
 	for child in units_root.get_children():
+		units_root.remove_child(child)
 		child.queue_free()
 	_actors_by_id.clear()
-
-	var party_data: Array = []
-	if GameState.heroes.size() > 0:
-		for i in range(mini(5, GameState.heroes.size())):
-			var h: Dictionary = GameState.heroes[i]
-			party_data.append({
-				"id": str(h.get("id", "hero-" + str(i))),
-				"name": str(h.get("name", "Hero " + str(i + 1))),
-				"side": "HERO",
-				"rarity": int(h.get("rarity", 3)),
-				"classCode": str(h.get("classCode", "WARRIOR")),
-				"hp": int(h.get("maxHp", 1200)),
-				"maxHp": int(h.get("maxHp", 1200)),
-			})
-	else:
-		party_data = [
-			{ "id": "demo-hero-1", "name": "Han Islat", "side": "HERO", "rarity": 4, "classCode": "WARRIOR", "hp": 1850, "maxHp": 1850 },
-			{ "id": "demo-hero-2", "name": "Jenna", "side": "HERO", "rarity": 3, "classCode": "THIEF", "hp": 1320, "maxHp": 1320 },
-			{ "id": "demo-hero-3", "name": "Eolka", "side": "HERO", "rarity": 4, "classCode": "MAGE", "hp": 1180, "maxHp": 1180 },
-		]
-
-	var enemy_data: Array = [
-		{ "id": "foe-orc-1", "name": "Orc Vanguard", "side": "ENEMY", "rarity": 3, "classCode": "WARRIOR", "hp": 1500, "maxHp": 1500 },
-		{ "id": "foe-shaman-2", "name": "Goblin Shaman", "side": "ENEMY", "rarity": 3, "classCode": "MAGE", "hp": 1050, "maxHp": 1050 },
-		{ "id": "foe-boss-3", "name": "Floor Guardian", "side": "ENEMY", "rarity": 4, "classCode": "SPEARMAN", "hp": 2200, "maxHp": 2200 },
-	]
-
-	_spawn_side_actors(party_data, HERO_SLOTS, Vector3(1, 0, -1))
-	_spawn_side_actors(enemy_data, ENEMY_SLOTS, Vector3(-1, 0, 1))
-
-	floor_title_label.text = "🗼 Tháp Thử Thách — Tầng 1 · Phòng #%d (Isometric 3D Combat v2)" % _current_room
-	turn_banner_label.text = "Đội hình sẵn sàng (%d Tướng vs %d Quái). Bấm 'Bắt Đầu Giao Tranh'!" % [party_data.size(), enemy_data.size()]
-
-func _spawn_side_actors(units: Array, slots: Array[Vector3], face_dir: Vector3) -> void:
-	for i in range(mini(units.size(), slots.size())):
-		var u: Dictionary = units[i]
+	for unit_value in _report.get("initialUnits", []):
+		if not (unit_value is Dictionary):
+			continue
+		var unit: Dictionary = unit_value
 		var actor: UnitActor3D = UNIT_ACTOR_SCENE.instantiate()
 		units_root.add_child(actor)
-		actor.global_position = slots[i]
-		actor.setup_combat_unit(u)
-		actor.visual_root.look_at(actor.global_position + face_dir.normalized(), Vector3.UP)
-		_actors_by_id[actor.unit_id] = actor
+		var side := str(unit.get("side", "HERO"))
+		actor.global_position = formation_position(side, int(unit.get("slotIndex", 0)))
+		var actor_data: Dictionary = unit.duplicate(true)
+		var hero: Dictionary = GameState.get_hero_by_id(str(unit.get("id", "")))
+		actor_data["classCode"] = str(hero.get("classCode", "WARRIOR"))
+		actor_data["rarity"] = int(hero.get("rarity", 3))
+		actor.setup_combat_unit(actor_data)
+		var facing := Vector3(1, 0, -1) if side == "HERO" else Vector3(-1, 0, 1)
+		actor.visual_root.look_at(actor.global_position + facing, Vector3.UP)
+		_actors_by_id[str(unit.get("id", ""))] = actor
 
 func _on_start_battle_pressed() -> void:
-	if _is_replaying:
+	if _is_replaying or _report.is_empty():
 		return
 	_is_replaying = true
 	start_battle_btn.disabled = true
 	combat_log_label.clear()
-	_append_log("[b][color=#62c5fc]⚔️ Bắt đầu kết nối Engine Combat v2...[/color][/b]")
-
-	var hero_ids: Array = []
-	for h in GameState.heroes.slice(0, 5):
-		var hid := str(h.get("id", ""))
-		if hid != "":
-			hero_ids.append(hid)
-
-	var report: Dictionary = {}
-	if hero_ids.size() > 0 and ApiClient.auth_token != "":
-		var res := await ApiClient.post_req("/api/combat/v2/simulate", {
-			"heroIds": hero_ids,
-			"maxRounds": 20
-		})
-		if res["ok"] and res["data"] is Dictionary:
-			report = res["data"]
-
-	if report.is_empty():
-		report = _build_local_demo_report()
-
-	await _play_combat_v2_report(report)
+	_setup_actors()
+	for entry_value in _report.get("log", []):
+		if _cancelled:
+			return
+		if not (entry_value is Dictionary):
+			continue
+		var entry: Dictionary = entry_value
+		var actor_id := str(entry.get("actorId", ""))
+		var target_id := str(entry.get("targetId", ""))
+		var actor: UnitActor3D = _actors_by_id.get(actor_id)
+		var target: UnitActor3D = _actors_by_id.get(target_id)
+		var action := str(entry.get("action", "BASIC"))
+		var round_number := int(entry.get("round", 1))
+		var heal := int(entry.get("heal", 0))
+		var hp_after := int(entry.get("targetHp", 0))
+		var actor_name := str(entry.get("actorName", actor.unit_name if is_instance_valid(actor) else "Hero"))
+		var target_name := str(entry.get("targetName", target.unit_name if is_instance_valid(target) else "Mục tiêu"))
+		if action == "REVIVE":
+			turn_banner_label.text = "Hiệp %d · %s hồi sinh" % [round_number, actor_name]
+			if is_instance_valid(actor):
+				actor.play_revive_feedback(hp_after)
+				actor.set_combat_resources(hp_after, int(entry.get("actorMp", actor.current_mp)))
+				if _dynamic_cam_enabled:
+					camera_rig.focus_action_unit(actor.global_position, 8.2, 0.2 / _playback_speed)
+			_append_log("[color=#ffc873]%s hồi sinh: +%d HP[/color]" % [_escape(actor_name), heal])
+		else:
+			turn_banner_label.text = "Hiệp %d · %s → %s" % [round_number, actor_name, target_name]
+			if heal > 0:
+				if is_instance_valid(target):
+					target.apply_heal_feedback(heal, hp_after)
+				_append_log("%s hồi %d HP cho %s" % [_escape(actor_name), heal, _escape(target_name)])
+			else:
+				var skill := str(entry.get("actionType", "")) == "SKILL" or action != "BASIC"
+				var critical := bool(entry.get("crit", false))
+				var missed := not bool(entry.get("hit", true))
+				if is_instance_valid(actor) and is_instance_valid(target):
+					if _dynamic_cam_enabled and (skill or critical):
+						camera_rig.focus_action_unit((actor.global_position + target.global_position) * 0.5, 8.8, 0.16 / _playback_speed)
+					await actor.perform_attack_lunge(target.global_position, skill, _playback_speed)
+					if _cancelled:
+						return
+					target.apply_hit_feedback(int(entry.get("damage", 0)), critical, missed, bool(entry.get("blocked", false)), hp_after)
+					if _dynamic_cam_enabled and critical:
+						camera_rig.shake(0.2, 0.15)
+					await actor.return_to_slot(_playback_speed)
+					if _cancelled:
+						return
+				var outcome := "Né tránh" if missed else "-%d HP" % int(entry.get("damage", 0))
+				_append_log("Hiệp %d · %s → %s: %s%s" % [round_number, _escape(actor_name), _escape(target_name), "CRIT " if critical else "", outcome])
+			if is_instance_valid(actor):
+				actor.set_combat_resources(int(entry.get("actorHp", actor.current_hp)), int(entry.get("actorMp", actor.current_mp)))
+		await get_tree().create_timer(0.25 / _playback_speed).timeout
+		if _cancelled:
+			return
+		if _dynamic_cam_enabled:
+			camera_rig.focus_overview(Vector3.ZERO, 0.2 / _playback_speed)
+	for unit in _report.get("units", []):
+		var actor: UnitActor3D = _actors_by_id.get(str(unit.get("id", "")))
+		if is_instance_valid(actor):
+			actor.set_combat_resources(int(unit.get("hp", 0)), int(unit.get("mp", 0)))
 	_is_replaying = false
 	start_battle_btn.disabled = false
-	_current_room += 1
+	start_battle_btn.text = "Phát lại chiến báo"
+	camera_rig.focus_overview(Vector3.ZERO, 0.3)
+	_show_summary()
 
-func _play_combat_v2_report(report: Dictionary) -> void:
-	# Rebuild 3D actors to match exact report units if provided
-	var units_list: Array = report.get("units", [])
-	if units_list.size() > 0:
-		for child in units_root.get_children():
-			child.queue_free()
-		_actors_by_id.clear()
-		var heroes_u: Array = []
-		var enemies_u: Array = []
-		for u in units_list:
-			var initial_unit := {
-				"id": u.get("id", ""),
-				"name": u.get("name", "Unit"),
-				"side": u.get("side", "HERO"),
-				"hp": u.get("maxHp", 1000),
-				"maxHp": u.get("maxHp", 1000),
-				"maxMp": u.get("maxMp", 100),
-			}
-			if str(u.get("side", "HERO")) == "HERO":
-				heroes_u.append(initial_unit)
-			else:
-				enemies_u.append(initial_unit)
-		_spawn_side_actors(heroes_u, HERO_SLOTS, Vector3(1, 0, -1))
-		_spawn_side_actors(enemies_u, ENEMY_SLOTS, Vector3(-1, 0, 1))
+func _show_summary() -> void:
+	var settlement: Dictionary = _battle.get("settlement", {})
+	var result := {"HERO": "CHIẾN THẮNG", "ENEMY": "THẤT BẠI", "DRAW": "HÒA"}
+	var outcome := str(result.get(str(_report.get("winner", "DRAW")), "KẾT THÚC"))
+	floor_title_label.text = "TẦNG %d · %s · %d HIỆP" % [int(settlement.get("floor", 1)), outcome, int(_report.get("rounds", 0))]
+	turn_banner_label.text = "%s · +%d Silver · +%d EXP/Hero · +%d EXP Master" % [outcome,
+		int(settlement.get("silverReward", 0)), int(settlement.get("heroExpReward", 0)), int(settlement.get("masterExpReward", 0))]
+	if bool(settlement.get("bossCleared", false)):
+		_append_log("[color=#8ce6b8]Boss đã bị hạ. Đã mở tầng %d; các đội đã rời map.[/color]" % int(settlement.get("nextFloor", 1)))
+	for death in settlement.get("deaths", []):
+		_append_log("[color=#ffad98]%s · %s[/color]" % [_escape(str(death.get("name", "Hero"))),
+			"Tử vong vĩnh viễn; trang bị rơi tại tầng này" if str(death.get("state", "")) == "DEAD" else "Vô hiệu hóa; giữ trang bị để hồi phục"])
+	_append_log("Kết quả đã được lưu. Bạn có thể trở về map bất cứ lúc nào.")
 
-	var entries: Array = report.get("log", [])
-	for entry in entries:
-		var round_num := int(entry.get("round", 1))
-		var actor_id := str(entry.get("actorId", ""))
-		var actor_name := str(entry.get("actorName", "Unit"))
-		var target_id := str(entry.get("targetId", ""))
-		var target_name := str(entry.get("targetName", "Target"))
-		var action_type := str(entry.get("action", "BASIC"))
-		var skill_code := str(entry.get("skillCode", ""))
-		var dmg := int(entry.get("damage", 0))
-		var is_crit := bool(entry.get("crit", false))
-		var is_evaded := bool(entry.get("evaded", false))
-		var is_blocked := bool(entry.get("blocked", false))
-		var hp_after := int(entry.get("targetHpAfter", 0))
+static func _escape(value: String) -> String:
+	return value.replace("[", "[lb]")
 
-		var actor_node: UnitActor3D = _actors_by_id.get(actor_id, null)
-		var target_node: UnitActor3D = _actors_by_id.get(target_id, null)
-
-		if action_type == "REVIVE":
-			turn_banner_label.text = "Hiệp %d — 🔥 %s kích hoạt PHƯỢNG HOÀNG TÁI SINH!" % [round_num, actor_name]
-			_append_log("[color=#ff9e3b]Hiệp %d: 🔥 %s hồi sinh với %d HP![/color]" % [round_num, actor_name, hp_after])
-			if actor_node:
-				if _dynamic_cam_enabled:
-					camera_rig.focus_action_unit(actor_node.global_position, 8.2, 0.22 / _playback_speed)
-				camera_rig.shake(0.3, 0.25)
-				actor_node.play_revive_feedback(hp_after)
-				await get_tree().create_timer(0.65 / _playback_speed).timeout
-				if _dynamic_cam_enabled:
-					camera_rig.focus_overview(Vector3.ZERO, 0.3 / _playback_speed)
-			continue
-
-		var is_skill := action_type == "SKILL"
-		var skill_tag := (" [" + skill_code + "]") if is_skill and skill_code != "" else ""
-		turn_banner_label.text = "Hiệp %d — %s ➔ %s%s" % [round_num, actor_name, target_name, skill_tag]
-
-		if actor_node and target_node:
-			# Dynamic Isometric Action Zoom on Skills or Critical Strikes
-			if _dynamic_cam_enabled and (is_skill or is_crit):
-				var mid_point := (actor_node.global_position + target_node.global_position) * 0.5
-				camera_rig.focus_action_unit(mid_point, 8.8, 0.2 / _playback_speed)
-
-			await actor_node.perform_attack_lunge(target_node.global_position, is_skill)
-			target_node.apply_hit_feedback(dmg, is_crit, is_evaded, is_blocked, hp_after)
-
-			if is_crit:
-				camera_rig.shake(0.32, 0.22)
-			elif is_skill:
-				camera_rig.shake(0.18, 0.16)
-
-			await actor_node.return_to_slot()
-
-			if _dynamic_cam_enabled and (is_skill or is_crit):
-				camera_rig.focus_overview(Vector3.ZERO, 0.28 / _playback_speed)
-
-		var outcome_str := "-%d HP" % dmg
-		if is_evaded:
-			outcome_str = "NÉ TRÁNH"
-		elif is_crit:
-			outcome_str = "💥 CRIT -%d HP" % dmg
-		elif is_blocked:
-			outcome_str = "🛡️ ĐỠ ĐÒN -%d HP" % dmg
-
-		_append_log("Hiệp %d: [b]%s[/b]%s ➔ [b]%s[/b] (%s)" % [round_num, actor_name, skill_tag, target_name, outcome_str])
-		await get_tree().create_timer(0.22 / _playback_speed).timeout
-
-	camera_rig.focus_overview(Vector3.ZERO, 0.4)
-	var winner := str(report.get("winner", "HERO"))
-	var rounds := int(report.get("rounds", 1))
-	var total_dmg := int(report.get("totalDamage", 0))
-	turn_banner_label.text = "🏆 Kết thúc sau %d hiệp — Phe thắng: %s (Tổng sát thương: %d)" % [rounds, winner, total_dmg]
-	_append_log("[b][color=#66f28d]🏆 Trận đấu kết thúc! Phe thắng: %s (%d hiệp)[/color][/b]" % [winner, rounds])
-
-func _build_local_demo_report() -> Dictionary:
-	var h_keys := _actors_by_id.keys().filter(func(k): return _actors_by_id[k].side == "HERO")
-	var e_keys := _actors_by_id.keys().filter(func(k): return _actors_by_id[k].side == "ENEMY")
-	if h_keys.is_empty() or e_keys.is_empty():
-		return { "winner": "HERO", "rounds": 1, "totalDamage": 0, "log": [] }
-
-	var log_entries: Array = []
-	var total_dmg := 0
-	for r in range(1, 4):
-		for hid in h_keys:
-			var h_actor: UnitActor3D = _actors_by_id[hid]
-			var target_id: String = e_keys[r % e_keys.size()]
-			var t_actor: UnitActor3D = _actors_by_id[target_id]
-			var is_skill := (r == 2)
-			var is_crit := (r == 3)
-			var dmg := 480 if not is_crit else 860
-			t_actor.current_hp = maxi(0, t_actor.current_hp - dmg)
-			total_dmg += dmg
-			log_entries.append({
-				"round": r,
-				"actorId": hid,
-				"actorName": h_actor.unit_name,
-				"targetId": target_id,
-				"targetName": t_actor.unit_name,
-				"action": "SKILL" if is_skill else "BASIC",
-				"skillCode": "CLEAVE_STRIKE" if is_skill else "",
-				"damage": dmg,
-				"crit": is_crit,
-				"evaded": false,
-				"blocked": false,
-				"targetHpAfter": t_actor.current_hp
-			})
-		for eid in e_keys:
-			var e_actor: UnitActor3D = _actors_by_id[eid]
-			var target_id: String = h_keys[0]
-			var t_actor: UnitActor3D = _actors_by_id[target_id]
-			var dmg := 190
-			t_actor.current_hp = maxi(120, t_actor.current_hp - dmg)
-			log_entries.append({
-				"round": r,
-				"actorId": eid,
-				"actorName": e_actor.unit_name,
-				"targetId": target_id,
-				"targetName": t_actor.unit_name,
-				"action": "BASIC",
-				"damage": dmg,
-				"crit": false,
-				"evaded": (r == 2 and eid == e_keys[0]),
-				"blocked": (r == 1),
-				"targetHpAfter": t_actor.current_hp
-			})
-	# Restore initial HP before playback starts
-	for k in _actors_by_id:
-		var a: UnitActor3D = _actors_by_id[k]
-		a.current_hp = a.max_hp
-	return {
-		"winner": "HERO",
-		"rounds": 3,
-		"totalDamage": total_dmg,
-		"log": log_entries
-	}
-
-func _append_log(bbcode_line: String) -> void:
-	combat_log_label.append_text(bbcode_line + "\n")
+func _append_log(value: String) -> void:
+	combat_log_label.append_text(value + "\n")
 
 func _on_speed_toggle_pressed() -> void:
-	_playback_speed = 2.0 if _playback_speed == 1.0 else 1.0
-	speed_toggle_btn.text = "⏩ Tốc Độ: %dx" % int(_playback_speed)
+	_playback_speed = 2.0 if _playback_speed == 1.0 else 4.0 if _playback_speed == 2.0 else 1.0
+	speed_toggle_btn.text = "Tốc độ: ×%d" % int(_playback_speed)
 
 func _on_camera_mode_pressed() -> void:
 	_dynamic_cam_enabled = not _dynamic_cam_enabled
-	camera_mode_btn.text = "🎥 Action Cam: BẬT" if _dynamic_cam_enabled else "🎥 Action Cam: TẮT"
-
-func _on_back_base_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/base/isometric_base_3d.tscn")
+	camera_mode_btn.text = "Camera động: " + ("BẬT" if _dynamic_cam_enabled else "TẮT")

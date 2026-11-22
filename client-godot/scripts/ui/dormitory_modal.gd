@@ -83,7 +83,7 @@ func refresh_ui() -> void:
 		_ration_label.text = "🍖 Lương thực: %d" % rations
 
 	if _hero_browser != null:
-		_hero_browser.set_items(GameState.heroes, true)
+		_hero_browser.set_items(GameState.heroes.filter(func(hero): return hero is Dictionary and not GameState.is_hero_pve_deployed(hero)), true)
 
 func _build_ui() -> void:
 	if _is_ui_built:

@@ -54,7 +54,6 @@ export class AnalyticsService {
       rolls: sql<number>`count(*)::int`,
       fiveStars: sql<number>`count(*) filter (where ${summonHistory.wasFiveStar})::int`,
       duplicates: sql<number>`count(*) filter (where ${summonHistory.wasDuplicate})::int`,
-      avgPity: sql<number>`coalesce(avg(${summonHistory.pityNumber}) filter (where ${summonHistory.wasFiveStar}), 0)::float`,
     }).from(summonHistory);
     const [weekTotals] = await db.select({
       rolls: sql<number>`count(*)::int`,
@@ -71,7 +70,6 @@ export class AnalyticsService {
       totalRolls: totals?.rolls ?? 0,
       fiveStarRate: ratio(totals?.fiveStars ?? 0, totals?.rolls ?? 0),
       duplicateRate: ratio(totals?.duplicates ?? 0, totals?.rolls ?? 0),
-      averagePityAtFiveStar: Math.round((totals?.avgPity ?? 0) * 100) / 100,
       last7d: { rolls: weekTotals?.rolls ?? 0, fiveStars: weekTotals?.fiveStars ?? 0, rate: ratio(weekTotals?.fiveStars ?? 0, weekTotals?.rolls ?? 0) },
       byBanner: byBanner.map(row => ({ ...row, rate: ratio(row.fiveStars, row.rolls) })),
     };

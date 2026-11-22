@@ -316,6 +316,34 @@
       "when": 1794621389576,
       "tag": "0044_messy_stryfe",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1795283011635,
+      "tag": "0045_flashy_sentry",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1795283520438,
+      "tag": "0046_perpetual_wallow",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795286693013,
+      "tag": "0047_glamorous_cable",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1795322297587,
+      "tag": "0048_even_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

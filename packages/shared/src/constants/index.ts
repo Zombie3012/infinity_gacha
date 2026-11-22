@@ -1,11 +1,18 @@
 export const GAME_CONSTANTS = {
+  PVE: {
+    MAP_WIDTH: 12,
+    MAP_HEIGHT: 12,
+    ALGORITHM_VERSION: 1,
+    MAX_DEPLOYED_SQUADS: 3,
+    MAX_HEROES_PER_SQUAD: 5,
+    FORMATION_SLOTS: 9,
+    SECONDS_PER_TILE: 1,
+    POLL_INTERVAL_SECONDS: 1,
+  },
   // Gacha System Constants
   GACHA: {
-    BASE_FIVE_STAR_RATE: 0.004,       // 0.40%
-    BASE_HERO_TOTAL_RATE: 0.50,       // 50.00%
-    BASE_MATERIAL_TOTAL_RATE: 0.50,   // 50.00%
-    PITY_THRESHOLD_START: 60,         // Roll 61 begins polynomial escalation
-    PITY_GUARANTEE_ROLL: 70,          // Roll 70 is 100% guarantee
+    // Probabilities come from each banner's persisted reward-pool weights; no pity.
+    SPECIAL_BANNER_GEM_COST_PER_ROLL: 100,
     SINGLE_SUMMON_COST_SCROLLS: 1,
     MULTI_SUMMON_COST_SCROLLS: 10,
     SCROLL_EXCHANGE_COST_SILVER: 10000,

@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import type { ElementAffinity } from '@infiniti-gacha/shared';
+import { GAME_CONSTANTS, type ElementAffinity } from '@infiniti-gacha/shared';
 import { db } from '../../database/db.js';
 import {
   currencyTransactions,
@@ -10,7 +10,7 @@ import {
 } from '../../database/drizzle-schema.js';
 import { affinityColumns, buildSummonedHero, HERO_STAR_LOCKED } from '../hero/hero-generation.js';
 
-export const SPECIAL_BANNER_GEM_COST_PER_ROLL = 100;
+export const SPECIAL_BANNER_GEM_COST_PER_ROLL = GAME_CONSTANTS.GACHA.SPECIAL_BANNER_GEM_COST_PER_ROLL;
 
 export class SummonError extends Error {
   constructor(message: string, public readonly statusCode: number) { super(message); }

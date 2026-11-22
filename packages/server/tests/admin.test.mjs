@@ -71,7 +71,7 @@ test('DM-14 Anti-cheat - RateGuard thresholds', async (t) => {
 
 test('DM-14 Configuration - validation helpers', async (t) => {
   await t.test('accepts a plain JSON object', () => {
-    const value = { exponentK: 4, description: 'Pity growth' };
+    const value = { tacticalBuffCooldownSeconds: 15, description: 'Battle cooldown' };
     assert.deepEqual(validateConfigValue(value), value);
   });
 
@@ -100,5 +100,6 @@ test('DM-14 Configuration - validation helpers', async (t) => {
   await t.test('only approved config keys are accepted', () => {
     for (const key of CONFIG_KEYS) assert.equal(isConfigKey(key), true);
     assert.equal(isConfigKey('NOT_A_RULE'), false);
+    assert.equal(isConfigKey('GACHA_PITY'), false);
   });
 });

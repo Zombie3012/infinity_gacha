@@ -4,9 +4,9 @@ import cors from 'cors';
 import { and, asc, count, desc, eq, gt, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { timingSafeEqual } from 'node:crypto';
-import { aggregateEquipment, BREAKTHROUGH_SILVER_COST, breakthroughMaxLevel, calculateFiveStarRate, heroEffectiveMaxLevel, roleForClass, rollElementAffinity, starMaxLevel, type EquipmentItemInput, type EquipmentV2Stats, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
+import { aggregateEquipment, BREAKTHROUGH_SILVER_COST, breakthroughMaxLevel, heroEffectiveMaxLevel, roleForClass, rollElementAffinity, starMaxLevel, type EquipmentItemInput, type EquipmentV2Stats, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
 import { db, pool } from './database/db.js';
-import { accounts, accountSessions, playerProfiles, banners, masterBannerPity, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits, heroImprints, imprintDefinitions } from './database/drizzle-schema.js';
+import { accounts, accountSessions, playerProfiles, banners, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits, heroImprints, imprintDefinitions } from './database/drizzle-schema.js';
 import { CLASS_CHANGE_ITEM, CLASS_CHANGE_SILVER, ProgressionError, allocateTraining, classChangeCheck, isV2Origin, originOf, progressionFor } from './modules/hero/hero-progression.js';
 import { legacyClassFor } from './modules/hero/hero-generation.js';
 import { imprintSlotsFor } from './modules/hero/imprint-rules.js';
@@ -48,7 +48,11 @@ import { WorldError, worldService } from './modules/world/world.service.js';
 import { ExpeditionError, expeditionService } from './modules/world/expedition.service.js';
 import { AllianceError, allianceService } from './modules/world/alliance.service.js';
 import { ConquestError, conquestService } from './modules/world/conquest.service.js';
-import { getBattleRules, getPityRules } from './modules/admin/runtime-rules.js';
+import { getBattleRules } from './modules/admin/runtime-rules.js';
+import { PveRuleError } from '@infiniti-gacha/shared';
+import { PveError, pveService } from './modules/pve/pve.service.js';
+import { CombatReadinessError } from './modules/combat/combat-readiness.js';
+import { pveHeroReservations, pveSquads } from './database/drizzle-schema.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
 
@@ -2436,6 +2440,10 @@ export function createApp() {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     const collection = await db.select().from(heroes).where(eq(heroes.masterId, master.id)).orderBy(desc(heroes.rarity), heroes.name);
+    const deployments = collection.length ? await db.select({ heroId: pveHeroReservations.heroId, squadId: pveSquads.id,
+      mapId: pveSquads.mapId, name: pveSquads.name }).from(pveHeroReservations)
+      .innerJoin(pveSquads, eq(pveSquads.id, pveHeroReservations.squadId)).where(eq(pveHeroReservations.masterId, master.id)) : [];
+    const deploymentByHero = new Map(deployments.map(deployment => [deployment.heroId, deployment]));
     const templateRows = await db.select({ code: heroTemplates.code, heroClass: heroTemplates.heroClass, element: heroTemplates.element })
       .from(heroTemplates);
     const templateByCode = new Map(templateRows.map(template => [template.code, template]));
@@ -2556,7 +2564,8 @@ export function createApp() {
         : undefined;
 
       return {
-        ...hero, heroClass: effectiveClass, element: strongestElement ?? template?.element ?? 'NEUTRAL', exp: hero.exp.toString(),
+        ...hero, pveDeployment: deploymentByHero.get(hero.id) ?? null,
+        heroClass: effectiveClass, element: strongestElement ?? template?.element ?? 'NEUTRAL', exp: hero.exp.toString(),
         nextLevelExp: expThresholdByLevel.get(hero.level + 1) ?? null,
         currentLevelExp: expThresholdByLevel.get(hero.level) ?? '0',
         maxLevel: heroEffectiveMaxLevel(hero.rarity, hero.promotionRank),
@@ -2997,6 +3006,8 @@ export function createApp() {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
     const result = await db.transaction(async tx => {
+      const [masterRow] = await tx.select().from(masters).where(eq(masters.id, master.id)).for('update').limit(1);
+      if (!masterRow) return { status: 404, error: 'Master not found.' } as const;
       const [hero] = await tx.select().from(heroes).where(and(eq(heroes.id, String(req.params.heroId)), eq(heroes.masterId, master.id))).for('update').limit(1);
       if (!hero) return { status: 404, error: 'Hero not found.' } as const;
       if (hero.isLocked) return { status: 409, error: 'Hero is locked.' } as const;
@@ -3015,7 +3026,7 @@ export function createApp() {
       }
 
       const silverCost = BREAKTHROUGH_SILVER_COST[config.rank] ?? (config.rank * 10_000);
-      if (master.silverCoins < BigInt(silverCost)) {
+      if (masterRow.silverCoins < BigInt(silverCost)) {
         return { status: 409, error: `Không đủ Xu Bạc để Đột phá (Cần ${silverCost.toLocaleString()} Bạc).` } as const;
       }
 
@@ -3025,7 +3036,7 @@ export function createApp() {
       }
 
       await tx.update(masterItems).set({ quantity: material.quantity - config.materialQuantity, updatedAt: new Date() }).where(eq(masterItems.id, material.id));
-      await tx.update(masters).set({ silverCoins: master.silverCoins - BigInt(silverCost), updatedAt: new Date() }).where(eq(masters.id, master.id));
+      await tx.update(masters).set({ silverCoins: masterRow.silverCoins - BigInt(silverCost), updatedAt: new Date() }).where(eq(masters.id, master.id));
 
       const multiplier = config.statGrowthMultiplier ?? 1.05;
       const maxHp = Math.floor(hero.maxHp * multiplier);
@@ -3051,7 +3062,7 @@ export function createApp() {
         maxLevel: effectiveMax,
         starCeiling: starMaxLevel(updated.rarity),
         silverCost,
-        remainingSilver: (master.silverCoins - BigInt(silverCost)).toString(),
+        remainingSilver: (masterRow.silverCoins - BigInt(silverCost)).toString(),
         materialQuantity: material.quantity - config.materialQuantity,
         stats: { hp: updated.hp, maxHp: updated.maxHp, attack: updated.attack, defense: updated.defense, speed: updated.speed }
       } as const;
@@ -3574,7 +3585,88 @@ export function createApp() {
     }
   }));
 
+  app.get('/api/pve/state', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    const cursor = req.query.cursor === undefined ? 0 : Number(req.query.cursor);
+    if (!Number.isSafeInteger(cursor) || cursor < 0) return res.status(400).json({ error: 'ERR_PVE_INVALID_CURSOR' });
+    return res.json(await pveService.state(master.id, cursor, typeof req.query.mapId === 'string' ? req.query.mapId : undefined));
+  }));
+
+  app.post('/api/pve/enter', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.status(201).json(await pveService.enter(master.id, req.header('Idempotency-Key') ?? ''));
+  }));
+
+  app.post('/api/pve/parties', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.status(201).json(await pveService.saveParty(master.id, req.body, req.header('Idempotency-Key') ?? ''));
+  }));
+
+  app.put('/api/pve/parties/:partyId', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.saveParty(master.id, req.body, req.header('Idempotency-Key') ?? '', String(req.params.partyId)));
+  }));
+
+  app.put('/api/pve/parties/:partyId/plan', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.savePlan(master.id, String(req.params.partyId), req.body, req.header('Idempotency-Key') ?? ''));
+  }));
+
+  app.post('/api/pve/parties/:partyId/deploy', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.status(201).json(await pveService.deploy(master.id, String(req.params.partyId), req.header('Idempotency-Key') ?? ''));
+  }));
+
+  app.post('/api/pve/squads/:squadId/move', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.move(master.id, String(req.params.squadId), req.body, req.header('Idempotency-Key') ?? ''));
+  }));
+
+  app.post('/api/pve/squads/:squadId/recall', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.recall(master.id, String(req.params.squadId), req.header('Idempotency-Key') ?? ''));
+  }));
+
+  app.post('/api/pve/squads/:squadId/auto', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.setAuto(master.id, String(req.params.squadId), req.body, req.header('Idempotency-Key') ?? ''));
+  }));
+
+  app.get('/api/pve/battles', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.battles(master.id,
+      typeof req.query.before === 'string' ? req.query.before : undefined,
+      typeof req.query.mapId === 'string' ? req.query.mapId : undefined,
+      req.query.limit === undefined ? 30 : Number(req.query.limit)));
+  }));
+
+  app.get('/api/pve/battles/:battleId', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
+    return res.json(await pveService.battle(master.id, String(req.params.battleId)));
+  }));
+
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (error instanceof PveError) return res.status(error.statusCode).json({ error: error.message });
+    if (error instanceof CombatReadinessError) return res.status(error.statusCode).json({ error: error.message });
+    if (error instanceof PveRuleError) return res.status(error.code.includes('UNDISCOVERED') ? 409 : 400).json({ error: error.code });
+    const databaseCause = error as { cause?: { message?: string }; message?: string };
+    if ([databaseCause.message, databaseCause.cause?.message].some(message => message?.includes('ERR_PVE_HERO_DEPLOYED'))) {
+      return res.status(409).json({ error: 'ERR_PVE_HERO_DEPLOYED' });
+    }
+    if ([databaseCause.message, databaseCause.cause?.message].some(message => message?.includes('ERR_PVE_MAP_ACTIVE'))) {
+      return res.status(409).json({ error: 'ERR_PVE_MAP_ACTIVE' });
+    }
     console.error(error);
     return res.status(500).json({ error: 'Lỗi máy chủ.' });
   });

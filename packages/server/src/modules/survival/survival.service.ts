@@ -1,8 +1,9 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
+import type { GameDatabase } from '../../database/transaction.js';
 import {
-  baseBuildings, buildingWorkerAssignments, combatPartySlots, heroes, masterItems, masterParties, masters,
+  baseBuildings, buildingWorkerAssignments, combatPartySlots, heroes, masterItems, masterParties, masters, pveHeroReservations,
 } from '../../database/drizzle-schema.js';
 import {
   FEED_HUNGER_RELIEF, applyActivity, applyDrift, baseFoodConsumption, clampScore, fatigueState, hungerState,
@@ -36,8 +37,8 @@ export interface SurvivalRow {
 }
 
 export class SurvivalService {
-  private async foodStock(masterId: string): Promise<number> {
-    const [row] = await db.select().from(masterItems)
+  private async foodStock(masterId: string, database: GameDatabase = db): Promise<number> {
+    const [row] = await database.select().from(masterItems)
       .where(and(eq(masterItems.masterId, masterId), eq(masterItems.itemId, FOOD_ITEM))).limit(1);
     return row?.quantity ?? 0;
   }
@@ -48,59 +49,64 @@ export class SurvivalService {
     return Math.max(100, (kitchen?.level ?? 0) * 200);
   }
 
-  private async ensureStates(masterId: string, now: Date) {
-    const roster = await db.select({ id: heroes.id }).from(heroes).where(eq(heroes.masterId, masterId));
+  private async ensureStates(masterId: string, now: Date, database: GameDatabase = db) {
+    const roster = await database.select({ id: heroes.id, hunger: heroes.hunger, fatigue: heroes.fatigue }).from(heroes).where(eq(heroes.masterId, masterId));
     if (roster.length === 0) return [];
-    const existing = await db.select().from(heroSurvivalStates)
+    const existing = await database.select().from(heroSurvivalStates)
       .where(inArray(heroSurvivalStates.heroId, roster.map(row => row.id)));
     const known = new Set(existing.map(row => row.heroId));
     const missing = roster.filter(row => !known.has(row.id));
     if (missing.length > 0) {
-      await db.insert(heroSurvivalStates).values(missing.map(row => ({
-        heroId: row.id, hungerScore: 0, fatigueScore: 0, isResting: false, lastTickAt: now,
+      await database.insert(heroSurvivalStates).values(missing.map(row => ({
+        heroId: row.id, hungerScore: row.hunger, fatigueScore: row.fatigue, isResting: false, lastTickAt: now,
       }))).onConflictDoNothing();
     }
-    return db.select().from(heroSurvivalStates).where(inArray(heroSurvivalStates.heroId, roster.map(row => row.id)));
+    return database.select().from(heroSurvivalStates).where(inArray(heroSurvivalStates.heroId, roster.map(row => row.id)));
   }
 
   /** Advance hunger/fatigue for every Hero of a Master and persist the result. */
   async settle(masterId: string, now = new Date()) {
-    const states = await this.ensureStates(masterId, now);
-    if (states.length === 0) return;
-    const hasFood = (await this.foodStock(masterId)) > 0;
-    const restFacilities = await db.select({
-      buildingType: baseBuildings.buildingType,
-      level: baseBuildings.level,
-      status: baseBuildings.status,
-    }).from(baseBuildings).where(and(
-      eq(baseBuildings.masterId, masterId),
-      inArray(baseBuildings.buildingType, ['HOUSE', 'PARTY_MANSION']),
-    ));
-    let recoveryMult = 1.0;
-    for (const fac of restFacilities) {
-      if (fac.status !== 'READY') continue;
-      if (fac.buildingType === 'PARTY_MANSION') {
-        recoveryMult = Math.max(recoveryMult, 4.0);
-      } else if (fac.buildingType === 'HOUSE') {
-        const lvl = Math.min(3, Math.max(1, fac.level));
-        const houseMult = lvl === 1 ? 1.0 : lvl === 2 ? 1.5 : 2.0;
-        recoveryMult = Math.max(recoveryMult, houseMult);
+    return db.transaction(async tx => {
+      // PvE settlement takes the same Master lock before charging battle fatigue.
+      // Reading before this lock could overwrite a battle with stale passive scores.
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      const states = await this.ensureStates(masterId, now, tx);
+      if (states.length === 0) return;
+      const hasFood = (await this.foodStock(masterId, tx)) > 0;
+      const restFacilities = await tx.select({
+        buildingType: baseBuildings.buildingType,
+        level: baseBuildings.level,
+        status: baseBuildings.status,
+      }).from(baseBuildings).where(and(
+        eq(baseBuildings.masterId, masterId),
+        inArray(baseBuildings.buildingType, ['HOUSE', 'PARTY_MANSION']),
+      ));
+      let recoveryMult = 1.0;
+      for (const fac of restFacilities) {
+        if (fac.status !== 'READY') continue;
+        if (fac.buildingType === 'PARTY_MANSION') {
+          recoveryMult = Math.max(recoveryMult, 4.0);
+        } else if (fac.buildingType === 'HOUSE') {
+          const lvl = Math.min(3, Math.max(1, fac.level));
+          const houseMult = lvl === 1 ? 1.0 : lvl === 2 ? 1.5 : 2.0;
+          recoveryMult = Math.max(recoveryMult, houseMult);
+        }
       }
-    }
-    for (const state of states) {
-      const drift = applyDrift({
-        hungerScore: state.hungerScore,
-        fatigueScore: state.fatigueScore,
-        isResting: state.isResting,
-        lastTickAt: state.lastTickAt,
-      }, now, hasFood, recoveryMult);
-      await db.update(heroSurvivalStates).set({
-        hungerScore: drift.hungerScore,
-        fatigueScore: drift.fatigueScore,
-        isResting: drift.isResting,
-        lastTickAt: now,
-      }).where(eq(heroSurvivalStates.heroId, state.heroId));
-    }
+      for (const state of states) {
+        const drift = applyDrift({
+          hungerScore: state.hungerScore,
+          fatigueScore: state.fatigueScore,
+          isResting: state.isResting,
+          lastTickAt: state.lastTickAt,
+        }, now, hasFood, recoveryMult);
+        await tx.update(heroSurvivalStates).set({
+          hungerScore: drift.hungerScore,
+          fatigueScore: drift.fatigueScore,
+          isResting: drift.isResting,
+          lastTickAt: state.lastTickAt > now ? state.lastTickAt : now,
+        }).where(eq(heroSurvivalStates.heroId, state.heroId));
+      }
+    });
   }
 
   async overview(masterId: string) {
@@ -149,40 +155,51 @@ export class SurvivalService {
   async feed(masterId: string, heroId: string, quantityInput: unknown) {
     await this.settle(masterId);
     const quantity = Math.max(1, Math.min(10, Math.floor(Number(quantityInput) || 1)));
-    const [hero] = await db.select().from(heroes)
-      .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).limit(1);
-    if (!hero) throw new SurvivalError('Không tìm thấy Hero.', 404);
+    return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      const [hero] = await tx.select().from(heroes)
+        .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).for('update');
+      if (!hero) throw new SurvivalError('Không tìm thấy Hero.', 404);
+      if ((await tx.select().from(pveHeroReservations).where(eq(pveHeroReservations.heroId, heroId))).length) {
+        throw new SurvivalError('ERR_PVE_HERO_DEPLOYED', 409);
+      }
 
-    const stock = await this.foodStock(masterId);
-    if (stock < quantity) throw new SurvivalError('Kho thức ăn không đủ.', 409);
-    const [state] = await db.select().from(heroSurvivalStates).where(eq(heroSurvivalStates.heroId, heroId)).limit(1);
+      const [food] = await tx.select().from(masterItems)
+        .where(and(eq(masterItems.masterId, masterId), eq(masterItems.itemId, FOOD_ITEM))).for('update');
+      if (!food || food.quantity < quantity) throw new SurvivalError('Kho thức ăn không đủ.', 409);
+      const [state] = await tx.select().from(heroSurvivalStates).where(eq(heroSurvivalStates.heroId, heroId)).for('update');
 
-    const now = new Date();
-    const nextHunger = clampScore((state?.hungerScore ?? 0) - FEED_HUNGER_RELIEF * quantity);
-    await db.transaction(async tx => {
+      const now = new Date();
+      const nextHunger = clampScore((state?.hungerScore ?? 0) - FEED_HUNGER_RELIEF * quantity);
       await tx.update(masterItems).set({ quantity: sql`${masterItems.quantity} - ${quantity}`, updatedAt: now })
         .where(and(eq(masterItems.masterId, masterId), eq(masterItems.itemId, FOOD_ITEM)));
       await tx.update(heroSurvivalStates).set({ hungerScore: nextHunger, lastTickAt: now })
         .where(eq(heroSurvivalStates.heroId, heroId));
+      return { heroId, foodUsed: quantity, hungerScore: nextHunger, hungerState: hungerState(nextHunger) };
     });
-    return { heroId, foodUsed: quantity, hungerScore: nextHunger, hungerState: hungerState(nextHunger) };
   }
 
   async setResting(masterId: string, heroId: string, resting: boolean) {
     await this.settle(masterId);
-    const [hero] = await db.select().from(heroes)
-      .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).limit(1);
-    if (!hero) throw new SurvivalError('Không tìm thấy Hero.', 404);
-    if (hero.state === 'DEAD' || hero.state === 'DISABLED') throw new SurvivalError('Hero không thể nghỉ ngơi.', 409);
-    if (resting) {
-      const [assigned] = await db.select().from(buildingWorkerAssignments)
-        .where(eq(buildingWorkerAssignments.heroInstanceId, heroId)).limit(1);
-      if (assigned) throw new SurvivalError('Hero đang làm việc, hãy thu hồi trước khi nghỉ.', 409);
-    }
-    const now = new Date();
-    const [updated] = await db.update(heroSurvivalStates).set({ isResting: resting, lastTickAt: now })
-      .where(eq(heroSurvivalStates.heroId, heroId)).returning();
-    return { heroId, isResting: updated.isResting, fatigueScore: updated.fatigueScore };
+    return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      const [hero] = await tx.select().from(heroes)
+        .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).for('update');
+      if (!hero) throw new SurvivalError('Không tìm thấy Hero.', 404);
+      if (hero.state === 'DEAD' || hero.state === 'DISABLED') throw new SurvivalError('Hero không thể nghỉ ngơi.', 409);
+      if ((await tx.select().from(pveHeroReservations).where(eq(pveHeroReservations.heroId, heroId))).length) {
+        throw new SurvivalError('ERR_PVE_HERO_DEPLOYED', 409);
+      }
+      if (resting) {
+        const [assigned] = await tx.select().from(buildingWorkerAssignments)
+          .where(eq(buildingWorkerAssignments.heroInstanceId, heroId)).limit(1);
+        if (assigned) throw new SurvivalError('Hero đang làm việc, hãy thu hồi trước khi nghỉ.', 409);
+      }
+      const now = new Date();
+      const [updated] = await tx.update(heroSurvivalStates).set({ isResting: resting, lastTickAt: now })
+        .where(eq(heroSurvivalStates.heroId, heroId)).returning();
+      return { heroId, isResting: updated.isResting, fatigueScore: updated.fatigueScore };
+    });
   }
 
   /**
@@ -212,7 +229,7 @@ export class SurvivalService {
    * Validate the party before a dungeon run: settle survival, block overexhausted
    * Heroes, charge travel rations and return the starvation multipliers.
    */
-  async battleReadiness(masterId: string, partyId?: string) {
+  async battleReadiness(masterId: string, partyId?: string, charge = true) {
     await this.settle(masterId);
     let party = partyId
       ? await db.select({ id: masterParties.id }).from(masterParties).where(and(eq(masterParties.id, partyId), eq(masterParties.masterId, masterId))).limit(1)
@@ -245,7 +262,7 @@ export class SurvivalService {
     if (stock < rations) {
       return { ok: false as const, statusCode: 409, message: `ERR_INSUFFICIENT_RATIONS: cần ${rations} lương khô.` };
     }
-    await db.update(masterItems).set({ quantity: sql`${masterItems.quantity} - ${rations}`, updatedAt: new Date() })
+    if (charge) await db.update(masterItems).set({ quantity: sql`${masterItems.quantity} - ${rations}`, updatedAt: new Date() })
       .where(and(eq(masterItems.masterId, masterId), eq(masterItems.itemId, FOOD_ITEM)));
 
     const multipliers: Record<string, number> = {};

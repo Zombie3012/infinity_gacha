@@ -1,71 +1,67 @@
-# Infinite Gacha — Godot 4 Client (Isometric 3D Architecture)
+# Infinite Gacha — Godot client
 
-Client phát triển chính thức cho tựa game **Infinite Gacha** trên nền tảng **Godot Engine 4.3+ (GDScript 2.0)**.
-Sử dụng kiến trúc **Isometric 3D Xuyên Suốt + Dynamic Action Camera** cho cả khu vực Phòng chờ / Căn cứ (Base) và Đấu trường / Hầm ngục (PvE Combat v2).
+Client chính thức đang phát triển: **3D isometric** cho căn cứ và đấu trường. Cập nhật **22/11/2026 (UTC+7)**.
 
----
+## Mở dự án
 
-## 1. Yêu cầu & Cài đặt
-- **Godot Engine**: Phiên bản Godot 4.3 trở lên (Standard version, không cần .NET / Mono). Tải tại: [https://godotengine.org/download](https://godotengine.org/download).
-- **Backend Server**: Đang chạy tại `http://localhost:3000` (khởi động bằng `npm run dev:server` tại root monorepo).
+1. Chạy backend theo [README gốc](../README.md#chạy-local), bao gồm migration và seed.
+2. Trong Godot, chọn **Import** và mở `client-godot/project.godot` từ checkout hiện tại.
+3. Project hiện khai báo **Godot 4.7 / Forward Plus**, viewport 1280×720.
+4. Bấm **F5**. Scene khởi động là `scenes/base/isometric_base_3d.tscn`.
 
----
+API mặc định: `http://127.0.0.1:3000`. Thay `base_url` trong `scripts/network/api_client.gd` khi backend chạy ở địa chỉ khác.
 
-## 2. Hướng dẫn Mở & Chạy dự án
-1. Khởi động **Godot Engine**.
-2. Chọn **Import** (Nhập dự án) và trỏ tới thư mục `f:/infiniti_gacha/client-godot`.
-3. Chọn file `project.godot` và bấm **Import & Edit**.
-4. Bấm phím **F5** (hoặc nút Play ở góc trên bên phải) để chạy game.
+Scene căn cứ hiện tự đăng nhập/đăng ký tài khoản phát triển `demo` qua `GameState.ensure_demo_session()`. Các giá trị ví/cấp ban đầu trong singleton có dữ liệu mẫu trước khi đồng bộ API; cần hoàn thiện luồng này trước phát hành.
 
----
+## Các phần chính
 
-## 3. Cấu trúc Thư mục & Kiến trúc Isometric 3D
-```
-client-godot/
-├── project.godot                              # File cấu hình dự án Godot (1280x720, Autoloads)
-├── scripts/
-│   ├── camera/
-│   │   └── isometric_camera_rig.gd            # Camera Isometric 3D (-35.264°, 45°) + Zoom/Pan/Shake
-│   ├── actors/
-│   │   └── unit_actor_3d.gd                   # Prefab Nhân vật 3D (Wander, Work, Injured, Dragged & Combat v2)
-│   ├── base/
-│   │   └── base_plot_3d.gd                    # Ô đất 3D (6 Khu x 3 Ô = 18 Ô) + Mesh công trình theo loại/cấp
-│   ├── network/
-│   │   └── api_client.gd                      # HTTPRequest Singleton kết nối REST API Backend
-│   ├── state/
-│   │   └── game_state.gd                      # Singleton quản lý dữ liệu Master, Base, Kho vật liệu, Heroes
-│   ├── core/
-│   │   └── event_bus.gd                       # Event Bus phát tín hiệu toàn cục
-│   └── constants/
-│       └── game_constants.gd                  # Enums & bảng công thức (Star max level, fodder count)
-└── scenes/
-    ├── common/
-    │   ├── isometric_camera_rig.tscn          # Scene Camera Isometric 3D tái sử dụng
-    │   └── unit_actor_3d.tscn                 # Scene Nhân vật 3D (Speech Bubble + Nameplate + Collider)
-    ├── base/
-    │   ├── base_plot_3d.tscn                  # Scene Ô đất / Công trình 3D có Raycast Collider
-    │   ├── isometric_base_3d.gd               # Logic Sảnh Chờ 3D: 18 Ô đất, Kéo-thả Tướng Pick Me Up, Inspector
-    │   └── isometric_base_3d.tscn             # Scene Căn cứ Isometric 3D (Phòng chờ chính)
-    ├── pve/
-    │   ├── isometric_pve_arena_3d.gd          # Trình phát Timeline Combat v2 3D + Dynamic Camera
-    │   └── isometric_pve_arena_3d.tscn        # Scene Đấu trường & Hầm ngục PvE Isometric 3D
-    ├── heroes/
-    │   ├── hero_roster.gd                     # Logic Doanh trại, xem chỉ số v2 & Thăng sao Pick Me Up
-    │   └── hero_roster.tscn                   # Scene Quản lý tướng & Nghi thức Thăng sao
-    ├── auth/
-    │   ├── login_screen.gd                    # Logic Đăng nhập / Đăng ký
-    │   └── login_screen.tscn                  # Giao diện Đăng nhập
-    └── hub/
-        ├── main_hub.gd                        # Menu quản lý nhanh
-        └── main_hub.tscn                      # Giao diện Menu Sảnh
+| Đường dẫn | Vai trò |
+|---|---|
+| `scripts/network/api_client.gd` | HTTP bất đồng bộ, Bearer token và xử lý response |
+| `scripts/state/game_state.gd` | Đồng bộ Master, Hero, ví, đội hình và căn cứ |
+| `scripts/core/event_bus.gd` | Tín hiệu dùng chung |
+| `scripts/camera/isometric_camera_rig.gd` | Camera, zoom, pan và shake |
+| `scripts/actors/unit_actor_3d.gd` | Nhân vật 3D ở căn cứ và trong replay |
+| `scripts/ui/` | Modal công trình, Hero/item card, hồ sơ và gacha |
+| `scenes/base/` | Căn cứ 3D và tương tác công trình |
+| `scenes/heroes/` | Hero roster, chi tiết, trang bị và thăng sao |
+| `scenes/pve/` | Map riêng 12×12, điều quân nhiều đội và replay Combat v2 đã lưu |
+| `scripts/state/pve_state.gd` | Polling map, ETA theo server và lưu khóa retry qua khởi động lại |
+| `tests/pve_*_test.*` | Kiểm thử engine cho UI, HTTP và phục hồi kết nối |
+| `scenes/auth/`, `scenes/hub/` | Màn tài khoản và menu phụ |
+
+Autoload: `EventBus`, `ApiClient`, `GameState`, `PveState`.
+
+## Gacha
+
+- Modal chọn banner theo hàng ngang, xem chi phí/tỷ lệ rồi triệu hồi ×1 hoặc ×10.
+- NORMAL seed dùng 1 scroll/lượt, Hero 1–3★ và vật liệu.
+- SPECIAL seed dùng 100 Gem/lượt, Hero 2–5★ và vật liệu; tỷ lệ 5★ là 0,4% theo pool seed.
+- Không có pity. Dùng dữ liệu `rates`, `costType`, `costPerRoll` của API để hiển thị.
+- Kết quả procedural tạo instance Hero riêng; xem quy tắc duplicate tại [README gốc](../README.md#quy-tắc-gacha-hiện-hành).
+
+## PvE
+
+Vào cổng **Chinh phạt** ở căn cứ để mở `scenes/pve/pve_map.tscn`. Tạo/chọn đội 1–5 Hero, sắp chín vị trí và chọn chiến thuật trước khi triển khai. Có tối đa ba đội và mỗi Hero cần 10 FOOD cho một lần triển khai. Di chuyển bốn hướng, một giây/ô theo server; bật/tắt auto để từng đội tự khám phá và thu tài nguyên. Auto dừng khi thua, hòa hoặc kiệt sức. Map hiển thị mô hình Hero đầu tiên còn sống của đội.
+
+Chiến báo mở đấu trường dưới dạng replay chỉ đọc. Các đội khác tiếp tục hành quân khi xem trận. HP/MP, kỹ năng, hồi máu và hồi sinh lấy từ báo cáo Combat v2, không tạo trận demo khi API lỗi. Thưởng/tử vong đã được server lưu trước khi xem. Thắng boss kết thúc tầng và thu hồi đội sống sót; bấm vào tầng tiếp theo để tiếp tục.
+
+Lệnh đang chờ được lưu với khóa retry, không lưu token. Khi mất kết nối hoặc mở lại game, bấm **Thử lại lệnh** để nhận lại kết quả; server không trả thưởng/trừ lương thực lần hai. Bản nháp đội hình giữ nguyên khi lưu lỗi. Hero đang triển khai bị khóa thao tác xung đột tại căn cứ.
+
+Từ root, đặt `GODOT_BIN` tới engine console và `DATABASE_URL` tới DB test đã migrate/seed rồi chạy:
+
+```powershell
+npm run test:godot:pve
+npm run test:godot:pve -- --integration
+npm run test:godot:pve:recovery
 ```
 
----
+Chi tiết hợp đồng và kiểm thử ở [PVE_IMPLEMENTATION.md](../docs/PVE_IMPLEMENTATION.md).
 
-## 4. Điểm nổi bật của Giải pháp Isometric 3D (Phương án 1)
-- **Tái sử dụng 100% tài nguyên 3D (`UnitActor3D`)**:
-  - Ở **Base (`isometric_base_3d.tscn`)**: Các Hero của người chơi chạy ở chế độ `BASE_WANDER`, đi dạo sinh động quanh Đài Triệu Hồi, Doanh Trại và Cổng Tháp.
-  - Ở **PvE (`isometric_pve_arena_3d.tscn`)**: Chính các `UnitActor3D` đó chuyển sang chế độ `PVE_COMBAT`, xếp đội hình Tiền vệ / Hậu vệ ở góc Dưới-Trái đối đầu Quái/Boss ở góc Trên-Phải.
-- **Dynamic Action Camera (`IsometricCameraRig`)**:
-  - Giữ góc nhìn chiến thuật Isometric chuẩn (`Orthogonal`, Pitch $-35.264^\circ$, Yaw $45^\circ$).
-  - Tự động **Zoom cận cảnh & nghiêng góc máy** mượt bằng `Tween` khi Hero tung **Skill**, nổ **Chí mạng (`CRIT`)**, hoặc kích hoạt **Phượng Hoàng Tái Sinh (`PHOENIX_REVIVE`)**, kèm hiệu ứng rung chấn (`shake`).
+## Giới hạn hiện tại
+
+Các API nhiệm vụ, mailbox, LiveOps, bản đồ PvP và liên minh chưa có giao diện Godot đầy đủ. Map PvE vẫn dùng balance/asset prototype; chưa có phối hợp liên đội, phục kích hoặc morale mới.
+
+`npm run verify` ở root kiểm tra encoding, build và test Node/TypeScript; không xác minh scene hay gameplay trong engine. Chạy project bằng Godot để kiểm tra UI, input, camera, VFX và tương tác thực tế.
+
+Theo dõi việc còn lại trong [GODOT_BACKLOG.md](../GODOT_BACKLOG.md).

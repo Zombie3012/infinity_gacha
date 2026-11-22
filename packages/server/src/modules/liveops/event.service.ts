@@ -1,3 +1,4 @@
+import type { GameDatabase } from '../../database/transaction.js';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
@@ -139,16 +140,16 @@ export class EventService {
   }
 
   /** Scenario 3.4: events stop accepting progress at `end_at`. */
-  async recordEvent(masterId: string, objectiveType: string, amount = 1, now = new Date()) {
-    const activeEvents = await db.select().from(liveEvents).where(eq(liveEvents.status, 'ACTIVE'));
+  async recordEvent(masterId: string, objectiveType: string, amount = 1, now = new Date(), database: GameDatabase = db) {
+    const activeEvents = await database.select().from(liveEvents).where(eq(liveEvents.status, 'ACTIVE'));
     const inWindow = activeEvents.filter(event => acceptsProgress(event.startAt, event.endAt, now));
     if (inWindow.length === 0) return { updated: 0 };
 
-    const missions = await db.select().from(eventMissions)
+    const missions = await database.select().from(eventMissions)
       .where(and(inArray(eventMissions.eventId, inWindow.map(event => event.id)), eq(eventMissions.objectiveType, objectiveType)));
     if (missions.length === 0) return { updated: 0 };
 
-    const rows = await db.select().from(eventMissionProgress)
+    const rows = await database.select().from(eventMissionProgress)
       .where(and(eq(eventMissionProgress.masterId, masterId), inArray(eventMissionProgress.missionId, missions.map(row => row.id))));
     const byMission = new Map(rows.map(row => [row.missionId, row]));
 
@@ -158,7 +159,7 @@ export class EventService {
       if (!row) continue;
       const nextProgress = Math.min(mission.targetCount, row.progress + Math.max(0, amount));
       const nextStatus = nextProgress >= mission.targetCount ? 'COMPLETED' : row.status;
-      await db.update(eventMissionProgress).set({
+      await database.update(eventMissionProgress).set({
         progress: nextProgress,
         status: nextStatus,
         ...(nextStatus === 'COMPLETED' && !row.completedAt ? { completedAt: now } : {}),

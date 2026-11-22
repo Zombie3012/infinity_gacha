@@ -1,3 +1,5 @@
+import type { GameTransaction } from '../../database/transaction.js';
+import { assertNoPrivatePve } from '../combat/combat-readiness.js';
 import { and, asc, eq, gt } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
@@ -99,62 +101,66 @@ export class DungeonExplorationService {
    */
   public async enterFloor(masterId: string, templateCode: string, floorNumber: number) {
     const templateWithFloors = await dungeonConfigService.getTemplateWithFloors(templateCode);
-    const targetFloor = templateWithFloors.floors.find(f => f.floorNumber === floorNumber);
-    if (!targetFloor) throw new DungeonExplorationError(`Không tìm thấy tầng ${floorNumber}.`, 404);
+    return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      await assertNoPrivatePve(masterId, tx);
+      const targetFloor = templateWithFloors.floors.find(f => f.floorNumber === floorNumber);
+      if (!targetFloor) throw new DungeonExplorationError(`Không tìm thấy tầng ${floorNumber}.`, 404);
 
-    const [master] = await db.select().from(masters).where(eq(masters.id, masterId)).limit(1);
-    if (!master) throw new DungeonExplorationError('Master không tồn tại.', 404);
+      const [master] = await tx.select().from(masters).where(eq(masters.id, masterId)).limit(1);
+      if (!master) throw new DungeonExplorationError('Master không tồn tại.', 404);
 
-    const [world] = await db.select().from(worlds).where(eq(worlds.masterId, masterId)).limit(1);
-    if (!world) throw new DungeonExplorationError('Hãy khởi tạo World trước khi vào Dungeon.', 409);
+      const [world] = await tx.select().from(worlds).where(eq(worlds.masterId, masterId)).limit(1);
+      if (!world) throw new DungeonExplorationError('Hãy khởi tạo World trước khi vào Dungeon.', 409);
 
-    // FUN-07-04-002: Validate Floor Unlock Requirement
-    const unlockCheck = dungeonConfigService.checkFloorUnlocked(targetFloor, master.level, world.currentFloor);
-    if (!unlockCheck.isUnlocked) {
-      throw new DungeonExplorationError(unlockCheck.reason ?? 'Tầng này hiện đang bị khóa.', 403);
-    }
-
-    // Check for existing ACTIVE instance
-    const [existing] = await db.select().from(dungeonInstances)
-      .where(and(eq(dungeonInstances.masterId, masterId), eq(dungeonInstances.status, 'ACTIVE'))).limit(1);
-
-    if (existing) {
-      if (existing.dungeonFloorId === targetFloor.id) {
-        return existing;
+      // FUN-07-04-002: Validate Floor Unlock Requirement
+      const unlockCheck = dungeonConfigService.checkFloorUnlocked(targetFloor, master.level, world.currentFloor);
+      if (!unlockCheck.isUnlocked) {
+        throw new DungeonExplorationError(unlockCheck.reason ?? 'Tầng này hiện đang bị khóa.', 403);
       }
-      // If entering a different floor, abandon the previous active one
-      await db.update(dungeonInstances)
-        .set({ status: 'ABANDONED', completedAt: new Date() })
-        .where(eq(dungeonInstances.id, existing.id));
-    }
 
-    // FUN-07-02-004 & FUN-07-03-001..005: Reconstruct floor deterministically from World Seed
-    const reconstruction = worldSeedService.reconstructFloor(
-      world.worldSeed,
-      floorNumber,
-      world.difficultyMultiplier,
-      world.seedAlgorithmVersion ?? 1
-    );
+      // Check for existing ACTIVE instance
+      const [existing] = await tx.select().from(dungeonInstances)
+        .where(and(eq(dungeonInstances.masterId, masterId), eq(dungeonInstances.status, 'ACTIVE'))).limit(1);
 
-    const instanceId = uuidv4();
-    const [newInstance] = await db.insert(dungeonInstances).values({
-      id: instanceId,
-      masterId,
-      worldId: world.id,
-      dungeonFloorId: targetFloor.id,
-      worldSeed: world.worldSeed,
-      seedAlgorithmVersion: world.seedAlgorithmVersion ?? 1,
-      floorNumber,
-      status: 'ACTIVE',
-      currentRoomIndex: 0,
-      floorState: {
-        rooms: reconstruction.rooms,
-        difficultyMultiplier: reconstruction.difficultyMultiplier,
-      },
-      createdAt: new Date(),
-    }).returning();
+      if (existing) {
+        if (existing.dungeonFloorId === targetFloor.id) {
+          return existing;
+        }
+        // If entering a different floor, abandon the previous active one
+        await tx.update(dungeonInstances)
+          .set({ status: 'ABANDONED', completedAt: new Date() })
+          .where(eq(dungeonInstances.id, existing.id));
+      }
 
-    return newInstance;
+      // FUN-07-02-004 & FUN-07-03-001..005: Reconstruct floor deterministically from World Seed
+      const reconstruction = worldSeedService.reconstructFloor(
+        world.worldSeed,
+        floorNumber,
+        world.difficultyMultiplier,
+        world.seedAlgorithmVersion ?? 1
+      );
+
+      const instanceId = uuidv4();
+      const [newInstance] = await tx.insert(dungeonInstances).values({
+        id: instanceId,
+        masterId,
+        worldId: world.id,
+        dungeonFloorId: targetFloor.id,
+        worldSeed: world.worldSeed,
+        seedAlgorithmVersion: world.seedAlgorithmVersion ?? 1,
+        floorNumber,
+        status: 'ACTIVE',
+        currentRoomIndex: 0,
+        floorState: {
+          rooms: reconstruction.rooms,
+          difficultyMultiplier: reconstruction.difficultyMultiplier,
+        },
+        createdAt: new Date(),
+      }).returning();
+
+      return newInstance;
+    });
   }
 
   /**
@@ -171,6 +177,8 @@ export class DungeonExplorationService {
    */
   public async exploreRoom(masterId: string, instanceId: string) {
     return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      await assertNoPrivatePve(masterId, tx);
       const [instance] = await tx.select().from(dungeonInstances)
         .where(and(eq(dungeonInstances.id, instanceId), eq(dungeonInstances.masterId, masterId))).for('update').limit(1);
       if (!instance) throw new DungeonExplorationError('Phiên thám hiểm Dungeon không tồn tại.', 404);
@@ -253,8 +261,7 @@ export class DungeonExplorationService {
    * MOD-07-06: Calculate & Distribute Rewards (Silver, Master EXP, Summon Scrolls).
    */
   private async distributeFloorRewards(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tx: any,
+    tx: GameTransaction,
     masterId: string,
     world: typeof worlds.$inferSelect,
     floor: typeof dungeonFloors.$inferSelect,

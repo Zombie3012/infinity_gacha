@@ -511,6 +511,8 @@ func _populate_browser_items() -> void:
 		return
 	var items: Array = []
 	for h in GameState.heroes:
+		if not (h is Dictionary) or GameState.is_hero_pve_deployed(h):
+			continue
 		var d: Dictionary = h.duplicate(true)
 		var hid := str(d.get("id", ""))
 		# Find hunger from survival_heroes_data if available
@@ -546,6 +548,8 @@ func _on_quick_action_requested(action_code: String, _sel: Array) -> void:
 		status_banner_label.text = "🍱 Đang cho toàn bộ Tổ đội PVE (%d Hero) dùng bữa..." % party_ids.size()
 		var count: int = 0
 		for hid in party_ids:
+			if GameState.is_hero_pve_deployed(GameState.get_hero_by_id(str(hid))):
+				continue
 			var res := await ApiClient.post_req("/api/survival/heroes/%s/feed" % str(hid), { "quantity": 1 })
 			if res["ok"]:
 				count += 1

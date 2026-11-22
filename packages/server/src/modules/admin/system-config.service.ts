@@ -4,10 +4,9 @@ import { db } from '../../database/db.js';
 import { systemConfigs } from '../../database/drizzle-schema.js';
 import { AUDIT_ACTIONS, auditService } from './audit.service.js';
 
-/** Runtime rule families covered by UC-P0-19 (FUN-14-03-001..006). */
+/** Supported operator configuration families. Banner probabilities live in reward-pool weights. */
 export const CONFIG_KEYS = [
   'GACHA_RULES',
-  'GACHA_PITY',
   'DEATH_RULES',
   'DUNGEON_RULES',
   'SEED_ALGORITHM',
@@ -144,6 +143,7 @@ export class SystemConfigService {
     const result = await db.transaction(async (tx) => {
       const [target] = await tx.select().from(systemConfigs).where(eq(systemConfigs.id, configId)).limit(1);
       if (!target) return null;
+      if (!isConfigKey(target.configKey)) throw new ConfigError('This configuration family has been retired.');
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${target.configKey}))`);
       await tx.update(systemConfigs).set({ isActive: false })
         .where(and(eq(systemConfigs.configKey, target.configKey), eq(systemConfigs.isActive, true)));

@@ -45,6 +45,7 @@ var max_hp: int = 100
 var current_mp: int = 0
 var max_mp: int = 100
 var is_alive: bool = true
+var _death_tween: Tween
 
 # Base wander / work / speech state
 var _wander_target: Vector3 = Vector3.ZERO
@@ -382,13 +383,15 @@ func _refresh_labels() -> void:
 	name_label.text = unit_name
 	var pct := int(round((float(current_hp) / float(maxi(1, max_hp))) * 100.0))
 	hp_label.text = "HP: %d/%d (%d%%)" % [current_hp, max_hp, pct]
+	if max_mp > 0:
+		hp_label.text += "\nMP: %d/%d" % [current_mp, max_mp]
 	if side == "HERO":
 		hp_label.modulate = Color(0.35, 0.95, 0.52) if pct > 35 else Color(0.98, 0.75, 0.25)
 	else:
 		hp_label.modulate = Color(0.98, 0.42, 0.42)
 
 ## Lunge toward target, strike, and return to formation slot
-func perform_attack_lunge(target_pos: Vector3, is_skill: bool = false) -> void:
+func perform_attack_lunge(target_pos: Vector3, is_skill: bool = false, playback_speed: float = 1.0) -> void:
 	var dir := (target_pos - home_position)
 	dir.y = 0.0
 	if dir.length() > 0.01:
@@ -397,18 +400,18 @@ func perform_attack_lunge(target_pos: Vector3, is_skill: bool = false) -> void:
 	stop_pos.y = home_position.y
 
 	var tween := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(self, "global_position", stop_pos, 0.22)
+	tween.tween_property(self, "global_position", stop_pos, 0.22 / maxf(1.0, playback_speed))
 	if is_skill:
-		tween.tween_property(visual_root, "scale", Vector3(1.25, 1.25, 1.25), 0.12)
-		tween.tween_property(visual_root, "scale", Vector3.ONE, 0.12)
+		tween.tween_property(visual_root, "scale", Vector3(1.25, 1.25, 1.25), 0.12 / maxf(1.0, playback_speed))
+		tween.tween_property(visual_root, "scale", Vector3.ONE, 0.12 / maxf(1.0, playback_speed))
 	else:
-		tween.tween_property(visual_root, "position:y", 0.35, 0.08)
-		tween.tween_property(visual_root, "position:y", 0.0, 0.08)
+		tween.tween_property(visual_root, "position:y", 0.35, 0.08 / maxf(1.0, playback_speed))
+		tween.tween_property(visual_root, "position:y", 0.0, 0.08 / maxf(1.0, playback_speed))
 	await tween.finished
 
-func return_to_slot() -> void:
+func return_to_slot(playback_speed: float = 1.0) -> void:
 	var tween := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tween.tween_property(self, "global_position", home_position, 0.22)
+	tween.tween_property(self, "global_position", home_position, 0.22 / maxf(1.0, playback_speed))
 	await tween.finished
 
 ## Apply damage/evade/block visual feedback and floating combat text
@@ -443,17 +446,30 @@ func apply_hit_feedback(damage: int, is_crit: bool, is_evaded: bool, is_blocked:
 
 	if current_hp <= 0 and is_alive:
 		is_alive = false
-		var death_tween := create_tween()
-		death_tween.tween_property(visual_root, "rotation_degrees:x", -85.0, 0.25)
+		_death_tween = create_tween()
+		_death_tween.tween_property(visual_root, "rotation_degrees:x", -85.0, 0.25)
 		hp_label.text = "ĐÃ HẠ GỤC"
 		hp_label.modulate = Color(0.55, 0.55, 0.55)
 
 func play_revive_feedback(hp_restored: int) -> void:
+	if is_instance_valid(_death_tween):
+		_death_tween.kill()
 	is_alive = true
 	current_hp = maxi(1, hp_restored)
 	visual_root.rotation_degrees = Vector3.ZERO
 	_refresh_labels()
 	spawn_floating_text("🔥 PHƯỢNG HOÀNG TÁI SINH +%d HP" % current_hp, Color(1.0, 0.55, 0.12), 1.35)
+
+func apply_heal_feedback(amount: int, hp_after: int) -> void:
+	current_hp = clampi(hp_after, 0, max_hp)
+	_refresh_labels()
+	spawn_floating_text("+%d HP" % amount, Color(0.40, 0.95, 0.65), 1.05)
+
+func set_combat_resources(hp_value: int, mp_value: int) -> void:
+	current_hp = clampi(hp_value, 0, max_hp)
+	current_mp = clampi(mp_value, 0, max_mp)
+	is_alive = current_hp > 0
+	_refresh_labels()
 
 func spawn_floating_text(text: String, color: Color, scale_mult: float = 1.0) -> void:
 	var floater := Label3D.new()

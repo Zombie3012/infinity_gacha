@@ -159,7 +159,11 @@ func _rebuild_ui() -> void:
 
 	var hid: String = str(hero_data.get("id", ""))
 	var in_party: bool = GameState.active_party_ids.has(hid)
-	if in_party:
+	if GameState.is_hero_pve_deployed(hero_data):
+		var deployed_badge := _create_mini_badge("↗ CHINH PHẠT", Color(0.25, 0.52, 0.66, 0.95))
+		deployed_badge.tooltip_text = "Hero đang ở ngoài map. Thu hồi đội trước khi phân công hoặc thay đổi trang bị."
+		header_row.add_child(deployed_badge)
+	elif in_party:
 		var party_badge := _create_mini_badge("⚔️ PVE", Color(0.85, 0.22, 0.22, 0.9))
 		header_row.add_child(party_badge)
 

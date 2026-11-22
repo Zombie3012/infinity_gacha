@@ -1,3 +1,4 @@
+import type { GameDatabase } from '../../database/transaction.js';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
@@ -139,16 +140,16 @@ export class LeaderboardService {
   }
 
   /** Record the best (fewest rounds) clear per floor for the dungeon board. */
-  async recordFloor(masterId: string, floor: number, rounds: number, now = new Date()) {
+  async recordFloor(masterId: string, floor: number, rounds: number, now = new Date(), database: GameDatabase = db) {
     if (!Number.isInteger(floor) || floor < 2 || !Number.isFinite(rounds)) return { recorded: false };
-    const [existing] = await db.select().from(floorRecords)
+    const [existing] = await database.select().from(floorRecords)
       .where(and(eq(floorRecords.masterId, masterId), eq(floorRecords.floor, floor))).limit(1);
     if (existing) {
       if (rounds >= existing.rounds) return { recorded: false };
-      await db.update(floorRecords).set({ rounds, achievedAt: now }).where(eq(floorRecords.id, existing.id));
+      await database.update(floorRecords).set({ rounds, achievedAt: now }).where(eq(floorRecords.id, existing.id));
       return { recorded: true, improved: true };
     }
-    await db.insert(floorRecords).values({ id: uuidv4(), masterId, floor, rounds, achievedAt: now });
+    await database.insert(floorRecords).values({ id: uuidv4(), masterId, floor, rounds, achievedAt: now });
     return { recorded: true, improved: false };
   }
 

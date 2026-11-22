@@ -16,6 +16,7 @@
 import {
   affinityMultiplier, applyShield, CAPS, clamp, resolveAttack,
   type DamageElement, type DerivedStats, type ElementAffinity, type ImprintCombatEffects,
+  type PveTargetPriority,
 } from '@infiniti-gacha/shared';
 
 export type CombatSide = 'HERO' | 'ENEMY';
@@ -38,6 +39,11 @@ export interface CombatV2UnitInput {
   name: string;
   side: CombatSide;
   slotIndex: number;
+  formationSlot?: number;
+  targetPriority?: PveTargetPriority;
+  skillOrder?: string[];
+  initialHp?: number;
+  initialMp?: number;
   agi: number;
   stats: DerivedStats;
   damageType: 'PHYSICAL' | 'MAGICAL';
@@ -69,6 +75,10 @@ export interface CombatV2LogEntry {
   blocked: boolean;
   targetHp: number;
   actorMp: number;
+  actorHp?: number;
+  targetName?: string;
+  actionType?: 'BASIC' | 'SKILL' | 'HEAL' | 'REVIVE';
+  hit?: boolean;
 }
 
 export interface CombatV2Report {
@@ -77,7 +87,9 @@ export interface CombatV2Report {
   log: CombatV2LogEntry[];
   units: {
     id: string; name: string; side: CombatSide; hp: number; maxHp: number; mp: number; maxMp: number; alive: boolean;
+    slotIndex?: number;
   }[];
+  initialUnits?: CombatV2Report['units'];
   totalDamage: number;
 }
 
@@ -86,6 +98,7 @@ export interface CombatV2Options {
   random?: () => number;
   skillMpCostRatio?: number;
   basicMpGainRatio?: number;
+  timeoutIsDraw?: boolean;
 }
 
 const DEFAULT_MAX_ROUNDS = 30;
@@ -95,11 +108,11 @@ const DEFAULT_BASIC_MP_RATIO = 0.05;
 function initialize(input: CombatV2UnitInput): CombatV2UnitState {
   return {
     ...input,
-    hp: input.stats.maxHp,
-    mp: input.stats.maxMp,
+    hp: Math.max(0, Math.min(input.stats.maxHp, input.initialHp ?? input.stats.maxHp)),
+    mp: Math.max(0, Math.min(input.stats.maxMp, input.initialMp ?? input.stats.maxMp)),
     shield: 0,
     cooldowns: {},
-    alive: input.stats.maxHp > 0,
+    alive: (input.initialHp ?? input.stats.maxHp) > 0,
     revivesLeft: input.imprintEffects?.revive?.times ?? 0,
   };
 }
@@ -116,9 +129,13 @@ function turnOrder(units: CombatV2UnitState[]): CombatV2UnitState[] {
 function pickTarget(actor: CombatV2UnitState, units: CombatV2UnitState[]): CombatV2UnitState | null {
   const enemies = units.filter(unit => unit.alive && unit.side !== actor.side);
   if (enemies.length === 0) return null;
-  // Focus the weakest enemy by HP ratio; ties follow slot order.
-  return [...enemies].sort((a, b) => (a.hp / a.stats.maxHp) - (b.hp / b.stats.maxHp)
-    || a.slotIndex - b.slotIndex)[0];
+  const cell = (unit: CombatV2UnitState) => unit.formationSlot ?? unit.slotIndex;
+  const score = (unit: CombatV2UnitState) => actor.targetPriority === 'FRONTLINE'
+    ? Math.floor(cell(unit) / 3)
+    : actor.targetPriority === 'HIGHEST_ATK' ? -Math.max(unit.stats.atk, unit.stats.matk)
+      : unit.hp / unit.stats.maxHp;
+  // Preserve the legacy weakest-HP default when no pre-battle policy is supplied.
+  return [...enemies].sort((a, b) => score(a) - score(b) || cell(a) - cell(b) || a.id.localeCompare(b.id))[0];
 }
 
 function pickHealTarget(actor: CombatV2UnitState, units: CombatV2UnitState[]): CombatV2UnitState | null {
@@ -148,8 +165,8 @@ function attackProfile(actor: CombatV2UnitState, multiplier: number) {
   };
 }
 
-function defenceProfile(target: CombatV2UnitState) {
-  const magical = target.damageType === 'MAGICAL';
+function defenceProfile(target: CombatV2UnitState, damageType: CombatV2UnitInput['damageType']) {
+  const magical = damageType === 'MAGICAL';
   return {
     defense: magical ? target.stats.mdef : target.stats.def,
     evasion: clamp(target.stats.evasion + (target.imprintEffects?.evasion ?? 0), 0, CAPS.evasion),
@@ -161,8 +178,11 @@ function defenceProfile(target: CombatV2UnitState) {
   };
 }
 
-function chooseSkill(actor: CombatV2UnitState, skillMpRatio: number): { skill: CombatV2Skill | null; mpCost: number } {
-  for (const skill of actor.skills ?? []) {
+function chooseSkill(actor: CombatV2UnitState, skillMpRatio: number, units: CombatV2UnitState[]): { skill: CombatV2Skill | null; mpCost: number } {
+  const rank = (code: string) => { const index = actor.skillOrder?.indexOf(code) ?? -1; return index < 0 ? Infinity : index; };
+  const skills = actor.skillOrder?.length ? [...(actor.skills ?? [])].sort((a, b) => rank(a.code) - rank(b.code)) : actor.skills ?? [];
+  for (const skill of skills) {
+    if (skill.effectType === 'HEAL_LOWEST_ALLY' && !pickHealTarget(actor, units)) continue;
     const cooldown = actor.cooldowns[skill.code] ?? 0;
     const cost = skill.mpCost ?? Math.max(10, Math.round(actor.stats.maxMp * skillMpRatio));
     if (cooldown <= 0 && actor.mp >= cost) return { skill, mpCost: cost };
@@ -182,6 +202,11 @@ export function resolveBattleV2(
   const basicMpGain = options.basicMpGainRatio ?? DEFAULT_BASIC_MP_RATIO;
 
   const units = [...heroes, ...enemies].map(initialize);
+  const unitSnapshot = (unit: CombatV2UnitState) => ({
+    id: unit.id, name: unit.name, side: unit.side, hp: unit.hp, maxHp: unit.stats.maxHp,
+    mp: unit.mp, maxMp: unit.stats.maxMp, alive: unit.alive, slotIndex: unit.formationSlot ?? unit.slotIndex,
+  });
+  const initialUnits = units.map(unitSnapshot);
   const log: CombatV2LogEntry[] = [];
   let rounds = 0;
   let totalDamage = 0;
@@ -195,7 +220,7 @@ export function resolveBattleV2(
       if (!actor.alive) continue;
       if (units.every(unit => unit.side === actor.side || !unit.alive)) break;
 
-      let { skill, mpCost } = chooseSkill(actor, skillMpRatio);
+      let { skill, mpCost } = chooseSkill(actor, skillMpRatio, units);
 
       if (skill?.effectType === 'HEAL_LOWEST_ALLY') {
         const target = pickHealTarget(actor, units);
@@ -207,6 +232,7 @@ export function resolveBattleV2(
           log.push({
             round, actorId: actor.id, actorName: actor.name, targetId: target.id, action: skill.code,
             damage: 0, heal, crit: false, blocked: false, targetHp: target.hp, actorMp: actor.mp,
+            actorHp: actor.hp, targetName: target.name, actionType: 'HEAL', hit: true,
           });
           continue;
         }
@@ -222,12 +248,21 @@ export function resolveBattleV2(
       const affinity = actor.damageType === 'MAGICAL' && skill?.element && actor.affinity
         ? affinityMultiplier(actor.affinity[skill.element])
         : 1;
-      const result = resolveAttack(attackProfile(actor, multiplier), defenceProfile(target), {
+      const result = resolveAttack(attackProfile(actor, multiplier), defenceProfile(target, actor.damageType), {
         elementMultiplier: affinity,
         random,
       });
 
+      // Executing an action consumes its resources even when the target evades.
+      if (skill) {
+        actor.mp = Math.max(0, actor.mp - mpCost);
+        actor.cooldowns[skill.code] = Math.max(1, skill.cooldownRounds);
+      } else {
+        actor.mp = Math.min(actor.stats.maxMp, actor.mp + Math.round(actor.stats.maxMp * basicMpGain));
+      }
+
       if (result.hit && result.damage > 0) {
+        let reviveEntry: CombatV2LogEntry | null = null;
         const shield = applyShield(result.damage, target.shield);
         target.shield = shield.shieldRemaining;
         target.hp = Math.max(0, target.hp - shield.toHp);
@@ -245,29 +280,27 @@ export function resolveBattleV2(
             target.revivesLeft -= 1;
             target.alive = true;
             target.hp = Math.max(1, Math.round(target.stats.maxHp * clamp(revive.hpPct, 1, 100) / 100));
-            log.push({
+            reviveEntry = {
               round, actorId: target.id, actorName: target.name, targetId: target.id, action: 'REVIVE',
               damage: 0, heal: target.hp, crit: false, blocked: false, targetHp: target.hp, actorMp: target.mp,
-            });
+              actorHp: target.hp, targetName: target.name, actionType: 'REVIVE', hit: true,
+            };
           }
         }
 
-        if (skill) {
-          actor.mp = Math.max(0, actor.mp - mpCost);
-          actor.cooldowns[skill.code] = Math.max(1, skill.cooldownRounds);
-        } else {
-          actor.mp = Math.min(actor.stats.maxMp, actor.mp + Math.round(actor.stats.maxMp * basicMpGain));
-        }
         log.push({
           round, actorId: actor.id, actorName: actor.name, targetId: target.id,
           action: skill?.code ?? 'BASIC', damage: shield.toHp, heal: 0,
-          crit: result.crit, blocked: result.blocked, targetHp: target.hp, actorMp: actor.mp,
+          crit: result.crit, blocked: result.blocked, targetHp: reviveEntry ? 0 : target.hp, actorMp: actor.mp,
+          actorHp: actor.hp, targetName: target.name, actionType: skill ? 'SKILL' : 'BASIC', hit: true,
         });
+        if (reviveEntry) log.push(reviveEntry);
       } else {
         log.push({
           round, actorId: actor.id, actorName: actor.name, targetId: target.id,
           action: skill?.code ?? 'BASIC', damage: 0, heal: 0,
           crit: result.crit, blocked: result.blocked, targetHp: target.hp, actorMp: actor.mp,
+          actorHp: actor.hp, targetName: target.name, actionType: skill ? 'SKILL' : 'BASIC', hit: result.hit,
         });
       }
     }
@@ -295,7 +328,7 @@ export function resolveBattleV2(
   let winner: CombatV2Winner = 'DRAW';
   if (heroesAlive && !enemiesAlive) winner = 'HERO';
   else if (!heroesAlive && enemiesAlive) winner = 'ENEMY';
-  else if (heroesAlive && enemiesAlive) {
+  else if (heroesAlive && enemiesAlive && !options.timeoutIsDraw) {
     const heroHp = units.filter(unit => unit.side === 'HERO').reduce((sum, unit) => sum + unit.hp / unit.stats.maxHp, 0);
     const enemyHp = units.filter(unit => unit.side === 'ENEMY').reduce((sum, unit) => sum + unit.hp / unit.stats.maxHp, 0);
     winner = heroHp === enemyHp ? 'DRAW' : heroHp > enemyHp ? 'HERO' : 'ENEMY';
@@ -306,9 +339,7 @@ export function resolveBattleV2(
     rounds,
     log,
     totalDamage,
-    units: units.map(unit => ({
-      id: unit.id, name: unit.name, side: unit.side,
-      hp: unit.hp, maxHp: unit.stats.maxHp, mp: unit.mp, maxMp: unit.stats.maxMp, alive: unit.alive,
-    })),
+    initialUnits,
+    units: units.map(unitSnapshot),
   };
 }

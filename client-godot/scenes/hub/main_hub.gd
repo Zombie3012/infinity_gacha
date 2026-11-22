@@ -73,7 +73,7 @@ func _on_roster_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/heroes/hero_roster.tscn")
 
 func _on_combat_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/pve/isometric_pve_arena_3d.tscn")
+	get_tree().change_scene_to_file("res://scenes/pve/pve_map.tscn")
 
 func _on_logout_pressed() -> void:
 	GameState.clear()
