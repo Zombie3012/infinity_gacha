@@ -2,13 +2,14 @@ import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import { isLivingHero } from '@infiniti-gacha/shared';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
-import type { GameDatabase } from '../../database/transaction.js';
+import type { GameDatabase, GameTransaction } from '../../database/transaction.js';
 import {
   baseBuildings, buildingWorkerAssignments, combatPartySlots, heroes, masterItems, masterParties, masters, pveHeroReservations,
 } from '../../database/drizzle-schema.js';
 import {
   FEED_HUNGER_RELIEF, applyActivity, applyDrift, baseFoodConsumption, clampScore, fatigueState, hungerState,
-  isImmobilised, rationsFor, starvationMultiplier, type FatigueState, type HungerState, type RationContext,
+  housingCapacityFor, housingRecoveryMultiplierFor, isImmobilised, rationsFor, starvationMultiplier,
+  type FatigueState, type HungerState, type RationContext,
 } from './survival-rules.js';
 import { heroSurvivalStates } from '../../database/drizzle-schema.js';
 
@@ -76,6 +77,7 @@ export class SurvivalService {
       if (states.length === 0) return;
       const hasFood = (await this.foodStock(masterId, tx)) > 0;
       const restFacilities = await tx.select({
+        id: baseBuildings.id,
         buildingType: baseBuildings.buildingType,
         level: baseBuildings.level,
         status: baseBuildings.status,
@@ -83,28 +85,23 @@ export class SurvivalService {
         eq(baseBuildings.masterId, masterId),
         inArray(baseBuildings.buildingType, ['HOUSE', 'PARTY_MANSION']),
       ));
-      let recoveryMult = 1.0;
-      for (const fac of restFacilities) {
-        if (fac.status !== 'READY') continue;
-        if (fac.buildingType === 'PARTY_MANSION') {
-          recoveryMult = Math.max(recoveryMult, 4.0);
-        } else if (fac.buildingType === 'HOUSE') {
-          const lvl = Math.min(3, Math.max(1, fac.level));
-          const houseMult = lvl === 1 ? 1.0 : lvl === 2 ? 1.5 : 2.0;
-          recoveryMult = Math.max(recoveryMult, houseMult);
-        }
-      }
+      const facilityById = new Map(restFacilities.map(f => [f.id, f]));
       for (const state of states) {
+        const fac = state.housingBuildingId ? facilityById.get(state.housingBuildingId) : undefined;
+        const recoveryMult = fac && fac.status === 'READY'
+          ? housingRecoveryMultiplierFor(fac.buildingType, fac.level)
+          : 1.0;
         const drift = applyDrift({
           hungerScore: state.hungerScore,
           fatigueScore: state.fatigueScore,
-          isResting: state.isResting,
+          isResting: state.isResting && Boolean(fac && fac.status === 'READY'),
           lastTickAt: state.lastTickAt,
         }, now, hasFood, recoveryMult);
+        const keepRestingAtZero = state.isResting && Boolean(fac && fac.status === 'READY') && state.fatigueScore <= 0;
         await tx.update(heroSurvivalStates).set({
           hungerScore: drift.hungerScore,
           fatigueScore: drift.fatigueScore,
-          isResting: drift.isResting,
+          isResting: keepRestingAtZero ? true : drift.isResting,
           lastTickAt: state.lastTickAt > now ? state.lastTickAt : now,
         }).where(eq(heroSurvivalStates.heroId, state.heroId));
       }
@@ -182,7 +179,7 @@ export class SurvivalService {
     });
   }
 
-  async setResting(masterId: string, heroId: string, resting: boolean) {
+  async setResting(masterId: string, heroId: string, resting: boolean, buildingId?: string | null) {
     await this.settle(masterId);
     return db.transaction(async tx => {
       await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
@@ -199,9 +196,160 @@ export class SurvivalService {
         if (assigned) throw new SurvivalError('Hero đang làm việc, hãy thu hồi trước khi nghỉ.', 409);
       }
       const now = new Date();
+      let [state] = await tx.select().from(heroSurvivalStates).where(eq(heroSurvivalStates.heroId, heroId)).for('update');
+      if (!state) {
+        await tx.insert(heroSurvivalStates).values({
+          heroId, hungerScore: hero.hunger, fatigueScore: hero.fatigue, isResting: false, lastTickAt: now,
+        }).onConflictDoNothing();
+        [state] = await tx.select().from(heroSurvivalStates).where(eq(heroSurvivalStates.heroId, heroId)).for('update');
+      }
+      if (resting) {
+        let targetHousingId = state?.housingBuildingId ?? null;
+        if (buildingId && targetHousingId !== buildingId) {
+          const [targetFac] = await tx.select().from(baseBuildings)
+            .where(and(
+              eq(baseBuildings.id, buildingId),
+              eq(baseBuildings.masterId, masterId),
+              eq(baseBuildings.status, 'READY'),
+              inArray(baseBuildings.buildingType, ['HOUSE', 'PARTY_MANSION']),
+            )).limit(1);
+          if (!targetFac) throw new SurvivalError('Không tìm thấy công trình cư trú sẵn sàng.', 404);
+          const occupants = await tx.select({ heroId: heroSurvivalStates.heroId })
+            .from(heroSurvivalStates)
+            .innerJoin(heroes, eq(heroes.id, heroSurvivalStates.heroId))
+            .where(and(eq(heroes.masterId, masterId), eq(heroSurvivalStates.housingBuildingId, targetFac.id)));
+          const cap = housingCapacityFor(targetFac.buildingType, targetFac.level);
+          if (occupants.length >= cap) {
+            throw new SurvivalError(`Nhà đã đầy chỗ (${occupants.length}/${cap}). Hãy đổi chỗ với Hero khác.`, 409);
+          }
+          await tx.update(heroSurvivalStates).set({ housingBuildingId: targetFac.id }).where(eq(heroSurvivalStates.heroId, heroId));
+          targetHousingId = targetFac.id;
+        } else if (!targetHousingId) {
+          targetHousingId = await this.autoAssignDormitory(tx, masterId, heroId, now);
+          if (!targetHousingId) {
+            throw new SurvivalError('Tất cả Dormitory đã đầy hoặc chưa xây. Hãy đổi chỗ với Hero khác hoặc xếp vào Biệt Thự.', 409);
+          }
+        }
+      }
       const [updated] = await tx.update(heroSurvivalStates).set({ isResting: resting, lastTickAt: now })
         .where(eq(heroSurvivalStates.heroId, heroId)).returning();
-      return { heroId, isResting: updated.isResting, fatigueScore: updated.fatigueScore };
+      return { heroId, isResting: updated.isResting, fatigueScore: updated.fatigueScore, housingBuildingId: updated.housingBuildingId };
+    });
+  }
+
+  /**
+   * Auto-assign a newly summoned or homeless Hero into the first Dormitory (HOUSE)
+   * with available capacity. Never auto-assigns into PARTY_MANSION.
+   */
+  async autoAssignDormitory(tx: GameTransaction, masterId: string, heroId: string, now = new Date()): Promise<string | null> {
+    const dorms = await tx.select({
+      id: baseBuildings.id,
+      level: baseBuildings.level,
+    }).from(baseBuildings).where(and(
+      eq(baseBuildings.masterId, masterId),
+      eq(baseBuildings.buildingType, 'HOUSE'),
+      eq(baseBuildings.status, 'READY'),
+    )).orderBy(asc(baseBuildings.createdAt), asc(baseBuildings.id));
+    if (dorms.length === 0) {
+      await tx.insert(heroSurvivalStates).values({
+        heroId, housingBuildingId: null, hungerScore: 0, fatigueScore: 0, isResting: false, lastTickAt: now,
+      }).onConflictDoNothing();
+      return null;
+    }
+
+    const dormIds = dorms.map(d => d.id);
+    const occupantRows = await tx.select({ housingBuildingId: heroSurvivalStates.housingBuildingId })
+      .from(heroSurvivalStates)
+      .innerJoin(heroes, eq(heroes.id, heroSurvivalStates.heroId))
+      .where(and(
+        eq(heroes.masterId, masterId),
+        inArray(heroSurvivalStates.housingBuildingId, dormIds),
+      ));
+    const counts = new Map<string, number>();
+    for (const row of occupantRows) {
+      if (row.housingBuildingId) counts.set(row.housingBuildingId, (counts.get(row.housingBuildingId) ?? 0) + 1);
+    }
+
+    const targetDorm = dorms.find(d => (counts.get(d.id) ?? 0) < housingCapacityFor('HOUSE', d.level));
+    const assignedId = targetDorm?.id ?? null;
+    await tx.insert(heroSurvivalStates).values({
+      heroId, housingBuildingId: assignedId, hungerScore: 0, fatigueScore: 0, isResting: false, lastTickAt: now,
+    }).onConflictDoUpdate({
+      target: heroSurvivalStates.heroId,
+      set: { housingBuildingId: assignedId },
+    });
+    return assignedId;
+  }
+
+  async assignHousing(masterId: string, buildingId: string, heroId: string, swapWithHeroId?: string | null) {
+    if (!heroId) throw new SurvivalError('heroId là bắt buộc.');
+    return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      const [building] = await tx.select().from(baseBuildings)
+        .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
+      if (!building) throw new SurvivalError('Không tìm thấy công trình cư trú.', 404);
+      if (building.status !== 'READY') throw new SurvivalError('Công trình chưa sẵn sàng.', 409);
+      if (building.buildingType !== 'HOUSE' && building.buildingType !== 'PARTY_MANSION') {
+        throw new SurvivalError('Công trình này không hỗ trợ cư trú.', 409);
+      }
+
+      const [hero] = await tx.select().from(heroes)
+        .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).for('update');
+      if (!hero) throw new SurvivalError('Không tìm thấy Hero.', 404);
+      if (!isLivingHero(hero)) throw new SurvivalError('Hero không thể vào nhà ở.', 409);
+
+      const now = new Date();
+      let [heroState] = await tx.select().from(heroSurvivalStates).where(eq(heroSurvivalStates.heroId, heroId)).for('update');
+      if (!heroState) {
+        await tx.insert(heroSurvivalStates).values({
+          heroId, housingBuildingId: null, hungerScore: hero.hunger, fatigueScore: hero.fatigue, isResting: false, lastTickAt: now,
+        }).onConflictDoNothing();
+        [heroState] = await tx.select().from(heroSurvivalStates).where(eq(heroSurvivalStates.heroId, heroId)).for('update');
+      }
+
+      if (heroState.housingBuildingId === buildingId) {
+        return { heroId, housingBuildingId: buildingId, swappedWithHeroId: null };
+      }
+
+      const occupants = await tx.select({ heroId: heroSurvivalStates.heroId })
+        .from(heroSurvivalStates)
+        .innerJoin(heroes, eq(heroes.id, heroSurvivalStates.heroId))
+        .where(and(eq(heroes.masterId, masterId), eq(heroSurvivalStates.housingBuildingId, buildingId)));
+      const cap = housingCapacityFor(building.buildingType, building.level);
+
+      if (occupants.length < cap) {
+        await tx.update(heroSurvivalStates).set({ housingBuildingId: buildingId }).where(eq(heroSurvivalStates.heroId, heroId));
+        return { heroId, housingBuildingId: buildingId, swappedWithHeroId: null };
+      }
+
+      if (!swapWithHeroId) {
+        throw new SurvivalError('Nhà đã đầy chỗ. Hãy chọn một Hero đang ở bên trong để đổi chỗ.', 409);
+      }
+      if (!occupants.some(o => o.heroId === swapWithHeroId)) {
+        throw new SurvivalError('Hero được chọn để đổi chỗ không ở trong công trình này.', 409);
+      }
+
+      const previousBuildingId = heroState.housingBuildingId ?? null;
+      await tx.update(heroSurvivalStates).set({
+        housingBuildingId: previousBuildingId,
+        isResting: previousBuildingId ? undefined : false,
+      }).where(eq(heroSurvivalStates.heroId, swapWithHeroId));
+      await tx.update(heroSurvivalStates).set({ housingBuildingId: buildingId })
+        .where(eq(heroSurvivalStates.heroId, heroId));
+
+      return { heroId, housingBuildingId: buildingId, swappedWithHeroId: swapWithHeroId };
+    });
+  }
+
+  async removeHousing(masterId: string, heroId: string) {
+    return db.transaction(async tx => {
+      await tx.select({ id: masters.id }).from(masters).where(eq(masters.id, masterId)).for('update');
+      const [hero] = await tx.select({ id: heroes.id }).from(heroes)
+        .where(and(eq(heroes.id, heroId), eq(heroes.masterId, masterId))).limit(1);
+      if (!hero) throw new SurvivalError('Không tìm thấy Hero.', 404);
+      await tx.update(heroSurvivalStates).set({ housingBuildingId: null, isResting: false })
+        .where(eq(heroSurvivalStates.heroId, heroId));
+      return { heroId, housingBuildingId: null, isResting: false };
     });
   }
 

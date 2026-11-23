@@ -1,6 +1,6 @@
 extends RefCounted
 
-const NAMES := {"HOUSE": "Nhà ở", "PARTY_MANSION": "Biệt thự tổ đội", "WAREHOUSE": "Nhà kho", "TRAINING_CENTER": "Khu huấn luyện", "FORGE": "Xưởng rèn", "KITCHEN": "Nhà bếp", "MEDICAL": "Trung tâm hồi phục", "HALL_OF_MAGIC": "Đại sảnh ma thuật", "LIBRARY": "Thư viện", "ALCHEMY_WORKSHOP": "Xưởng giả kim", "MAGIC_RESEARCH_LAB": "Phòng nghiên cứu", "HERO_CHRONICLE": "Sử Điện Anh Hùng", "SHOP_AIRSHIP": "Thương thuyền"}
+const NAMES := {"HOUSE": "Nhà ở", "PARTY_MANSION": "Biệt thự tổ đội", "WAREHOUSE": "Nhà kho", "TRAINING_CENTER": "Khu huấn luyện", "FORGE": "Xưởng rèn", "KITCHEN": "Nhà bếp", "MEDICAL": "Trung tâm hồi phục", "HALL_OF_MAGIC": "Đại sảnh ma thuật", "LIBRARY": "Thư viện", "ALCHEMY_WORKSHOP": "Xưởng giả kim", "MAGIC_RESEARCH_LAB": "Phòng nghiên cứu", "HERO_CHRONICLE": "Sử Điện Anh Hùng", "SHOP_AIRSHIP": "Thương thuyền", "ALLIANCE_HALL": "Liên minh"}
 static var _font: SystemFont
 
 static func apply(label: Label3D, size: int) -> void:

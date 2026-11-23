@@ -664,11 +664,13 @@ export const buildingWorkerAssignments = pgTable('building_worker_assignments', 
 
 export const heroSurvivalStates = pgTable('hero_survival_states', {
   heroId: varchar('hero_instance_id', { length: 36 }).primaryKey().references(() => heroes.id, { onDelete: 'cascade' }),
+  housingBuildingId: varchar('housing_building_id', { length: 36 }).references(() => baseBuildings.id, { onDelete: 'set null' }),
   hungerScore: doublePrecision('hunger_score').default(0).notNull(),
   fatigueScore: doublePrecision('fatigue_score').default(0).notNull(),
   isResting: boolean('is_resting').default(false).notNull(),
   lastTickAt: timestamp('last_tick_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
+  index('idx_hero_survival_housing').on(table.housingBuildingId),
   check('hero_survival_hunger_range', sql`${table.hungerScore} >= 0 AND ${table.hungerScore} <= 100`),
   check('hero_survival_fatigue_range', sql`${table.fatigueScore} >= 0 AND ${table.fatigueScore} <= 100`),
 ]);
@@ -1453,3 +1455,15 @@ export const pveEvents = pgTable('pve_events', {
   data: jsonb('data').$type<Record<string, unknown>>().notNull(),
   occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
 }, table => [unique('uq_pve_event_revision').on(table.mapId, table.revision)]);
+
+export const chatMessages = pgTable('chat_messages', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  channel: varchar('channel', { length: 16 }).notNull(),
+  senderMasterId: varchar('sender_master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  recipientMasterId: varchar('recipient_master_id', { length: 36 }).references(() => masters.id, { onDelete: 'cascade' }),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index('idx_chat_messages_channel').on(table.channel, table.createdAt),
+  index('idx_chat_messages_private').on(table.senderMasterId, table.recipientMasterId, table.createdAt),
+]);

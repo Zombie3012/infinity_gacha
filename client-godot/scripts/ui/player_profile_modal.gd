@@ -247,6 +247,7 @@ func _create_tab_buttons() -> void:
 		{"icon": "⚙️", "title": "Cài Đặt", "tab": 1},
 		{"icon": "🎁", "title": "Mã Quà Tặng", "tab": 2},
 		{"icon": "🛟", "title": "Hỗ Trợ", "tab": 3},
+		{"icon": "🔐", "title": "Bảo Mật & Tài Khoản", "tab": 4},
 	]
 
 	for item in tab_defs:
@@ -304,6 +305,73 @@ func _render_active_tab() -> void:
 			_render_giftcode_tab()
 		3:
 			_render_support_tab()
+		4:
+			_render_security_tab()
+
+func _render_security_tab() -> void:
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	_content_panel.add_child(margin)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 10)
+	margin.add_child(vb)
+
+	var title := Label.new()
+	title.text = "🔐 BẢO MẬT, ĐỊNH DANH & KHÔI PHỤC TÀI KHOẢN"
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.55, 0.88, 1.0))
+	vb.add_child(title)
+
+	var info_lbl := Label.new()
+	info_lbl.text = "⏳ Đang tải thông tin bảo mật & định danh..."
+	info_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(info_lbl)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.add_theme_constant_override("separation", 10)
+	vb.add_child(btn_row)
+
+	var rec_btn := Button.new()
+	rec_btn.text = "🔑 Tạo Mã Khôi Phục"
+	rec_btn.custom_minimum_size = Vector2(180, 36)
+	rec_btn.pressed.connect(func():
+		var r := await ApiClient.post_req("/api/account/recovery-token", {})
+		if not is_instance_valid(self): return
+		if r.get("ok", false):
+			var tok := str(r.get("data", {}).get("recoveryToken", r.get("data", {}).get("token", "")))
+			info_lbl.text = "🔑 Mã khôi phục mới: %s\n(Hãy lưu lại cẩn thận)" % tok
+		else:
+			info_lbl.text = "❌ " + str(r.get("error", "Không thể tạo mã"))
+	)
+	btn_row.add_child(rec_btn)
+
+	var logout_btn := Button.new()
+	logout_btn.text = "🚪 Đăng Xuất / Đổi Tài Khoản"
+	logout_btn.custom_minimum_size = Vector2(210, 36)
+	logout_btn.modulate = Color(1.0, 0.65, 0.65)
+	logout_btn.pressed.connect(func():
+		await ApiClient.post_req("/api/auth/logout", {})
+		GameState.clear()
+		if is_instance_valid(self) and get_tree() != null:
+			get_tree().change_scene_to_file("res://scenes/auth/login_screen.tscn")
+	)
+	btn_row.add_child(logout_btn)
+
+	var sec_res := await ApiClient.get_req("/api/auth/security")
+	var id_res := await ApiClient.get_req("/api/account/identities")
+	if not is_instance_valid(self) or not is_instance_valid(info_lbl):
+		return
+	var id_count := 0
+	if id_res.get("ok", false) and id_res.get("data") is Array:
+		id_count = (id_res["data"] as Array).size()
+	info_lbl.text = "🛡️ Trạng thái bảo mật: %s\n🔗 Số định danh đã liên kết: %d" % [
+		"Đã xác thực" if sec_res.get("ok", false) else "Chưa rõ",
+		id_count,
+	]
 
 # ==============================================================================
 # TAB 0: HỒ SƠ MASTER

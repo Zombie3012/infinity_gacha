@@ -23,6 +23,24 @@ func _ready() -> void:
 	get_tree().quit(1 if _failures > 0 else 0)
 
 func _run() -> void:
+	var tower_scene: PackedScene = load("res://scenes/pve/pve_tower.tscn")
+	var tower_screen: Control = tower_scene.instantiate()
+	PveState.snapshot = {"currentFloor": 3, "food": 120, "teleportStones": 2, "map": null}
+	add_child(tower_screen)
+	await get_tree().process_frame
+	tower_screen._render()
+	expect(tower_screen._floors_box.get_child_count() == 100, "Tower exterior renders 100 preview floors")
+	tower_screen._selected_floor = 1
+	tower_screen._render()
+	expect(not tower_screen._enter_btn.disabled and tower_screen._enter_btn.text.contains("VÀO LẠI TẦNG 1"), "Cleared floor can be re-selected")
+	expect(tower_screen._detail_info.text.contains("Cho phép rút lui: Có") and tower_screen._detail_info.text.contains("Chi phí tham gia"), "Normal floor shows retreat allowed and entry cost")
+	expect(tower_screen._detail_objectives.text.contains("Hạ Boss") and tower_screen._detail_objectives.text.contains("Toàn đội còn sống"), "Objectives list 5-star floor clear goals")
+	tower_screen._selected_floor = 5
+	tower_screen._render()
+	expect(tower_screen._enter_btn.disabled and tower_screen._detail_title.text.contains("ĐẶC BIỆT") and tower_screen._detail_info.text.contains("Cho phép rút lui: Không"), "Special floor 5 is highlighted and disallows retreat")
+	tower_screen.queue_free()
+	await get_tree().process_frame
+
 	PveState.polling_enabled = false
 	var map_scene: PackedScene = load("res://scenes/pve/pve_map.tscn")
 	var map_screen: Control = map_scene.instantiate()
@@ -108,6 +126,13 @@ func _run() -> void:
 	map_screen._view_area_id = "floor"
 	map_screen._render_state()
 	expect(map_screen._tiles.all(func(button): return button.disabled), "Browsing another area cannot issue movement there")
+	map_screen._toggle_party_drawer(false)
+	expect(not map_screen._party_drawer.visible, "Party drawer can be collapsed")
+	map_screen._toggle_report_drawer(true)
+	expect(map_screen._report_drawer.visible, "Report drawer can be expanded")
+	map_screen._set_map_zoom(1.25)
+	expect(is_equal_approx(map_screen._map_zoom, 1.25) and map_screen._zoom_label.text == "125%", "Map zoom updates zoom state and label")
+	map_screen._set_map_zoom(1.0)
 	PveState.snapshot["areas"].append({"id": "interior:0", "name": "Công trình", "parentAreaId": "region:0", "width": 8, "height": 8, "metersPerTile": 5, "tiles": []})
 	PveState.snapshot["squads"][0]["areaId"] = "interior:0"
 	PveState.snapshot_changed.emit()
@@ -118,6 +143,21 @@ func _run() -> void:
 	await get_tree().process_frame
 
 	var editor_script: Script = load("res://scripts/ui/pve_party_editor.gd")
+	var items_modal: Control = load("res://scripts/ui/pve_field_items_modal.gd").new()
+	items_modal.squad_id = "ui-squad"
+	PveState.snapshot["loadouts"] = [{"squadId": "ui-squad", "heroId": "ui-hero-0", "config": {"slots": [{"itemId": "MEDICINE", "quantity": 2}, null, null, null, null]}}]
+	add_child(items_modal)
+	await get_tree().process_frame
+	expect(items_modal.find_children("*", "ProgressBar", true, false).size() == 2, "Field items modal displays HP and MP progress bars")
+	items_modal.queue_free()
+	var live_modal: Control = load("res://scripts/ui/pve_live_battle_modal.gd").new()
+	live_modal.battle_id = "ui-battle"
+	live_modal.battle = {"live": true, "deadline": 0, "report": {"units": [{"id": "ui-hero-0", "name": "Hero 0", "side": "HERO", "slotIndex": 0, "hp": 300, "maxHp": 500, "mp": 50, "maxMp": 100, "alive": true}], "log": [], "pending": {}}}
+	add_child(live_modal)
+	await get_tree().process_frame
+	expect(live_modal._clock_bar != null and live_modal.find_children("*", "GridContainer", true, false).size() == 2, "Live battle modal renders turn bar and both formation grids")
+	live_modal.queue_free()
+	await get_tree().process_frame
 	var editor: Control = editor_script.new()
 	editor.configure({})
 	add_child(editor)
@@ -207,7 +247,7 @@ func _run() -> void:
 	add_child(dorm)
 	await get_tree().process_frame
 	expect(not dorm._hero_browser.all_items.any(func(hero): return str(hero.get("id", "")) == "ui-hero-0"), "Dormitory excludes deployed Heroes from rest and feed selection")
-	expect(dorm._hero_browser.extra_action_box.get_child_count() == 3, "Preconfigured facility action buttons remain attached and visible")
+	expect(dorm._hero_browser.extra_action_box.get_child_count() == 5, "Preconfigured facility action buttons remain attached and visible")
 	expect(dorm._hero_browser.header_title_label.text.contains("Nghỉ"), "Browser initialization preserves a preconfigured facility heading")
 	dorm.queue_free()
 	await get_tree().process_frame

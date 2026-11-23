@@ -1,5 +1,5 @@
 import type { GameTransaction } from '../../database/transaction.js';
-import { assertNoPrivatePve } from '../combat/combat-readiness.js';
+import { assertHeroesActivityReadiness, assertNoPrivatePve } from '../combat/combat-readiness.js';
 import { and, asc, eq, gt } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
@@ -9,6 +9,8 @@ import {
   dungeonTemplates,
   dungeonFloors,
   dungeonInstances,
+  masterParties,
+  combatPartySlots,
   currencyTransactions,
   masterSummonInventory,
   masterLevelConfigs,
@@ -112,6 +114,15 @@ export class DungeonExplorationService {
 
       const [world] = await tx.select().from(worlds).where(eq(worlds.masterId, masterId)).limit(1);
       if (!world) throw new DungeonExplorationError('Hãy khởi tạo World trước khi vào Dungeon.', 409);
+
+      const [defaultParty] = await tx.select({ id: masterParties.id }).from(masterParties)
+        .where(and(eq(masterParties.masterId, masterId), eq(masterParties.isDefault, true))).limit(1);
+      if (defaultParty) {
+        const slots = await tx.select({ heroId: combatPartySlots.heroId }).from(combatPartySlots)
+          .where(eq(combatPartySlots.partyId, defaultParty.id));
+        const partyHeroIds = slots.map(s => s.heroId);
+        await assertHeroesActivityReadiness(tx, masterId, partyHeroIds, new Date(), 'DUNGEON');
+      }
 
       // FUN-07-04-002: Validate Floor Unlock Requirement
       const unlockCheck = dungeonConfigService.checkFloorUnlocked(targetFloor, master.level, world.currentFloor);

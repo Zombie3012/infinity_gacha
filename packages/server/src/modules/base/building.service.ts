@@ -5,9 +5,10 @@ import { db } from '../../database/db.js';
 import type { GameTransaction } from '../../database/transaction.js';
 import { isV2Origin, originOf, progressionFor } from '../hero/hero-progression.js';
 import { survivalService } from '../survival/survival.service.js';
+import { assertHeroesActivityReadiness } from '../combat/combat-readiness.js';
 import { RETIRED_MAGIC_BUILDINGS, magicSnapshot, updateMagicProduction, collectMagic } from './magic-production.js';
 import {
-  baseBuildings, baseProductionNodes, buildingTypes, buildingWorkerAssignments, heroLevelConfigs, heroes, masterItems, masters, worlds,
+  baseBuildings, baseProductionNodes, buildingTypes, buildingWorkerAssignments, heroLevelConfigs, heroes, heroSurvivalStates, masterItems, masters, worlds,
 } from '../../database/drizzle-schema.js';
 import {
   MAX_BASE_ZONES, PARTY_MANSION_REQUIRED_MASTER_LEVEL, PARTY_MANSION_UPGRADE_COST_SILVER,
@@ -374,6 +375,11 @@ export class BuildingService {
       const refund = demolishRefundSilver(type.buildCostSilver, building.level);
       const now = new Date();
 
+      if (building.buildingType === 'HOUSE' || building.buildingType === 'PARTY_MANSION') {
+        await tx.update(heroSurvivalStates)
+          .set({ housingBuildingId: null, isResting: false })
+          .where(eq(heroSurvivalStates.housingBuildingId, building.id));
+      }
       await tx.delete(baseBuildings).where(eq(baseBuildings.id, building.id));
       await tx.update(masters).set({ silverCoins: sql`${masters.silverCoins} + ${refund}`, updatedAt: now })
           .where(eq(masters.id, masterId));
@@ -505,6 +511,12 @@ export class BuildingService {
       const [already] = await tx.select({ id: buildingWorkerAssignments.id }).from(buildingWorkerAssignments)
         .where(eq(buildingWorkerAssignments.heroInstanceId, hero.id)).limit(1);
       if (already) throw new BaseError('Hero đang làm việc ở công trình khác.', 409);
+
+      try {
+        await assertHeroesActivityReadiness(tx, masterId, [hero.id], new Date(), 'ANY');
+      } catch {
+        throw new BaseError('Hero quá mệt hoặc quá đói (≥90), từ chối nhận việc.', 409);
+      }
 
       if (building.buildingType === 'HALL_OF_MAGIC') await updateMagicProduction(tx,building,building.level,new Date());
       const [assignment] = await tx.insert(buildingWorkerAssignments).values({

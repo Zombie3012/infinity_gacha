@@ -29,6 +29,8 @@ var active_party_ids: Array = []
 var base_overview: Dictionary = {}
 var crafting_overview: Dictionary = {}
 var equipment_list: Array = []
+var inventory_items: Array = []
+var summon_scrolls_list: Array = []
 var materials: Dictionary = {
 	"WOOD": 0,
 	"STONE": 0,
@@ -39,6 +41,7 @@ var materials: Dictionary = {
 }
 var normal_scrolls: int = 0
 var floor_assigned_hero_ids: Dictionary = {} # floor_num (int) -> Array[String hero_id]
+var away_expedition_hero_ids: Array = []
 
 var world_base_pos: Vector2i = Vector2i(0, 0)
 var world_unlocked: bool = false
@@ -223,6 +226,8 @@ func refresh_inventory() -> bool:
 	materials["SAMPLE_HERO_PROMOTION_SEAL"] = 0
 	materials["SAMPLE_HERO_SKILL_BOOK"] = 0
 	normal_scrolls = 0
+	inventory_items.clear()
+	summon_scrolls_list.clear()
 	
 	var items: Array = data.get("items", [])
 	for item in items:
@@ -230,13 +235,33 @@ func refresh_inventory() -> bool:
 			var item_id := str(item.get("itemId", ""))
 			var qty := int(item.get("quantity", 0))
 			materials[item_id] = qty
+			if qty > 0:
+				inventory_items.append(item.duplicate(true))
 	materials["RATION"] = int(materials.get("FOOD", 0)) + int(materials.get("RATION", 0))
 	materials["RAW_FOOD"] = int(materials.get("FOOD_RAW", 0)) + int(materials.get("RAW_FOOD", 0))
 			
 	var scrolls: Array = data.get("summonScrolls", [])
 	for s in scrolls:
-		if s is Dictionary and str(s.get("scrollType", "")) == "NORMAL":
-			normal_scrolls = int(s.get("quantity", 0))
+		if s is Dictionary:
+			var stype := str(s.get("scrollType", ""))
+			var sqty := int(s.get("quantity", 0))
+			if stype == "NORMAL":
+				normal_scrolls = sqty
+			if sqty > 0:
+				var s_name := "Thiên Thư Triệu Hồi Thường" if stype == "NORMAL" else ("Thiên Thư %s" % stype)
+				summon_scrolls_list.append({
+					"id": "SCROLL_%s" % stype,
+					"itemId": "SCROLL_%s" % stype,
+					"name": s_name,
+					"description": "Dùng tại Triệu Hồi Đàn để triệu hồi Hero mới.",
+					"category": "TICKET",
+					"rarity": 3 if stype == "NORMAL" else 5,
+					"starLevel": 3 if stype == "NORMAL" else 5,
+					"slot": "SCROLL",
+					"quantity": sqty,
+					"canUse": false,
+					"source": "Kho Triệu Hồi",
+				})
 			
 	EventBus.inventory_updated.emit(materials)
 	return true
@@ -273,7 +298,22 @@ static func is_hero_alive(hero: Dictionary) -> bool:
 	return not hero.is_empty() and str(hero.get("state", "")).to_upper() not in ["DEAD", "DISABLED"] and float(hero.get("hp", 1)) > 0
 
 static func is_hero_available(hero: Dictionary) -> bool:
-	return is_hero_alive(hero) and not is_hero_pve_deployed(hero)
+	return is_hero_alive(hero) and not is_hero_pve_deployed(hero) and not bool(hero.get("onExpedition", false))
+
+func refresh_away_heroes() -> void:
+	var res := await ApiClient.get_req("/api/world/heroes/away")
+	away_expedition_hero_ids.clear()
+	if res.get("ok", false):
+		var d = res.get("data")
+		var arr: Array = d if d is Array else (d.get("heroIds", []) if d is Dictionary else [])
+		for item in arr:
+			if item is Dictionary:
+				away_expedition_hero_ids.append(str(item.get("heroId", item.get("id", ""))))
+			else:
+				away_expedition_hero_ids.append(str(item))
+	for h in heroes:
+		if h is Dictionary:
+			h["onExpedition"] = away_expedition_hero_ids.has(str(h.get("id", "")))
 
 static func hero_life_label(hero: Dictionary) -> String:
 	match str(hero.get("state", "")).to_upper():

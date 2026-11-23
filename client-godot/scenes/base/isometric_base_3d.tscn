@@ -258,7 +258,7 @@ anchor_right = 1.0
 offset_left = 14.0
 offset_top = 10.0
 offset_right = -14.0
-offset_bottom = 68.0
+offset_bottom = 98.0
 grow_horizontal = 2
 theme_override_constants/margin_left = 2
 theme_override_constants/margin_top = 2
@@ -373,103 +373,152 @@ text = "EXP: 50%"
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="ResourceHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer" unique_id=1149927589]
+[node name="TopRightVBox" type="VBoxContainer" parent="HUD/TopBar/HBoxContainer" unique_id=1149927580]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ResourceHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox" unique_id=1149927589]
 layout_mode = 2
 theme_override_constants/separation = 8
+alignment = 2
 
-[node name="GemsPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox" unique_id=1334681445]
+[node name="GemsPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox" unique_id=1334681445]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 
-[node name="GemsMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill" unique_id=635165189]
+[node name="GemsMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/GemsPill" unique_id=635165189]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 2
 
-[node name="GemsHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill/GemsMargin" unique_id=1916086381]
+[node name="GemsHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/GemsPill/GemsMargin" unique_id=1916086381]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="GemsIcon" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill/GemsMargin/GemsHBox" unique_id=1974304874]
+[node name="GemsIcon" type="Label" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/GemsPill/GemsMargin/GemsHBox" unique_id=1974304874]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "💎"
 
-[node name="GemsValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GemsPill/GemsMargin/GemsHBox" unique_id=117019537]
+[node name="GemsValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/GemsPill/GemsMargin/GemsHBox" unique_id=117019537]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 13
 text = "0"
 
-[node name="GoldPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox" unique_id=395344038]
+[node name="GoldPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox" unique_id=395344038]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 
-[node name="GoldMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill" unique_id=796509283]
+[node name="GoldMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/GoldPill" unique_id=796509283]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 2
 
-[node name="GoldHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill/GoldMargin" unique_id=2001877899]
+[node name="GoldHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/GoldPill/GoldMargin" unique_id=2001877899]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="GoldIcon" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill/GoldMargin/GoldHBox" unique_id=2058302716]
+[node name="GoldIcon" type="Label" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/GoldPill/GoldMargin/GoldHBox" unique_id=2058302716]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "🪙"
 
-[node name="GoldValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/GoldPill/GoldMargin/GoldHBox" unique_id=654520723]
+[node name="GoldValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/GoldPill/GoldMargin/GoldHBox" unique_id=654520723]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.88, 0.4, 1)
 theme_override_font_sizes/font_size = 13
 text = "0"
 
-[node name="RationPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox" unique_id=203846468]
+[node name="RationPill" type="PanelContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox" unique_id=203846468]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(100, 36)
 layout_mode = 2
 
-[node name="RationMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill" unique_id=1523534550]
+[node name="RationMargin" type="MarginContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/RationPill" unique_id=1523534550]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 2
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 2
 
-[node name="RationHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill/RationMargin" unique_id=972640680]
+[node name="RationHBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/RationPill/RationMargin" unique_id=972640680]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="RationIcon" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill/RationMargin/RationHBox" unique_id=1370068277]
+[node name="RationIcon" type="Label" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/RationPill/RationMargin/RationHBox" unique_id=1370068277]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
 text = "🍖"
 
-[node name="RationValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/ResourceHBox/RationPill/RationMargin/RationHBox" unique_id=1704800044]
+[node name="RationValLabel" type="Label" parent="HUD/TopBar/HBoxContainer/TopRightVBox/ResourceHBox/RationPill/RationMargin/RationHBox" unique_id=1704800044]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.68, 0.45, 1)
 theme_override_font_sizes/font_size = 13
 text = "0"
 
+[node name="EventStripRow" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox" unique_id=1704800101]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 2
+
+[node name="EventButtonsBox" type="HBoxContainer" parent="HUD/TopBar/HBoxContainer/TopRightVBox/EventStripRow" unique_id=1704800102]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AirshipEventBtn" type="Button" parent="HUD/TopBar/HBoxContainer/TopRightVBox/EventStripRow/EventButtonsBox" unique_id=1704800103]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(124, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "🎈 Thương Thuyền"
+
+[node name="QuestEventBtn" type="Button" parent="HUD/TopBar/HBoxContainer/TopRightVBox/EventStripRow/EventButtonsBox" unique_id=1704800105]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "📜 Sự Kiện"
+
+[node name="MailboxEventBtn" type="Button" parent="HUD/TopBar/HBoxContainer/TopRightVBox/EventStripRow/EventButtonsBox" unique_id=1704800104]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "✉️ Hòm Thư"
+
+[node name="EventStripToggleBtn" type="Button" parent="HUD/TopBar/HBoxContainer/TopRightVBox/EventStripRow" unique_id=1704800106]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "▾"
+
 [node name="FloorElevatorPanel" type="PanelContainer" parent="HUD" unique_id=1379900271]
-anchors_preset = 4
-anchor_top = 0.5
-anchor_bottom = 0.5
-offset_left = 14.0
-offset_top = -175.0
-offset_right = 198.0
-offset_bottom = 175.0
-grow_vertical = 2
+unique_name_in_owner = true
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -268.0
+offset_top = -305.0
+offset_right = -14.0
+offset_bottom = -78.0
+grow_horizontal = 0
+grow_vertical = 0
 
 [node name="MarginContainer" type="MarginContainer" parent="HUD/FloorElevatorPanel" unique_id=1058012503]
 layout_mode = 2
@@ -486,7 +535,7 @@ theme_override_constants/separation = 6
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.88, 0.38, 1)
 theme_override_font_sizes/font_size = 13
-text = "🛗 SẢNH ĐA TẦNG (Q/E)"
+text = "🏗️ CÔNG CỤ XÂY DỰNG"
 horizontal_alignment = 1
 
 [node name="FloorButtonsContainer" type="VBoxContainer" parent="HUD/FloorElevatorPanel/MarginContainer/VBoxContainer" unique_id=733627323]
@@ -494,6 +543,12 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 5
+
+[node name="ExpandZoneBtn" type="Button" parent="HUD/FloorElevatorPanel/MarginContainer/VBoxContainer" unique_id=1703011992]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+text = "👑 Mở Rộng Ô"
 
 [node name="InspectorPanel" type="PanelContainer" parent="HUD" unique_id=2069834822]
 unique_name_in_owner = true
@@ -559,74 +614,120 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
+[node name="BottomLeftDock" type="VBoxContainer" parent="HUD" unique_id=482116500]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 14.0
+offset_top = -94.0
+offset_right = 430.0
+offset_bottom = -12.0
+grow_vertical = 0
+theme_override_constants/separation = 6
+
+[node name="StatusToastPanel" type="PanelContainer" parent="HUD/BottomLeftDock" unique_id=482116501]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ToastMargin" type="MarginContainer" parent="HUD/BottomLeftDock/StatusToastPanel" unique_id=482116502]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 4
+
+[node name="StatusBannerLabel" type="Label" parent="HUD/BottomLeftDock/StatusToastPanel/ToastMargin" unique_id=1495223834]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.45, 1)
+theme_override_font_sizes/font_size = 11
+text = "💡 Sảnh Đa Tầng: Dùng Q/E hoặc nút góc trái để đổi tầng, kéo-thả để điều động Tướng."
+text_overrun_behavior = 3
+
+[node name="LeftControlsRow" type="HBoxContainer" parent="HUD/BottomLeftDock" unique_id=482116503]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ViewCycleBtn" type="Button" parent="HUD/BottomLeftDock/LeftControlsRow" unique_id=482116504]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(142, 42)
+layout_mode = 2
+text = "🏰 Tầng 1 ↻"
+
+[node name="ManageFloorHeroesBtn" type="Button" parent="HUD/BottomLeftDock/LeftControlsRow" unique_id=482116505]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(142, 42)
+layout_mode = 2
+text = "👥 Nhân Sự T1"
+
+[node name="ChatBtn" type="Button" parent="HUD/BottomLeftDock/LeftControlsRow" unique_id=482116506]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 42)
+layout_mode = 2
+text = "💬 Chat"
+
 [node name="BottomBar" type="PanelContainer" parent="HUD" unique_id=482116610]
-anchors_preset = 12
+anchors_preset = 3
+anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 14.0
-offset_top = -90.0
+offset_left = -610.0
+offset_top = -72.0
 offset_right = -14.0
 offset_bottom = -12.0
-grow_horizontal = 2
+grow_horizontal = 0
 grow_vertical = 0
 
 [node name="MarginContainer" type="MarginContainer" parent="HUD/BottomBar" unique_id=1942465764]
 layout_mode = 2
-theme_override_constants/margin_left = 14
+theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 6
-theme_override_constants/margin_right = 14
+theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 6
 
 [node name="VBoxContainer" type="VBoxContainer" parent="HUD/BottomBar/MarginContainer" unique_id=1136567119]
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="StatusBannerLabel" type="Label" parent="HUD/BottomBar/MarginContainer/VBoxContainer" unique_id=1495223834]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.85, 0.45, 1)
-theme_override_font_sizes/font_size = 12
-text = "💡 Sảnh Đa Tầng (Ruộng Bậc Thang): Dùng Q/E để đổi tầng, WASD để trượt, chuột để kéo-thả Tướng."
-horizontal_alignment = 1
-text_overrun_behavior = 3
-
 [node name="ActionRow" type="HBoxContainer" parent="HUD/BottomBar/MarginContainer/VBoxContainer" unique_id=96146990]
 layout_mode = 2
-theme_override_constants/separation = 10
-alignment = 1
+theme_override_constants/separation = 8
+alignment = 2
 
 [node name="SummonAltarBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=972825704]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 36)
+custom_minimum_size = Vector2(102, 44)
 layout_mode = 2
-size_flags_horizontal = 3
 text = "✨ Triệu Hồi"
 
 [node name="BarracksBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=311322450]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 36)
+custom_minimum_size = Vector2(102, 44)
 layout_mode = 2
-size_flags_horizontal = 3
-text = "🛡️ Nhà Chiến Lược"
+text = "🛡️ Anh Hùng"
 
-[node name="ExpandZoneBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=1703011992]
+[node name="WarehouseBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=311322451]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 36)
+custom_minimum_size = Vector2(102, 44)
 layout_mode = 2
-size_flags_horizontal = 3
-text = "🏗️ Mở Tầng Kế"
+text = "📦 Nhà Kho"
+
+[node name="BuildDrawerBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=311322452]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(106, 44)
+layout_mode = 2
+text = "🏗️ Xây Dựng"
 
 [node name="CollectAllBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=655900079]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(0, 36)
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 text = "🌾 Thu Hoạch"
 
 [node name="EnterPveBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=1584409842]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 36)
+custom_minimum_size = Vector2(138, 48)
 layout_mode = 2
-size_flags_horizontal = 3
-text = "⚔️ Tháp PvE"
+text = "⚔️ THÁP PvE"

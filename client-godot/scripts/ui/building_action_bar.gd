@@ -200,6 +200,10 @@ func _add_facility_action_button(code: String, _lvl: int) -> void:
 			_add_action_button("🎈", "Cửa hàng", Color(0.95, 0.75, 0.35), func():
 				facility_action_pressed.emit(current_data, "SHOP_AIRSHIP")
 			)
+		"ALLIANCE_HALL":
+			_add_action_button("🏳️", "Mở Liên Minh", Color(0.45, 0.78, 1.0), func():
+				facility_action_pressed.emit(current_data, "ALLIANCE_HALL")
+			)
 		"HERO_CHRONICLE":
 			_add_action_button("📖", "Sử Điện Anh Hùng", Color(0.9, 0.75, 0.35), func():
 				facility_action_pressed.emit(current_data, "HERO_CHRONICLE")
@@ -334,6 +338,7 @@ func _close() -> void:
 func _get_building_icon(code: String) -> String:
 	match code:
 		"SHOP_AIRSHIP": return "🎈"
+		"ALLIANCE_HALL": return "🏳️"
 		"KITCHEN": return "🍖"
 		"MEDICAL": return "✚"
 		"FORGE": return "⚒️"

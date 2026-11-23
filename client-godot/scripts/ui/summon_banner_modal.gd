@@ -11,12 +11,16 @@ signal summon_requested(banner_id: String, banner_type: String, roll_count: int)
 signal exchange_scrolls_requested(amount: int)
 signal closed
 
+const RarityStyleScript = preload("res://scripts/ui/rarity_style.gd")
+
 var _banners: Array = []
 var _selected_banner: Dictionary = {}
+var _busy: bool = false
 
 var _root_vbox: VBoxContainer
 var _resource_lbl: Label
 var _content_slot: Control
+var _history_btn: Button
 
 func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -29,6 +33,7 @@ func setup(banners: Array) -> void:
 	_render_banner_list()
 
 func refresh_resources() -> void:
+	_busy = false
 	if _resource_lbl != null and is_instance_valid(_resource_lbl):
 		_resource_lbl.text = _format_resources_text()
 	if not _selected_banner.is_empty():
@@ -119,6 +124,12 @@ func _build_shell() -> void:
 	_resource_lbl.add_theme_font_size_override("font_size", 13)
 	_resource_lbl.add_theme_color_override("font_color", Color(0.80, 0.92, 1.0))
 	top_bar.add_child(_resource_lbl)
+
+	_history_btn = Button.new()
+	_history_btn.text = "📜 Lịch Sử"
+	_history_btn.custom_minimum_size = Vector2(96, 32)
+	_history_btn.pressed.connect(_open_history_view)
+	top_bar.add_child(_history_btn)
 
 	var close_btn := Button.new()
 	close_btn.text = " ✕ "
@@ -399,8 +410,10 @@ func _render_banner_detail(b: Dictionary) -> void:
 		btn1.text = "💎 Triệu Hồi ×1 (%d Gem)" % cost_per
 		btn1.custom_minimum_size = Vector2(230, 48)
 		btn1.modulate = Color(0.55, 0.90, 1.0)
-		btn1.disabled = GameState.gem_stones < cost_per
+		btn1.disabled = _busy or GameState.gem_stones < cost_per
 		btn1.pressed.connect(func():
+			if _busy: return
+			_busy = true
 			summon_requested.emit(bid, btype, 1)
 			_close()
 		)
@@ -410,8 +423,10 @@ func _render_banner_detail(b: Dictionary) -> void:
 		btn10.text = "🌟 Đại Triệu Hồi ×10 (%s Gem)" % _format_num(cost_per * 10)
 		btn10.custom_minimum_size = Vector2(260, 48)
 		btn10.modulate = Color(1.0, 0.85, 0.35)
-		btn10.disabled = GameState.gem_stones < (cost_per * 10)
+		btn10.disabled = _busy or GameState.gem_stones < (cost_per * 10)
 		btn10.pressed.connect(func():
+			if _busy: return
+			_busy = true
 			summon_requested.emit(bid, btype, 10)
 			_close()
 		)
@@ -421,8 +436,11 @@ func _render_banner_detail(b: Dictionary) -> void:
 		ex_btn.text = "🪙 Đổi 10 Thiên Thư (100,000 Bạc)"
 		ex_btn.custom_minimum_size = Vector2(230, 48)
 		ex_btn.modulate = Color(0.90, 0.75, 0.45)
-		ex_btn.disabled = GameState.silver_coins < 100000
+		ex_btn.disabled = _busy or GameState.silver_coins < 100000
 		ex_btn.pressed.connect(func():
+			if _busy: return
+			_busy = true
+			ex_btn.disabled = true
 			exchange_scrolls_requested.emit(10)
 		)
 		actions.add_child(ex_btn)
@@ -432,8 +450,10 @@ func _render_banner_detail(b: Dictionary) -> void:
 		btn1.text = "📜 Triệu Hồi ×1 (1 Thiên Thư)"
 		btn1.custom_minimum_size = Vector2(215, 48)
 		btn1.modulate = Color(0.45, 0.88, 1.0)
-		btn1.disabled = not can_1
+		btn1.disabled = _busy or not can_1
 		btn1.pressed.connect(func():
+			if _busy: return
+			_busy = true
 			summon_requested.emit(bid, btype, 1)
 			_close()
 		)
@@ -445,12 +465,78 @@ func _render_banner_detail(b: Dictionary) -> void:
 		btn10.text = "🌟 Đại Triệu Hồi ×10 (10 Thiên Thư)"
 		btn10.custom_minimum_size = Vector2(235, 48)
 		btn10.modulate = Color(1.0, 0.85, 0.35)
-		btn10.disabled = not can_10
+		btn10.disabled = _busy or not can_10
 		btn10.pressed.connect(func():
+			if _busy: return
+			_busy = true
 			summon_requested.emit(bid, btype, 10)
 			_close()
 		)
 		actions.add_child(btn10)
+
+func _open_history_view() -> void:
+	_clear_content()
+	var nav := HBoxContainer.new()
+	nav.add_theme_constant_override("separation", 10)
+	_content_slot.add_child(nav)
+
+	var back_btn := Button.new()
+	back_btn.text = "⬅️ Quay Lại Banner"
+	back_btn.custom_minimum_size = Vector2(150, 34)
+	back_btn.pressed.connect(func():
+		if not _selected_banner.is_empty():
+			_render_banner_detail(_selected_banner)
+		else:
+			_render_banner_list()
+	)
+	nav.add_child(back_btn)
+
+	var hdr := Label.new()
+	hdr.text = "📜 LỊCH SỬ TRIỆU HỒI GẦN ĐÂY (TỐI ĐA 50 LẦN)"
+	hdr.add_theme_font_size_override("font_size", 15)
+	hdr.add_theme_color_override("font_color", Color(1.0, 0.88, 0.42))
+	hdr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nav.add_child(hdr)
+
+	var status_lbl := Label.new()
+	status_lbl.text = "Đang tải lịch sử triệu hồi..."
+	status_lbl.add_theme_color_override("font_color", Color(0.75, 0.86, 0.96))
+	_content_slot.add_child(status_lbl)
+
+	var res := await ApiClient.get_req("/api/gacha/history")
+	if not is_instance_valid(self) or not is_instance_valid(status_lbl):
+		return
+	if not res.get("ok", false):
+		status_lbl.text = "❌ Không thể tải lịch sử: " + str(res.get("error", "Lỗi kết nối"))
+		return
+
+	var rows: Array = res.get("data", []) if res.get("data", []) is Array else []
+	if rows.is_empty():
+		status_lbl.text = "Chưa có lượt triệu hồi nào được ghi nhận."
+		return
+	status_lbl.queue_free()
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_content_slot.add_child(scroll)
+
+	var list_vb := VBoxContainer.new()
+	list_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_vb.add_theme_constant_override("separation", 6)
+	scroll.add_child(list_vb)
+
+	for row in rows:
+		if not (row is Dictionary): continue
+		var star := clampi(int(row.get("rarity", 1)), 1, 7)
+		var rname := str(row.get("rewardName", row.get("rewardId", "Phần thưởng")))
+		var rtype := str(row.get("rewardType", "HERO"))
+		var origin := str(row.get("summonOrigin", "NORMAL"))
+		var line := Label.new()
+		line.text = "• [%s] %d★ %s (%s)" % [origin, star, rname, "Anh Hùng" if rtype == "HERO" else "Vật Phẩm"]
+		line.add_theme_font_size_override("font_size", 13)
+		line.add_theme_color_override("font_color", RarityStyleScript.color_for_star(star))
+		list_vb.add_child(line)
 
 func _add_rate_row(grid: GridContainer, label_txt: String, val_txt: String, color: Color) -> void:
 	var l := Label.new()

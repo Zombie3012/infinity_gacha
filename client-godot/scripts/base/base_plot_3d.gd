@@ -266,6 +266,8 @@ func _role_subtitle_for_type(b_type: String, b_lvl: int = 1) -> String:
 	match b_type:
 		"SHOP_AIRSHIP":
 			return "🎈 Cửa hàng • Vật phẩm & Trang bị"
+		"ALLIANCE_HALL":
+			return "🏳️ Hội quán • Liên minh & Thành viên"
 		"HERO_CHRONICLE":
 			return "📖 Tiểu sử • Tưởng niệm • Hồi sinh"
 		"FORGE":
@@ -373,6 +375,29 @@ func _rebuild_structure_mesh(b_type: String, b_lvl: int, b_status: String) -> vo
 	var roof_mat := StandardMaterial3D.new()
 
 	match b_type:
+		"ALLIANCE_HALL":
+			var hall := BoxMesh.new()
+			hall.size = Vector3(1.85, 1.1, 1.65)
+			main_mesh.mesh = hall
+			main_mesh.position.y = 0.55
+			main_mat.albedo_color = Color(0.22, 0.28, 0.42)
+			var dome := CylinderMesh.new()
+			dome.top_radius = 0.25; dome.bottom_radius = 0.92; dome.height = 0.95
+			roof_mesh.mesh = dome
+			roof_mesh.position.y = 1.55
+			roof_mat.albedo_color = Color(0.92, 0.74, 0.24)
+			structure_root.add_child(_make_cyl_part(0.04, 0.04, 1.2, Vector3(0.0, 2.35, 0.0), Color(0.85, 0.72, 0.3)))
+			var flag := MeshInstance3D.new()
+			var flag_box := BoxMesh.new()
+			flag_box.size = Vector3(0.55, 0.35, 0.05)
+			flag.mesh = flag_box
+			flag.position = Vector3(0.28, 2.75, 0.0)
+			var fmat := StandardMaterial3D.new()
+			fmat.albedo_color = Color(0.18, 0.55, 0.95)
+			fmat.emission_enabled = true
+			fmat.emission = Color(0.12, 0.42, 0.85)
+			flag.material_override = fmat
+			structure_root.add_child(flag)
 		"SHOP_AIRSHIP":
 			_airship_root = Node3D.new()
 			_airship_root.name = "Airship"
@@ -775,6 +800,8 @@ func _icon_for_type(b_type: String) -> String:
 	match b_type:
 		"SHOP_AIRSHIP":
 			return "🎈"
+		"ALLIANCE_HALL":
+			return "🏳️"
 		"FORGE":
 			return "⚒️"
 		"TRAINING_CENTER":

@@ -240,6 +240,28 @@ func _render_alchemy() -> void:
 	_production("ALCHEMY_WORKSHOP", "⚗ Sản xuất Đá Cường Hóa")
 	var stock := _section("Kho giả kim")
 	_label(stock, "Đá Cường Hóa: %d\nThuốc điều trị: %d" % [_stock("ENHANCEMENT_STONE"), _stock("MEDICINE")])
+	var card_row := HBoxContainer.new()
+	card_row.add_theme_constant_override("separation", 8)
+	stock.add_child(card_row)
+	var item_card_script = load("res://scripts/ui/universal_item_card.gd")
+	for mat_def in [
+		{"id": "ENHANCEMENT_STONE", "name": "Đá Cường Hóa", "star": 2, "slot": "MATERIAL"},
+		{"id": "MEDICINE", "name": "Thuốc điều trị", "star": 2, "slot": "POTION"},
+		{"id": "MANA_POTION", "name": "Thuốc ma lực", "star": 2, "slot": "POTION"},
+		{"id": "STRENGTH_POTION", "name": "Thuốc cường lực", "star": 3, "slot": "POTION"},
+		{"id": "ALCHEMY_HERB_1", "name": "Dược liệu 1★", "star": 1, "slot": "MATERIAL"},
+	]:
+		var ic: Control = item_card_script.new()
+		ic.setup({
+			"id": mat_def["id"],
+			"itemId": mat_def["id"],
+			"name": mat_def["name"],
+			"starLevel": mat_def["star"],
+			"slot": mat_def["slot"],
+			"quantity": _stock(str(mat_def["id"])),
+			"source": "Đại Sảnh Ma Thuật",
+		}, 0, false)
+		card_row.add_child(ic)
 	var care := _section("Dùng thuốc điều trị", "Dùng 1 thuốc để chữa khẩn cấp cho Hero đang chọn. Thuốc không hồi sinh Hero tử trận.")
 	_button(care, "Chữa trị bằng 1 thuốc", _heal, not _can_develop() or _stock("MEDICINE") < 1 or int(_selected.get("hp", 0)) >= int(_selected.get("maxHp", 1)))
 	var recipes := _section("Chế thuốc", "Mỗi viên: 3 Dược liệu 1★ và 100 bạc. Nghiên cứu công thức tại tab Nghiên cứu.")

@@ -10,6 +10,8 @@ signal closed
 signal hero_rest_toggled(hero_id: String, hero_name: String, is_currently_resting: bool)
 signal squad_rest_requested(is_resting: bool)
 signal feed_hero_requested(hero_id: String, hero_name: String)
+signal housing_assign_requested(building_id: String, hero_id: String, swap_with_hero_id: String)
+signal housing_remove_requested(hero_id: String)
 
 const UniversalHeroCardScript = preload("res://scripts/ui/universal_hero_card.gd")
 const CardGridBrowserScript = preload("res://scripts/ui/card_grid_browser.gd")
@@ -26,6 +28,7 @@ var _title_label: Label
 var _capacity_label: Label
 var _rate_label: Label
 var _ration_label: Label
+var _feedback_label: Label
 var _hero_browser: CardGridBrowser
 var _is_ui_built: bool = false
 
@@ -58,12 +61,26 @@ func setup(b_data: Dictionary) -> void:
 		_build_ui()
 	refresh_ui()
 
+func _is_hero_resting(hero: Dictionary) -> bool:
+	return bool(hero.get("isResting", false)) or str(hero.get("state", "")) == "RESTING"
+
 func refresh_ui() -> void:
 	if not _is_ui_built:
 		return
+	var b_id := str(building_data.get("id", ""))
+	var resident_count := 0
 	var resting_count := 0
 	for h in GameState.heroes:
-		if h is Dictionary and str(h.get("state", "")) == "RESTING":
+		if not (h is Dictionary):
+			continue
+		var hid_b := str(h.get("housingBuildingId", "")) if h.get("housingBuildingId") != null else ""
+		if not b_id.is_empty():
+			if hid_b == b_id:
+				resident_count += 1
+				if _is_hero_resting(h):
+					resting_count += 1
+		elif _is_hero_resting(h):
+			resident_count += 1
 			resting_count += 1
 
 	if _title_label != null:
@@ -73,8 +90,8 @@ func refresh_ui() -> void:
 			_title_label.text = "🏠 DORMITORY – KHU CƯ TRÚ (Lv.%d/3)" % building_level
 
 	if _capacity_label != null:
-		_capacity_label.text = "🛌 Đang nghỉ ngơi: %d / %d Hero" % [resting_count, max_capacity]
-		_capacity_label.modulate = Color(0.4, 0.95, 0.65) if resting_count < max_capacity else Color(1.0, 0.75, 0.3)
+		_capacity_label.text = "🏠 Cư trú: %d / %d (Đang nghỉ: %d)" % [resident_count, max_capacity, resting_count]
+		_capacity_label.modulate = Color(0.4, 0.95, 0.65) if resident_count < max_capacity else Color(1.0, 0.75, 0.3)
 
 	if _rate_label != null:
 		_rate_label.text = "⚡ Tốc độ hồi phục: %.1fx (-%.1f Mệt mỏi/giờ)" % [mult_by_lvl, fat_per_hr]
@@ -84,7 +101,20 @@ func refresh_ui() -> void:
 		_ration_label.text = "🍖 Lương thực: %d" % rations
 
 	if _hero_browser != null:
-		_hero_browser.set_items(GameState.heroes.filter(func(hero): return hero is Dictionary and GameState.is_hero_available(hero)), true)
+		var scoped_items: Array = []
+		for h in GameState.heroes:
+			if not (h is Dictionary) or not GameState.is_hero_available(h):
+				continue
+			var copy: Dictionary = h.duplicate(true)
+			var hid_b := str(h.get("housingBuildingId", "")) if h.get("housingBuildingId") != null else ""
+			var in_this := (not b_id.is_empty() and hid_b == b_id)
+			var in_other := (not b_id.is_empty() and not hid_b.is_empty() and hid_b != b_id)
+			copy["_dorm_target_building_id"] = b_id
+			copy["_dorm_is_resident_here"] = in_this
+			copy["_dorm_in_other_house"] = in_other
+			copy["_dorm_is_resting_here"] = (in_this and _is_hero_resting(h)) if not b_id.is_empty() else _is_hero_resting(h)
+			scoped_items.append(copy)
+		_hero_browser.set_items(scoped_items, true)
 
 func _build_ui() -> void:
 	if _is_ui_built:
@@ -220,39 +250,98 @@ func _build_ui() -> void:
 	_hero_browser.add_extra_action_button("🛏️ Cho Cả Đội PVE Nghỉ", "REST_PVE", Color(0.45, 0.85, 1.0))
 	_hero_browser.add_extra_action_button("🌅 Đánh Thức Tất Cả", "WAKE_ALL", Color(1.0, 0.85, 0.4))
 	_hero_browser.add_extra_action_button("🍖 Cho Ăn Tiếp Tế", "FEED_SELECTED", Color(1.0, 0.65, 0.35))
+	_hero_browser.add_extra_action_button("🔄 Xếp / Đổi Chỗ Nhà", "ASSIGN_HOUSING", Color(0.55, 0.95, 0.72))
+	_hero_browser.add_extra_action_button("🚪 Rút Khỏi Nhà", "REMOVE_HOUSING", Color(0.95, 0.60, 0.55))
 
 	_hero_browser.action_confirmed.connect(_on_browser_action_confirmed)
 	_hero_browser.quick_action_requested.connect(_on_quick_action_requested)
-	_hero_browser.item_selected.connect(_on_card_clicked)
 
 	root_vbox.add_child(_hero_browser)
 
-func _on_card_clicked(hero: Dictionary) -> void:
-	var hid := str(hero.get("id", ""))
-	var hname := str(hero.get("name", "Hero"))
-	var is_resting := str(hero.get("state", "")) == "RESTING"
-	hero_rest_toggled.emit(hid, hname, is_resting)
+	_feedback_label = Label.new()
+	_feedback_label.text = "💡 Chọn Hero rồi nhấn nút «Đổi Trạng Thái Nghỉ» bên dưới."
+	_feedback_label.add_theme_font_size_override("font_size", 13)
+	_feedback_label.add_theme_color_override("font_color", Color(0.75, 0.88, 1.0))
+	_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root_vbox.add_child(_feedback_label)
+
+func set_feedback(message: String, is_error: bool = false) -> void:
+	if _feedback_label != null and is_instance_valid(_feedback_label):
+		_feedback_label.text = message
+		_feedback_label.add_theme_color_override("font_color", Color(1.0, 0.52, 0.48) if is_error else Color(0.48, 0.96, 0.68))
 
 func _on_browser_action_confirmed(selected_heroes: Array) -> void:
-	for h in selected_heroes:
+	var targets := selected_heroes.duplicate()
+	if _hero_browser != null:
+		_hero_browser.clear_selection()
+	for h in targets:
 		if h is Dictionary:
+			if bool(h.get("_dorm_in_other_house", false)):
+				set_feedback("❌ [%s] đang ở nhà khác! Hãy dùng «🔄 Xếp / Đổi Chỗ Nhà» để chuyển sang đây trước." % str(h.get("name", "Hero")), true)
+				continue
 			var hid := str(h.get("id", ""))
 			var hname := str(h.get("name", "Hero"))
-			var is_resting := str(h.get("state", "")) == "RESTING"
+			var is_resting := bool(h.get("_dorm_is_resting_here", _is_hero_resting(h)))
 			hero_rest_toggled.emit(hid, hname, is_resting)
 
 func _on_quick_action_requested(action_code: String, selected_heroes: Array) -> void:
 	match action_code:
 		"REST_PVE":
+			if _hero_browser != null:
+				_hero_browser.clear_selection()
 			squad_rest_requested.emit(true)
 		"WAKE_ALL":
+			if _hero_browser != null:
+				_hero_browser.clear_selection()
 			squad_rest_requested.emit(false)
 		"FEED_SELECTED":
-			for h in selected_heroes:
+			var targets := selected_heroes.duplicate()
+			if _hero_browser != null:
+				_hero_browser.clear_selection()
+			for h in targets:
 				if h is Dictionary:
 					var hid := str(h.get("id", ""))
 					var hname := str(h.get("name", "Hero"))
 					feed_hero_requested.emit(hid, hname)
+		"ASSIGN_HOUSING":
+			var b_id := str(building_data.get("id", ""))
+			if b_id.is_empty():
+				set_feedback("❌ Không xác định được ID công trình cư trú.", true)
+				return
+			var targets := selected_heroes.duplicate()
+			if _hero_browser != null:
+				_hero_browser.clear_selection()
+			if targets.is_empty():
+				set_feedback("💡 Chọn 1 Hero ở ngoài (hoặc chọn 1 Hero ở ngoài + 1 Hero đang ở trong nhà để Đổi Chỗ).", true)
+				return
+			var inside_ids: Array[String] = []
+			var outside_ids: Array[String] = []
+			for h in targets:
+				if not (h is Dictionary):
+					continue
+				var hid := str(h.get("id", ""))
+				var cur_b := str(h.get("housingBuildingId", "")) if h.get("housingBuildingId") != null else ""
+				if cur_b == b_id:
+					inside_ids.append(hid)
+				else:
+					outside_ids.append(hid)
+			if outside_ids.size() == 1 and inside_ids.size() == 1:
+				housing_assign_requested.emit(b_id, outside_ids[0], inside_ids[0])
+			elif not outside_ids.is_empty():
+				for oid in outside_ids:
+					housing_assign_requested.emit(b_id, oid, "")
+			else:
+				set_feedback("💡 Các Hero đã chọn đều đang ở trong nhà này rồi.", true)
+		"REMOVE_HOUSING":
+			var targets := selected_heroes.duplicate()
+			if _hero_browser != null:
+				_hero_browser.clear_selection()
+			if targets.is_empty():
+				set_feedback("💡 Chọn Hero cần rút ra khỏi nhà.", true)
+				return
+			for h in targets:
+				if h is Dictionary:
+					housing_remove_requested.emit(str(h.get("id", "")))
 
 func _on_close_pressed() -> void:
 	closed.emit()

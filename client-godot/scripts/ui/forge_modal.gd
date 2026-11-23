@@ -13,7 +13,7 @@ signal enhance_requested(item_id: String, item_name: String)
 signal fuse_requested(template_code: String, star_level: int, item_name: String)
 
 const UniversalItemCardScript = preload("res://scripts/ui/universal_item_card.gd")
-const CardGridBrowserScript = preload("res://scripts/ui/card_grid_browser.gd")
+const ItemGridBrowserScript = preload("res://scripts/ui/item_grid_browser.gd")
 
 var building_data: Dictionary = {}
 var building_level: int = 1
@@ -40,7 +40,7 @@ var _craft_pill_idx: int = 0
 var _craft_search_query: String = ""
 
 # Tab 1: Enhancement
-var _enh_browser: CardGridBrowser
+var _enh_browser
 var _selected_enh_item: Dictionary = {}
 var _enh_detail_box: PanelContainer
 var _enh_preview_label: Label
@@ -567,12 +567,12 @@ func _build_enhance_tab_ui(deck: Control) -> void:
 	deck.add_child(enh_hbox)
 	_tab_containers.append(enh_hbox)
 
-	# Left / Center Area: CardGridBrowser for Equipment Items
-	_enh_browser = CardGridBrowserScript.new()
-	_enh_browser.browser_type = CardGridBrowserScript.BrowserType.ITEM
+	# Left / Center Area: ItemGridBrowser for Equipment Items
+	_enh_browser = ItemGridBrowserScript.new()
 	_enh_browser.grid_columns = 3
 	_enh_browser.card_selectable = true
 	_enh_browser.multi_select_enabled = false
+	_enh_browser.show_action_bar = false
 	_enh_browser.item_context_mode = UniversalItemCardScript.ContextMode.FORGE_ENHANCE
 	_enh_browser.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_enh_browser.size_flags_vertical = Control.SIZE_EXPAND_FILL

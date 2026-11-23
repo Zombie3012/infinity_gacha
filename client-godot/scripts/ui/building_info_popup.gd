@@ -7,6 +7,7 @@ extends Control
 
 signal closed
 signal demolish_requested(building_data: Dictionary)
+signal worker_remove_requested(building_id: String, hero_id: String, hero_name: String)
 
 var building_data: Dictionary = {}
 var building_code: String = ""
@@ -163,6 +164,87 @@ func _build_ui() -> void:
 		row.add_child(v_lbl)
 		stats_vbox.add_child(row)
 
+	if building_code in ["HOUSE", "PARTY_MANSION"]:
+		var occ_title := Label.new()
+		occ_title.text = "🛏️ DANH SÁCH HERO ĐANG Ở BÊN TRONG"
+		occ_title.add_theme_font_size_override("font_size", 13)
+		occ_title.add_theme_color_override("font_color", Color(0.55, 0.90, 1.0))
+		vbox.add_child(occ_title)
+
+		var occ_scroll := ScrollContainer.new()
+		occ_scroll.custom_minimum_size = Vector2(0, 110)
+		occ_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		vbox.add_child(occ_scroll)
+
+		var occ_list := VBoxContainer.new()
+		occ_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		occ_list.add_theme_constant_override("separation", 4)
+		occ_scroll.add_child(occ_list)
+
+		var resting_heroes := _get_resting_heroes()
+		if resting_heroes.is_empty():
+			var empty_lbl := Label.new()
+			empty_lbl.text = "Hiện chưa có Hero nào đang nghỉ ngơi bên trong."
+			empty_lbl.add_theme_font_size_override("font_size", 12)
+			empty_lbl.add_theme_color_override("font_color", Color(0.65, 0.72, 0.82))
+			occ_list.add_child(empty_lbl)
+		else:
+			for h in resting_heroes:
+				var h_lbl := Label.new()
+				var rest_tag := "💤 Đang nghỉ" if (bool(h.get("isResting", false)) or str(h.get("state", "")) == "RESTING") else "Thức"
+				h_lbl.text = "• %s (%d★ · Lv.%d) — %s · Mệt mỏi: %d%%" % [
+					str(h.get("name", "Hero")),
+					int(h.get("rarity", 1)),
+					int(h.get("level", 1)),
+					rest_tag,
+					int(float(h.get("fatigue", 0)))
+				]
+				h_lbl.add_theme_font_size_override("font_size", 12)
+				h_lbl.add_theme_color_override("font_color", Color(0.82, 0.94, 1.0))
+				occ_list.add_child(h_lbl)
+
+	var workers_val: Variant = building_data.get("workers", [])
+	var workers_arr: Array = workers_val if workers_val is Array else []
+	var max_w := int(building_data.get("maxWorkers", 0))
+	if max_w > 0 or not workers_arr.is_empty():
+		var w_title := Label.new()
+		w_title.text = "👷 NHÂN CÔNG ĐANG LÀM VIỆC (%d / %d)" % [workers_arr.size(), maxi(max_w, workers_arr.size())]
+		w_title.add_theme_font_size_override("font_size", 13)
+		w_title.add_theme_color_override("font_color", Color(0.55, 0.96, 0.72))
+		vbox.add_child(w_title)
+
+		if workers_arr.is_empty():
+			var no_w := Label.new()
+			no_w.text = "Chưa có Hero nào được phân công."
+			no_w.add_theme_font_size_override("font_size", 12)
+			no_w.add_theme_color_override("font_color", Color(0.65, 0.72, 0.82))
+			vbox.add_child(no_w)
+		else:
+			var b_id := str(building_data.get("id", ""))
+			for w in workers_arr:
+				if not (w is Dictionary):
+					continue
+				var wid := str(w.get("heroInstanceId", w.get("heroId", "")))
+				var wname := str(w.get("heroName", w.get("name", "Hero")))
+				var w_row := HBoxContainer.new()
+				w_row.add_theme_constant_override("separation", 8)
+				vbox.add_child(w_row)
+				var w_lbl := Label.new()
+				w_lbl.text = "• %s" % wname
+				w_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				w_lbl.add_theme_font_size_override("font_size", 12)
+				w_lbl.add_theme_color_override("font_color", Color(0.88, 0.95, 1.0))
+				w_row.add_child(w_lbl)
+				var rem_btn := Button.new()
+				rem_btn.text = "🚪 Giải phóng"
+				rem_btn.custom_minimum_size = Vector2(110, 28)
+				rem_btn.modulate = Color(1.0, 0.72, 0.55)
+				rem_btn.pressed.connect(func():
+					worker_remove_requested.emit(b_id, wid, wname)
+					_close()
+				)
+				w_row.add_child(rem_btn)
+
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(spacer)
@@ -266,11 +348,17 @@ func _get_building_stats_display(code: String, lvl: int) -> Array[Dictionary]:
 		"HOUSE":
 			var cap := 5 if lvl <= 1 else (7 if lvl == 2 else 10)
 			var mult := 1.0 if lvl <= 1 else (1.5 if lvl == 2 else 2.0)
-			list.append({"label": "Sức chứa cư trú:", "val": "%d Người" % cap, "col": Color(0.65, 0.85, 1.0)})
+			var resting_cnt := _get_resting_heroes().size()
+			list.append({"label": "Đang nghỉ ngơi bên trong:", "val": "%d / %d Người" % [resting_cnt, cap], "col": Color(0.55, 0.90, 1.0)})
+			list.append({"label": "Sức chứa cư trú:", "val": "%d Người (Lv.1: 5 · Lv.2: 7 · Lv.3: 10)" % cap, "col": Color(0.65, 0.85, 1.0)})
 			list.append({"label": "Tốc độ hồi phục thể lực:", "val": "%.1fx (-%.1f Mệt mỏi/giờ)" % [mult, 15.0 * mult], "col": Color(0.4, 0.95, 0.6)})
+			list.append({"label": "Chức năng:", "val": "Giảm mệt mỏi & phục hồi sức bền", "col": Color(1.0, 0.88, 0.45)})
 		"PARTY_MANSION":
+			var resting_cnt := _get_resting_heroes().size()
+			list.append({"label": "Đang nghỉ ngơi bên trong:", "val": "%d / 5 Người" % resting_cnt, "col": Color(0.55, 0.90, 1.0)})
 			list.append({"label": "Sức chứa tổ đội:", "val": "5 Người (Cố định)", "col": Color(0.65, 0.85, 1.0)})
-			list.append({"label": "Tốc độ hồi phục thể lực:", "val": "4.0x (-60 Mệt mỏi/giờ)", "col": Color(0.4, 0.95, 0.6)})
+			list.append({"label": "Tốc độ hồi phục thể lực:", "val": "4.0x (-60.0 Mệt mỏi/giờ)", "col": Color(0.4, 0.95, 0.6)})
+			list.append({"label": "Chức năng:", "val": "Biệt thự cao cấp hồi phục siêu tốc cho tổ đội", "col": Color(1.0, 0.88, 0.45)})
 		"FORGE":
 			list.append({"label": "Cấp độ lò rèn:", "val": "Cấp %d / 3" % lvl, "col": Color(1.0, 0.85, 0.4)})
 			list.append({"label": "Thợ rèn phụ trách:", "val": "%d Hero" % clampi(lvl, 1, 3), "col": Color(0.65, 0.85, 1.0)})
@@ -305,6 +393,20 @@ func _get_building_stats_display(code: String, lvl: int) -> Array[Dictionary]:
 		_:
 			list.append({"label": "Cấp công trình:", "val": "Cấp %d" % lvl, "col": Color(0.4, 0.95, 0.6)})
 	return list
+
+func _get_resting_heroes() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var b_id := str(building_data.get("id", ""))
+	for h in GameState.heroes:
+		if not (h is Dictionary):
+			continue
+		var hid_building := str(h.get("housingBuildingId", "")) if h.get("housingBuildingId") != null else ""
+		if not b_id.is_empty():
+			if hid_building == b_id:
+				result.append(h)
+		elif bool(h.get("isResting", false)) or str(h.get("state", "")) == "RESTING":
+			result.append(h)
+	return result
 
 func _format_num(val: int) -> String:
 	if val >= 1_000_000:

@@ -4,7 +4,10 @@ import {
   applyActivity,
   applyDrift,
   baseFoodConsumption,
+  checkActivityRefusal,
   fatigueState,
+  housingCapacityFor,
+  housingRecoveryMultiplierFor,
   hungerState,
   isImmobilised,
   rationsFor,
@@ -49,6 +52,31 @@ test('DM-09 Survival - hunger tracking', async (t) => {
     assert.equal(isImmobilised(100, 10), true);
     assert.equal(isImmobilised(10, 100), true);
     assert.equal(isImmobilised(99, 99), false);
+  });
+
+  await t.test('activity refusal thresholds for Tower (60), Dungeon (80) and Any (90)', () => {
+    assert.equal(checkActivityRefusal(59, 59, 'TOWER').refused, false);
+    assert.deepEqual(checkActivityRefusal(10, 60, 'TOWER'), { refused: true, reason: 'FATIGUE', threshold: 60 });
+    assert.deepEqual(checkActivityRefusal(60, 10, 'TOWER'), { refused: true, reason: 'HUNGER', threshold: 60 });
+
+    assert.equal(checkActivityRefusal(79, 79, 'DUNGEON').refused, false);
+    assert.deepEqual(checkActivityRefusal(10, 80, 'DUNGEON'), { refused: true, reason: 'FATIGUE', threshold: 80 });
+    assert.deepEqual(checkActivityRefusal(80, 10, 'DUNGEON'), { refused: true, reason: 'HUNGER', threshold: 80 });
+
+    assert.equal(checkActivityRefusal(89, 89, 'ANY').refused, false);
+    assert.deepEqual(checkActivityRefusal(10, 90, 'ANY'), { refused: true, reason: 'FATIGUE', threshold: 90 });
+    assert.deepEqual(checkActivityRefusal(90, 10, 'ANY'), { refused: true, reason: 'HUNGER', threshold: 90 });
+  });
+
+  await t.test('housing capacities and recovery multipliers for Dormitory and Party Mansion', () => {
+    assert.equal(housingCapacityFor('HOUSE', 1), 5);
+    assert.equal(housingCapacityFor('HOUSE', 2), 7);
+    assert.equal(housingCapacityFor('HOUSE', 3), 10);
+    assert.equal(housingCapacityFor('PARTY_MANSION', 1), 5);
+    assert.equal(housingRecoveryMultiplierFor('HOUSE', 1), 1.0);
+    assert.equal(housingRecoveryMultiplierFor('HOUSE', 2), 1.5);
+    assert.equal(housingRecoveryMultiplierFor('HOUSE', 3), 2.0);
+    assert.equal(housingRecoveryMultiplierFor('PARTY_MANSION', 1), 4.0);
   });
 });
 

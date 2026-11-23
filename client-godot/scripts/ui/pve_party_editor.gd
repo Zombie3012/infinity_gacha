@@ -48,82 +48,120 @@ func _ready() -> void:
 	EventBus.heroes_updated.connect(_on_heroes_updated)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+
 	var backdrop := ColorRect.new()
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	backdrop.color = Color(0.015, 0.025, 0.04, 0.9)
+	backdrop.color = Color(0.015, 0.025, 0.04, 0.90)
 	add_child(backdrop)
+
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
-	var panel := Ui.panel(center, 990)
-	Ui.label(panel, "CHUẨN BỊ ĐỘI CHINH PHẠT", 22, Ui.GOLD)
-	Ui.label(panel, "Chọn tối đa 5 Hero, xếp vị trí và đặt chiến thuật trước khi triển khai.", 14, Ui.MUTED)
+
+	var panel := Ui.glass_panel(center, Ui.GOLD, 14, 18, 16)
+	panel.get_parent().custom_minimum_size.x = 1010
+
+	# Header Row: Title + Party Name Input + Hero Count Badge
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	panel.add_child(header)
+
+	var title_col := VBoxContainer.new()
+	title_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_col.add_theme_constant_override("separation", 2)
+	header.add_child(title_col)
+	Ui.label(title_col, "⚔️ CHUẨN BỊ ĐỘI CHINH PHẠT", 21, Ui.GOLD)
+	Ui.label(title_col, "Chọn tối đa 5 Hero, xếp vị trí đội hình 3×3 và thiết lập thứ tự kỹ năng.", 13, Ui.MUTED)
+
 	_name_input = LineEdit.new()
-	_name_input.placeholder_text = "Tên đội"
+	_name_input.placeholder_text = "Nhập tên đội..."
 	_name_input.max_length = 60
+	_name_input.custom_minimum_size = Vector2(260, 36)
 	_name_input.text = str(party_data.get("name", ""))
-	panel.add_child(_name_input)
+	header.add_child(_name_input)
+
+	var count_pill := Ui.badge(header, "0 / 5 Hero", Color("1b3536"), Ui.TEAL, Ui.TEAL, 13)
+	_count_label = count_pill.get_child(0) as Label
+
+	# Main 3-Column Body
 	var body := HBoxContainer.new()
-	body.add_theme_constant_override("separation", 16)
+	body.add_theme_constant_override("separation", 14)
 	panel.add_child(body)
-	var left := VBoxContainer.new()
-	left.custom_minimum_size.x = 285
-	body.add_child(left)
-	_count_label = Ui.label(left, "", 14, Ui.TEAL)
+
+	# Left Card: Hero Roster
+	var left_card := Ui.card(body, Ui.CARD, Ui.BORDER)
+	left_card.custom_minimum_size.x = 290
+	Ui.label(left_card, "1. DANH SÁCH HERO", 13, Ui.GOLD)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(285, 350)
+	scroll.custom_minimum_size = Vector2(280, 360)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	left.add_child(scroll)
+	left_card.add_child(scroll)
 	_roster_box = VBoxContainer.new()
 	_roster_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_roster_box.add_theme_constant_override("separation", 4)
 	scroll.add_child(_roster_box)
-	var middle := VBoxContainer.new()
-	middle.custom_minimum_size.x = 325
-	body.add_child(middle)
-	Ui.label(middle, "HÀNG TRƯỚC — ĐỐI DIỆN KẺ ĐỊCH", 13, Ui.GOLD)
+
+	# Middle Card: 3x3 Formation Grid
+	var mid_card := Ui.card(body, Ui.CARD, Ui.BORDER)
+	mid_card.custom_minimum_size.x = 340
+	Ui.label(mid_card, "2. ĐỘI HÌNH 3×3", 13, Ui.GOLD)
+	Ui.label(mid_card, "▲ HÀNG TRƯỚC — ĐỐI DIỆN KẺ ĐỊCH", 12, Ui.TEAL)
 	_grid = GridContainer.new()
 	_grid.columns = 3
-	_grid.add_theme_constant_override("h_separation", 6)
-	_grid.add_theme_constant_override("v_separation", 6)
-	middle.add_child(_grid)
-	Ui.label(middle, "Hàng giữa / Hàng sau", 13, Ui.MUTED)
-	var hint := Ui.label(middle, "Bấm vào một ô để chọn hoặc đổi vị trí Hero.\nÔ trống không cộng chỉ số.", 13, Ui.MUTED)
+	_grid.add_theme_constant_override("h_separation", 8)
+	_grid.add_theme_constant_override("v_separation", 8)
+	mid_card.add_child(_grid)
+	Ui.label(mid_card, "▼ HÀNG GIỮA / HÀNG SAU", 12, Ui.MUTED)
+	var hint := Ui.label(mid_card, "Bấm ô để chọn hoặc đổi vị trí Hero. Ô trống không cộng chỉ số.", 12, Ui.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var right := VBoxContainer.new()
-	right.custom_minimum_size.x = 290
-	body.add_child(right)
-	Ui.label(right, "ƯU TIÊN MỤC TIÊU", 14, Ui.GOLD)
+
+	# Right Card: Tactics, Consumables & Skill Order
+	var right_card := Ui.card(body, Ui.CARD, Ui.BORDER)
+	right_card.custom_minimum_size.x = 310
+	Ui.label(right_card, "3. CHIẾN THUẬT & KỸ NĂNG", 13, Ui.GOLD)
 	_priority = OptionButton.new()
-	_priority.add_item("Đánh hàng trước")
-	_priority.add_item("Đánh mục tiêu ít máu nhất")
-	_priority.add_item("Đánh mục tiêu mạnh nhất")
+	_priority.custom_minimum_size.y = 32
+	_priority.add_item("Ưu tiên: Đánh hàng trước")
+	_priority.add_item("Ưu tiên: Mục tiêu ít máu nhất")
+	_priority.add_item("Ưu tiên: Mục tiêu mạnh nhất")
 	var selected_priority := str(party_data.get("plan", {}).get("targetPriority", "FRONTLINE")) if party_data.get("plan") is Dictionary else "FRONTLINE"
 	_priority.select(maxi(0, ["FRONTLINE", "LOWEST_HP", "HIGHEST_ATK"].find(selected_priority)))
-	right.add_child(_priority)
+	right_card.add_child(_priority)
+
 	_battle_mode = OptionButton.new()
-	_battle_mode.add_item("Tự động giao chiến")
-	_battle_mode.add_item("Thủ công • 10 giây/lượt")
+	_battle_mode.custom_minimum_size.y = 32
+	_battle_mode.add_item("Chế độ: Tự động giao chiến")
+	_battle_mode.add_item("Chế độ: Thủ công (10 giây/lượt)")
 	var mode_plan: Dictionary = party_data.get("plan") if party_data.get("plan") is Dictionary else {}
 	_battle_mode.select(1 if mode_plan.get("battleMode", "AUTO") == "MANUAL" else 0)
-	right.add_child(_battle_mode)
+	right_card.add_child(_battle_mode)
+
 	var skill_scroll := ScrollContainer.new()
-	skill_scroll.custom_minimum_size = Vector2(290, 270)
+	skill_scroll.custom_minimum_size = Vector2(296, 240)
 	skill_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	right.add_child(skill_scroll)
+	right_card.add_child(skill_scroll)
 	_skill_box = VBoxContainer.new()
 	_skill_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_skill_box.add_theme_constant_override("separation", 6)
 	skill_scroll.add_child(_skill_box)
-	var info := Ui.label(right, "Chọn chế độ trước khi triển khai.\nThủ công: 10 giây mỗi lượt; hết giờ tự đánh.", 13, Ui.MUTED)
+
+	var info := Ui.label(right_card, "Thủ công: 10 giây mỗi lượt; hết giờ tự đánh.", 12, Ui.MUTED)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var actions := HBoxContainer.new()
-	_feedback = Ui.label(panel, "", 13, Color("ffb49a"))
+
+	_feedback = Ui.label(panel, "", 13, Ui.DANGER)
 	_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 10)
 	panel.add_child(actions)
-	_save_button = Ui.button(actions, "Lưu đội hình & chiến thuật", _on_save, true)
+	_save_button = Ui.button(actions, "💾 Lưu đội hình & chiến thuật", _on_save, true, "gold")
 	_save_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_retry_button = Ui.button(actions, "Thử lại lệnh", func(): retry_requested.emit(), true)
+	_save_button.custom_minimum_size.y = 40
+	_retry_button = Ui.button(actions, "Thử lại lệnh", func(): retry_requested.emit(), true, "danger")
 	_retry_button.visible = false
-	_close_button = Ui.button(actions, "Đóng", func(): closed.emit(); queue_free())
+	_close_button = Ui.button(actions, "Đóng", func(): closed.emit(); queue_free(), false, "ghost")
+	_close_button.custom_minimum_size = Vector2(100, 40)
+
 	_build_roster()
 	if not _hero_ids.is_empty():
 		_focused_hero = str(_hero_ids[0])
@@ -137,15 +175,26 @@ func _build_roster() -> void:
 			continue
 		var hero_id := str(hero.get("id", ""))
 		var state_value := str(hero.get("state", ""))
+		var is_resting := bool(hero.get("isResting", false))
+		var is_hungry := float(hero.get("hunger", 0.0)) >= 60.0
+		var is_tired := float(hero.get("fatigue", 0.0)) >= 60.0
+		var status_suffix := ""
+		if is_resting:
+			status_suffix = " [Đang nghỉ]"
+		elif is_hungry:
+			status_suffix = " [Đói ≥60%]"
+		elif is_tired:
+			status_suffix = " [Mệt ≥60%]"
 		var check := CheckBox.new()
-		check.text = "%s · %d★ Lv.%d" % [str(hero.get("name", "Hero")), int(hero.get("rarity", 1)), int(hero.get("level", 1))]
+		check.text = "%s · %d★ Lv.%d%s" % [str(hero.get("name", "Hero")), int(hero.get("rarity", 1)), int(hero.get("level", 1)), status_suffix]
 		check.clip_text = true
-		check.custom_minimum_size.x = 275
-		check.tooltip_text = "%s · %s" % [str(hero.get("name", "")), state_value]
+		check.custom_minimum_size = Vector2(270, 30)
+		check.tooltip_text = "%s · %s%s" % [str(hero.get("name", "")), state_value, status_suffix]
 		check.button_pressed = _hero_ids.has(hero_id)
-		check.disabled = (state_value in ["DEAD", "DISABLED"] or reserved.has(hero_id)) and not check.button_pressed
+		check.disabled = (state_value in ["DEAD", "DISABLED"] or reserved.has(hero_id) or is_resting or is_hungry or is_tired) and not check.button_pressed
 		if reserved.has(hero_id):
 			check.tooltip_text += " — Đang được triển khai"
+			check.modulate = Color(0.75, 0.80, 0.88, 0.7)
 		check.toggled.connect(func(selected: bool): _toggle_hero(hero_id, selected))
 		_roster_box.add_child(check)
 		_hero_checks[hero_id] = check
@@ -191,11 +240,15 @@ func _render_formation() -> void:
 	for cell in range(9):
 		var hero_id := str(_slots.get(cell, ""))
 		var hero: Dictionary = GameState.get_hero_by_id(hero_id)
-		var caption := str(hero.get("name", "Ô trống")) if not hero_id.is_empty() else "Ô trống"
-		var button := Ui.button(_grid, caption, func(): _choose_cell(cell), hero_id == _focused_hero and not hero_id.is_empty())
-		button.custom_minimum_size = Vector2(104, 75)
+		var caption := "Trống"
+		if not hero_id.is_empty():
+			caption = "%s\n%d★ Lv.%d" % [str(hero.get("name", "Hero")), int(hero.get("rarity", 1)), int(hero.get("level", 1))]
+		var is_focused := (hero_id == _focused_hero and not hero_id.is_empty())
+		var tone := "gold" if is_focused else ("accent" if not hero_id.is_empty() else "ghost")
+		var button := Ui.button(_grid, caption, func(): _choose_cell(cell), is_focused, tone)
+		button.custom_minimum_size = Vector2(104, 78)
 		button.clip_text = true
-		button.tooltip_text = "Hàng %d · Cột %d\n%s" % [cell / 3 + 1, cell % 3 + 1, caption]
+		button.tooltip_text = "Hàng %d · Cột %d\n%s" % [cell / 3 + 1, cell % 3 + 1, str(hero.get("name", "Ô trống"))]
 
 func _choose_cell(cell: int) -> void:
 	var menu := PopupMenu.new()
@@ -236,13 +289,13 @@ func _render_skills() -> void:
 	heading.clip_text = true
 	heading.tooltip_text = str(hero.get("name", ""))
 	if not hero.is_empty():
-		Ui.button(_skill_box, "Túi tiêu hao • 5 ô", func():
+		Ui.button(_skill_box, "🎒 Túi tiêu hao • 5 ô", func():
 			var editor = preload("res://scripts/ui/pve_consumable_editor.gd").new()
 			editor.config = _loadouts.get(_focused_hero, {}).duplicate(true)
 			var hero_id := _focused_hero
 			editor.configured.connect(func(config): _loadouts[hero_id] = config)
 			add_child(editor)
-		)
+		, true, "accent")
 	var skills: Array = hero.get("skills", []).filter(func(skill): return bool(skill.get("isUnlocked", false)))
 	var available: Array = skills.map(func(skill): return str(skill.get("code", "")))
 	var ordered: Array = []
@@ -258,19 +311,22 @@ func _render_skills() -> void:
 		return
 	for index in range(ordered.size()):
 		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
 		_skill_box.add_child(row)
 		var skill_name := str(ordered[index])
 		for skill in skills:
 			if str(skill.get("code", "")) == skill_name:
 				skill_name = str(skill.get("name", skill_name))
-		var label := Ui.label(row, "%d. %s" % [index + 1, skill_name], 12)
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		label.clip_text = true
-		var up := Ui.button(row, "↑", func(): _move_skill(index, -1))
+		var lbl := Ui.label(row, "#%d %s" % [index + 1, skill_name], 12, Ui.TEXT)
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lbl.clip_text = true
+		var up := Ui.button(row, "↑", func(): _move_skill(index, -1), false, "ghost")
+		up.custom_minimum_size = Vector2(30, 28)
 		up.disabled = index == 0
-		var down := Ui.button(row, "↓", func(): _move_skill(index, 1))
+		var down := Ui.button(row, "↓", func(): _move_skill(index, 1), false, "ghost")
+		down.custom_minimum_size = Vector2(30, 28)
 		down.disabled = index == ordered.size() - 1
-	Ui.label(_skill_box, "Kỹ năng chưa sẵn sàng sẽ được bỏ qua.\nHero hồi máu tự chọn đồng đội yếu nhất.", 12, Ui.MUTED)
+	Ui.label(_skill_box, "Kỹ năng chưa sẵn sàng sẽ được bỏ qua.\nHero hồi máu tự chọn đồng đội yếu nhất.", 11, Ui.MUTED)
 
 func _move_skill(index: int, direction: int) -> void:
 	var order: Array = _skill_orders.get(_focused_hero, [])

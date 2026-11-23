@@ -10,7 +10,7 @@ signal item_unequipped(item_id: String, item_name: String)
 signal quick_unequip_requested(hero_id: String, hero_name: String)
 signal closed
 
-const CardGridBrowserScript = preload("res://scripts/ui/card_grid_browser.gd")
+const ItemGridBrowserScript = preload("res://scripts/ui/item_grid_browser.gd")
 const UniversalItemCardScript = preload("res://scripts/ui/universal_item_card.gd")
 const UniversalHeroCardScript = preload("res://scripts/ui/universal_hero_card.gd")
 const HeroPickerModalScript = preload("res://scripts/ui/hero_picker_modal.gd")
@@ -18,13 +18,26 @@ const HeroPickerModalScript = preload("res://scripts/ui/hero_picker_modal.gd")
 var target_hero_id: String = ""
 var target_hero_name: String = "Hero"
 var selected_item_data: Dictionary = {}
+var active_category: String = "ALL"
+
+const WAREHOUSE_CATEGORIES: Array = [
+	{"id": "ALL", "label": "📦 Tất cả", "title": "Toàn bộ Vật phẩm trong Kho", "pills": ["Tất cả", "Trang bị", "Tiêu hao", "Nguyên liệu", "Phát triển", "Lương thực & Vé"]},
+	{"id": "EQUIPMENT", "label": "⚔️ Trang bị", "title": "Trang bị & Thánh Di Vật", "pills": ["Tất cả", "Chưa trang bị", "Vũ khí", "Giáp", "Trang sức", "Đang mặc"]},
+	{"id": "CONSUMABLE", "label": "🧪 Tiêu hao & Thuốc", "title": "Thuốc Hồi phục & Dược phẩm", "pills": ["Tất cả", "Thuốc hồi phục", "Dược phẩm & Hỗ trợ"]},
+	{"id": "MATERIAL", "label": "🪨 Nguyên liệu", "title": "Khoáng sản & Nguyên liệu Chế tạo", "pills": ["Tất cả", "Gỗ & Đá & Sắt", "Nguyên liệu chế tạo"]},
+	{"id": "DEVELOPMENT", "label": "📘 Phát triển & Sách", "title": "Sách EXP, Ấn & Lõi Thức tỉnh", "pills": ["Tất cả", "Sách EXP", "Đột phá & Thức tỉnh"]},
+	{"id": "MISC", "label": "🍖 Lương thực & Khác", "title": "Lương thực & Thiên Thư Triệu Hồi", "pills": ["Tất cả", "Lương thực", "Thiên Thư & Vé"]},
+]
 
 var browser
+var category_tabs_row: HBoxContainer
+var _category_buttons: Dictionary = {}
 var title_label: Label
 var hero_badge_label: Label
 var item_detail_label: Label
 var equip_action_btn: Button
 var unequip_action_btn: Button
+var pickup_drops_btn: Button
 
 func _init() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -33,6 +46,7 @@ func _init() -> void:
 func _ready() -> void:
 	_build_ui()
 	EventBus.heroes_updated.connect(func(_heroes: Array): setup(target_hero_id))
+	EventBus.inventory_updated.connect(func(_m: Dictionary): refresh_items())
 	_populate_browser()
 
 func setup(hero_id: String = "") -> void:
@@ -109,13 +123,13 @@ func _build_ui() -> void:
 	header_row.add_child(title_box)
 
 	title_label = Label.new()
-	title_label.text = "📦 KHO TRANG BỊ & THÁNH DI VẬT (WAREHOUSE)"
+	title_label.text = "📦 NHÀ KHO TỔNG HỢP (WAREHOUSE)"
 	title_label.add_theme_font_size_override("font_size", 18)
 	title_label.add_theme_color_override("font_color", Color(1.0, 0.88, 0.38))
 	title_box.add_child(title_label)
 
 	var subtitle_lbl := Label.new()
-	subtitle_lbl.text = "Quản lý kho đồ, so sánh chỉ số và Tháo / Mặc trang bị trực quan"
+	subtitle_lbl.text = "Lưu trữ toàn bộ Trang bị, Thuốc, Nguyên liệu, Sách EXP, Lương thực và Thiên Thư"
 	subtitle_lbl.add_theme_font_size_override("font_size", 12)
 	subtitle_lbl.add_theme_color_override("font_color", Color(0.75, 0.88, 1.0))
 	title_box.add_child(subtitle_lbl)
@@ -126,46 +140,32 @@ func _build_ui() -> void:
 	close_btn.pressed.connect(close_modal)
 	header_row.add_child(close_btn)
 
-	# 4. Target Hero Banner & Quick Actions
-	var hero_row := HBoxContainer.new()
-	hero_row.add_theme_constant_override("separation", 8)
-	root_vbox.add_child(hero_row)
+	# 4. Warehouse Category Tabs
+	category_tabs_row = HBoxContainer.new()
+	category_tabs_row.add_theme_constant_override("separation", 6)
+	root_vbox.add_child(category_tabs_row)
+	for cat_def in WAREHOUSE_CATEGORIES:
+		var cid := str(cat_def.get("id", "ALL"))
+		var cbtn := Button.new()
+		cbtn.text = str(cat_def.get("label", cid))
+		cbtn.custom_minimum_size = Vector2(0, 32)
+		cbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cbtn.pressed.connect(select_category.bind(cid))
+		category_tabs_row.add_child(cbtn)
+		_category_buttons[cid] = cbtn
 
-	hero_badge_label = Label.new()
-	hero_badge_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hero_badge_label.add_theme_font_size_override("font_size", 13)
-	hero_row.add_child(hero_badge_label)
-
-	var switch_hero_btn := Button.new()
-	switch_hero_btn.text = "👥 Đổi Hero Khác"
-	switch_hero_btn.custom_minimum_size = Vector2(0, 30)
-	switch_hero_btn.pressed.connect(_on_switch_hero_pressed)
-	hero_row.add_child(switch_hero_btn)
-
-	var quick_unequip_btn := Button.new()
-	quick_unequip_btn.text = "🔄 Tháo Toàn Bộ Về Kho"
-	quick_unequip_btn.custom_minimum_size = Vector2(0, 30)
-	quick_unequip_btn.modulate = Color(1.0, 0.75, 0.65)
-	quick_unequip_btn.pressed.connect(func():
-		if not target_hero_id.is_empty():
-			quick_unequip_requested.emit(target_hero_id, target_hero_name)
-	)
-	hero_row.add_child(quick_unequip_btn)
-
-	_update_hero_header()
-
-	# 5. CardGridBrowser Component
-	browser = CardGridBrowserScript.new()
-	browser.browser_type = CardGridBrowserScript.BrowserType.ITEM
+	# 5. ItemGridBrowser Component
+	browser = ItemGridBrowserScript.new()
 	browser.item_context_mode = UniversalItemCardScript.ContextMode.INVENTORY
-	browser.grid_columns = 4
+	browser.grid_columns = 6
 	browser.card_selectable = false
 	browser.multi_select_enabled = false
+	browser.show_action_bar = false
 	root_vbox.add_child(browser)
 
-	var filter_pills: Array = ["Tất cả", "Chưa trang bị", "Vũ khí", "Giáp", "Trang sức", "Đang mặc"]
-	browser.configure_header("Danh sách Trang bị trong Kho", filter_pills)
 	browser.item_selected.connect(_on_item_clicked)
+	browser.item_action_requested.connect(_on_popover_item_action)
+	select_category(active_category)
 
 	# 6. Selected Item Inspection & Action Bar
 	var action_panel := PanelContainer.new()
@@ -217,6 +217,13 @@ func _build_ui() -> void:
 	unequip_action_btn.pressed.connect(_on_unequip_action_pressed)
 	ap_row.add_child(unequip_action_btn)
 
+	pickup_drops_btn = Button.new()
+	pickup_drops_btn.text = "🎒 Nhặt Đồ Rơi"
+	pickup_drops_btn.custom_minimum_size = Vector2(130, 34)
+	pickup_drops_btn.modulate = Color(0.85, 0.92, 1.0)
+	pickup_drops_btn.pressed.connect(_on_pickup_floor_drops_pressed)
+	ap_row.add_child(pickup_drops_btn)
+
 func _update_hero_header() -> void:
 	if hero_badge_label == null:
 		return
@@ -226,21 +233,98 @@ func _update_hero_header() -> void:
 		hero_badge_label.text = "🎯 Hero đang chọn mặc đồ: 【%s】" % target_hero_name
 		hero_badge_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75))
 
+func select_category(cat_id: String) -> void:
+	active_category = cat_id
+	for cid in _category_buttons.keys():
+		var btn: Button = _category_buttons[cid]
+		btn.modulate = Color(1.0, 0.90, 0.45) if cid == active_category else Color(0.75, 0.80, 0.88)
+	if browser != null:
+		for cat_def in WAREHOUSE_CATEGORIES:
+			if str(cat_def.get("id", "")) == active_category:
+				browser.configure_header(str(cat_def.get("title", "Kho Lưu Trữ")), cat_def.get("pills", ["Tất cả"]))
+				break
+	_populate_browser()
+
+func _resolve_inventory_slot(item_id: String, cat: String) -> String:
+	var upper_id := item_id.to_upper()
+	if "POTION" in upper_id or "RESURRECTION" in upper_id or "HEAL" in upper_id:
+		return "POTION"
+	if "TELEPORT" in upper_id or "STONE" in upper_id or "ORE" in upper_id or "WOOD" in upper_id or "IRON" in upper_id:
+		return "MATERIAL"
+	if "FOOD" in upper_id or "RATION" in upper_id:
+		return "FOOD"
+	if "EXP" in upper_id or "BOOK" in upper_id or "SKILL" in upper_id:
+		return "BOOK"
+	if "SCROLL" in upper_id or cat == "TICKET":
+		return "SCROLL"
+	if cat == "CONSUMABLE":
+		return "POTION"
+	if cat == "DEVELOPMENT":
+		return "BOOK"
+	return "MATERIAL"
+
+func _get_all_warehouse_items() -> Array:
+	var combined: Array = []
+	var equip_src: Array = GameState.equipment_list if not GameState.equipment_list.is_empty() else GameState.crafting_overview.get("equipment", [])
+	for eq in equip_src:
+		if eq is Dictionary:
+			var copy: Dictionary = eq.duplicate(true)
+			copy["_warehouse_cat"] = "EQUIPMENT"
+			if not copy.has("source") or str(copy.get("source", "")).is_empty():
+				copy["source"] = "Xưởng Rèn / Kho Trang Bị"
+			combined.append(copy)
+
+	for inv in GameState.inventory_items:
+		if inv is Dictionary:
+			var copy: Dictionary = inv.duplicate(true)
+			var iid := str(copy.get("itemId", copy.get("id", ""))).to_upper()
+			var raw_cat := str(copy.get("category", "MATERIAL")).to_upper()
+			var wcat := raw_cat
+			if iid in ["FOOD", "RATION", "FOOD_RAW", "RAW_FOOD"] or raw_cat == "TICKET":
+				wcat = "MISC"
+			copy["_warehouse_cat"] = wcat
+			copy["starLevel"] = int(copy.get("rarity", copy.get("starLevel", 1)))
+			if str(copy.get("slot", "")).is_empty():
+				copy["slot"] = _resolve_inventory_slot(iid, raw_cat)
+			if str(copy.get("source", "")).is_empty():
+				copy["source"] = "Kho Lưu Trữ Lãnh Địa"
+			combined.append(copy)
+
+	for sc in GameState.summon_scrolls_list:
+		if sc is Dictionary:
+			var copy: Dictionary = sc.duplicate(true)
+			copy["_warehouse_cat"] = "MISC"
+			combined.append(copy)
+
+	return combined
+
 func _populate_browser() -> void:
 	if browser == null:
 		return
-	var items: Array = []
-	if not GameState.equipment_list.is_empty():
-		items = GameState.equipment_list
-	else:
-		items = GameState.crafting_overview.get("equipment", [])
-
-	browser.set_items(items, false)
+	var all_items := _get_all_warehouse_items()
+	if active_category == "ALL":
+		browser.set_items(all_items, false)
+		return
+	var filtered: Array = []
+	for it in all_items:
+		if str(it.get("_warehouse_cat", "")) == active_category:
+			filtered.append(it)
+	browser.set_items(filtered, false)
 
 func _on_item_clicked(item: Dictionary) -> void:
 	selected_item_data = item
-	var iname := str(item.get("name", item.get("targetName", "Trang bị")))
+	var wcat := str(item.get("_warehouse_cat", "EQUIPMENT"))
+	var iname := str(item.get("name", item.get("targetName", "Vật phẩm")))
 	var estar := int(item.get("starLevel", item.get("rarity", 1)))
+
+	if wcat != "EQUIPMENT":
+		var qty := int(item.get("quantity", 1))
+		var desc := str(item.get("description", "Vật phẩm lưu trữ trong kho."))
+		item_detail_label.text = "[%s] %s %d★ (×%d) — %s" % [wcat, iname, estar, qty, desc]
+		equip_action_btn.visible = false
+		unequip_action_btn.visible = false
+		return
+
 	var eenh := int(item.get("enhanceLevel", 0))
 	var eslot := str(item.get("slot", item.get("itemType", "EQ"))).to_upper()
 	var eq_hid := str(item.get("equippedHeroId", ""))
@@ -278,6 +362,31 @@ func _on_item_clicked(item: Dictionary) -> void:
 		else:
 			equip_action_btn.visible = false
 
+func _on_popover_item_action(action_code: String, item: Dictionary, qty: int) -> void:
+	_on_item_clicked(item)
+	match action_code:
+		"EQUIP":
+			_on_equip_action_pressed()
+		"UNEQUIP":
+			_on_unequip_action_pressed()
+		"USE":
+			var iid := str(item.get("itemId", item.get("id", "")))
+			if not iid.is_empty():
+				var res := await ApiClient.post_req("/api/inventory/items/%s/use" % iid, {"quantity": qty})
+				if res.get("ok", false):
+					await GameState.refresh_inventory()
+					refresh_items()
+		"DROP":
+			var iid := str(item.get("itemId", item.get("id", "")))
+			if not iid.is_empty():
+				var res := await ApiClient.post_req("/api/inventory/items/%s/sell" % iid, {"quantity": qty})
+				if res.get("ok", false):
+					await GameState.refresh_inventory()
+					await GameState.refresh_profile()
+					refresh_items()
+		"SPLIT":
+			item_detail_label.text = "✂️ Đã tách ×%d [%s] để thao tác riêng." % [qty, str(item.get("name", "Vật phẩm"))]
+
 func _on_equip_action_pressed() -> void:
 	if selected_item_data.is_empty() or target_hero_id.is_empty():
 		return
@@ -291,6 +400,27 @@ func _on_unequip_action_pressed() -> void:
 	var item_id := str(selected_item_data.get("id", ""))
 	var item_name := str(selected_item_data.get("name", "Trang bị"))
 	item_unequipped.emit(item_id, item_name)
+
+func _on_pickup_floor_drops_pressed() -> void:
+	var res := await ApiClient.get_req("/api/equipment/floor-drops")
+	if not is_instance_valid(self):
+		return
+	if not res.get("ok", false):
+		item_detail_label.text = "❌ Không thể kiểm tra đồ rơi tầng: " + str(res.get("error", "Lỗi kết nối"))
+		return
+	var drops: Array = res.get("data", []) if res.get("data") is Array else []
+	if drops.is_empty():
+		item_detail_label.text = "📦 Hiện không có trang bị rơi trên tầng cần thu hồi."
+		return
+	var picked := 0
+	for d in drops:
+		if d is Dictionary and not str(d.get("id", "")).is_empty():
+			var p_res := await ApiClient.post_req("/api/equipment/%s/pickup" % str(d.get("id", "")), {})
+			if p_res.get("ok", false):
+				picked += 1
+	await GameState.refresh_crafting()
+	refresh_items()
+	item_detail_label.text = "🎒 Đã thu hồi %d / %d trang bị rơi trên tầng về Kho!" % [picked, drops.size()]
 
 func _on_switch_hero_pressed() -> void:
 	var existing = get_tree().root.get_node_or_null("HeroPickerModal")
@@ -320,7 +450,7 @@ func refresh_items() -> void:
 	if not selected_item_data.is_empty():
 		var found_item: Dictionary = {}
 		var iid := str(selected_item_data.get("id", ""))
-		var cur_list: Array = GameState.equipment_list if not GameState.equipment_list.is_empty() else GameState.crafting_overview.get("equipment", [])
+		var cur_list: Array = _get_all_warehouse_items()
 		for it in cur_list:
 			if str(it.get("id", "")) == iid:
 				found_item = it

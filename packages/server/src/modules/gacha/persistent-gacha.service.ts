@@ -9,6 +9,7 @@ import {
   masterSummonInventory, masters, itemTemplates, summonHistory, summonRewardPool, summonSessions,
 } from '../../database/drizzle-schema.js';
 import { affinityColumns, buildSummonedHero, HERO_STAR_LOCKED } from '../hero/hero-generation.js';
+import { survivalService } from '../survival/survival.service.js';
 
 export const SPECIAL_BANNER_GEM_COST_PER_ROLL = GAME_CONSTANTS.GACHA.SPECIAL_BANNER_GEM_COST_PER_ROLL;
 
@@ -194,6 +195,7 @@ export class PersistentGachaService {
               heroId, ...affinityColumns(build.elementAffinity), updatedAt: now,
             });
           }
+          await survivalService.autoAssignDormitory(tx, masterId, heroId, now);
 
           const strongestElement = build.elementAffinity
             ? Object.entries(build.elementAffinity).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] ?? 'NEUTRAL'

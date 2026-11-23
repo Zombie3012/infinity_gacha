@@ -122,10 +122,23 @@ var lighting_toggle_btn: Button = null
 var focus_base_btn: Button = null
 var refresh_base_btn: Button = null
 var back_hub_btn: Button = null
+@onready var floor_elevator_panel: PanelContainer = get_node_or_null("%FloorElevatorPanel")
 @onready var floor_buttons_container: VBoxContainer = %FloorButtonsContainer
+@onready var view_cycle_btn: Button = get_node_or_null("%ViewCycleBtn")
+@onready var manage_floor_heroes_btn: Button = get_node_or_null("%ManageFloorHeroesBtn")
+@onready var chat_btn: Button = get_node_or_null("%ChatBtn")
+@onready var status_toast_panel: PanelContainer = get_node_or_null("%StatusToastPanel")
+
+@onready var event_buttons_box: HBoxContainer = get_node_or_null("%EventButtonsBox")
+@onready var airship_event_btn: Button = get_node_or_null("%AirshipEventBtn")
+@onready var mailbox_event_btn: Button = get_node_or_null("%MailboxEventBtn")
+@onready var quest_event_btn: Button = get_node_or_null("%QuestEventBtn")
+@onready var event_strip_toggle_btn: Button = get_node_or_null("%EventStripToggleBtn")
 
 @onready var summon_altar_btn: Button = %SummonAltarBtn
 @onready var barracks_btn: Button = %BarracksBtn
+@onready var warehouse_btn: Button = get_node_or_null("%WarehouseBtn")
+@onready var build_drawer_btn: Button = get_node_or_null("%BuildDrawerBtn")
 @onready var expand_zone_btn: Button = %ExpandZoneBtn
 @onready var collect_all_btn: Button = %CollectAllBtn
 @onready var enter_pve_btn: Button = %EnterPveBtn
@@ -262,6 +275,61 @@ func _ready() -> void:
 		_open_landmark_inspector("SUMMON_ALTAR", true)
 	)
 	barracks_btn.pressed.connect(_on_barracks_pressed)
+	if warehouse_btn != null:
+		warehouse_btn.pressed.connect(func():
+			_exit_grid_edit_mode()
+			_open_gear_warehouse_modal("")
+		)
+	if build_drawer_btn != null:
+		build_drawer_btn.pressed.connect(toggle_build_drawer)
+	if view_cycle_btn != null:
+		view_cycle_btn.pressed.connect(_on_cycle_camera_view_pressed)
+	if manage_floor_heroes_btn != null:
+		manage_floor_heroes_btn.pressed.connect(func(): _open_floor_hero_manager(_current_lobby_floor))
+	if chat_btn != null:
+		chat_btn.pressed.connect(func():
+			_exit_grid_edit_mode()
+			var existing = $HUD.get_node_or_null("ChatPanelModal")
+			if existing != null: existing.queue_free()
+			var c_script = load("res://scripts/ui/chat_panel_modal.gd")
+			if c_script != null:
+				var modal = c_script.new()
+				modal.name = "ChatPanelModal"
+				$HUD.add_child(modal)
+		)
+	if airship_event_btn != null:
+		airship_event_btn.pressed.connect(func():
+			_exit_grid_edit_mode()
+			var shop = preload("res://scripts/ui/airship_shop_modal.gd").new()
+			shop.closed.connect(func(): await _sync_all_from_backend())
+			$HUD.add_child(shop)
+		)
+	if mailbox_event_btn != null:
+		mailbox_event_btn.pressed.connect(func():
+			_exit_grid_edit_mode()
+			var existing = $HUD.get_node_or_null("MailboxModal")
+			if existing != null: existing.queue_free()
+			var m_script = load("res://scripts/ui/mailbox_modal.gd")
+			if m_script != null:
+				var modal = m_script.new()
+				modal.name = "MailboxModal"
+				modal.closed.connect(func(): await _sync_all_from_backend())
+				$HUD.add_child(modal)
+		)
+	if quest_event_btn != null:
+		quest_event_btn.pressed.connect(func():
+			_exit_grid_edit_mode()
+			var existing = $HUD.get_node_or_null("EventsQuestsModal")
+			if existing != null: existing.queue_free()
+			var eq_script = load("res://scripts/ui/events_quests_modal.gd")
+			if eq_script != null:
+				var modal = eq_script.new()
+				modal.name = "EventsQuestsModal"
+				modal.closed.connect(func(): await _sync_all_from_backend())
+				$HUD.add_child(modal)
+		)
+	if event_strip_toggle_btn != null:
+		event_strip_toggle_btn.pressed.connect(toggle_event_strip)
 	expand_zone_btn.pressed.connect(_on_expand_zone_pressed)
 	collect_all_btn.pressed.connect(_on_collect_all_pressed)
 	enter_pve_btn.pressed.connect(_on_enter_pve_pressed)
@@ -1636,37 +1704,16 @@ func _build_floor_elevator_buttons() -> void:
 	for child in floor_buttons_container.get_children():
 		child.queue_free()
 	_floor_buttons.clear()
+	_panorama_btn = null
+
+	if floor_elevator_panel != null:
+		floor_elevator_panel.visible = false
 
 	var header_lbl := floor_buttons_container.get_parent().get_node_or_null("FloorHeaderLabel") as Label
 	if header_lbl != null:
-		header_lbl.text = "🏰 LÂU ĐÀI & XÂY DỰNG"
+		header_lbl.text = "🏗️ CÔNG CỤ XÂY DỰNG"
 
-	# 1. Camera Quick Focus Buttons (Seamless 2-Tier Castle)
-	var panorama_btn := Button.new()
-	panorama_btn.custom_minimum_size = Vector2(0, 32)
-	panorama_btn.text = "🌐 Toàn Cảnh Lâu Đài"
-	panorama_btn.pressed.connect(_show_all_floors_panorama)
-	floor_buttons_container.add_child(panorama_btn)
-	_panorama_btn = panorama_btn
-
-	var tier2_btn := Button.new()
-	tier2_btn.custom_minimum_size = Vector2(0, 32)
-	tier2_btn.text = "👑 Thượng Thành T2 (60×100)"
-	tier2_btn.pressed.connect(func(): _switch_to_lobby_floor(2))
-	floor_buttons_container.add_child(tier2_btn)
-	_floor_buttons[2] = tier2_btn
-
-	var tier1_btn := Button.new()
-	tier1_btn.custom_minimum_size = Vector2(0, 32)
-	tier1_btn.text = "🏰 Hạ Thành T1 (100×100)"
-	tier1_btn.pressed.connect(func(): _switch_to_lobby_floor(1))
-	floor_buttons_container.add_child(tier1_btn)
-	_floor_buttons[1] = tier1_btn
-
-	var sep := HSeparator.new()
-	floor_buttons_container.add_child(sep)
-
-	# 2. Grid-Based Free Placement & Road System Controls
+	# Grid-Based Free Placement & Road System Controls (inside collapsible Build Drawer)
 	_build_menu_btn = Button.new()
 	_build_menu_btn.custom_minimum_size = Vector2(0, 34)
 	_build_menu_btn.text = "🏗️ Xây Công Trình Mới"
@@ -1693,15 +1740,30 @@ func _build_floor_elevator_buttons() -> void:
 	_cancel_grid_btn.pressed.connect(_exit_grid_edit_mode)
 	floor_buttons_container.add_child(_cancel_grid_btn)
 
-	var sep2 := HSeparator.new()
-	floor_buttons_container.add_child(sep2)
+	_manage_floor_heroes_btn = manage_floor_heroes_btn
 
-	var manage_btn := Button.new()
-	manage_btn.custom_minimum_size = Vector2(0, 32)
-	manage_btn.text = "👥 Quản Lý Tướng Sảnh"
-	manage_btn.pressed.connect(func(): _open_floor_hero_manager(_current_lobby_floor))
-	floor_buttons_container.add_child(manage_btn)
-	_manage_floor_heroes_btn = manage_btn
+func _on_cycle_camera_view_pressed() -> void:
+	if not _panorama_mode and _current_lobby_floor == 1:
+		_switch_to_lobby_floor(2)
+	elif not _panorama_mode and _current_lobby_floor == 2:
+		_show_all_floors_panorama()
+	else:
+		_switch_to_lobby_floor(1)
+
+func toggle_build_drawer() -> void:
+	if floor_elevator_panel == null:
+		return
+	floor_elevator_panel.visible = not floor_elevator_panel.visible
+	if not floor_elevator_panel.visible and _grid_edit_mode != GridEditMode.NONE:
+		_exit_grid_edit_mode()
+	_refresh_hud()
+
+func toggle_event_strip() -> void:
+	if event_buttons_box == null:
+		return
+	event_buttons_box.visible = not event_buttons_box.visible
+	if event_strip_toggle_btn != null:
+		event_strip_toggle_btn.text = "▾" if event_buttons_box.visible else "◂"
 
 func _show_all_floors_panorama() -> void:
 	_close_inspector()
@@ -1863,23 +1925,19 @@ func _refresh_hud() -> void:
 	if portal_sub_label != null:
 		portal_sub_label.text = "Đội hình xuất kích: %d/5 Tướng [Kéo-thả Tướng vào đây]" % GameState.active_party_ids.size()
 
-	if _panorama_btn != null:
+	if view_cycle_btn != null:
 		if _panorama_mode:
-			_panorama_btn.text = "▶ 🌐 Toàn Cảnh Lâu Đài"
-			_panorama_btn.modulate = Color(1.0, 0.92, 0.45)
+			view_cycle_btn.text = "🌐 Toàn Cảnh ↻"
+			view_cycle_btn.modulate = Color(1.0, 0.92, 0.45)
+		elif _current_lobby_floor == 2:
+			view_cycle_btn.text = "👑 Tầng 2 ↻"
+			view_cycle_btn.modulate = Color(0.95, 0.88, 1.0)
 		else:
-			_panorama_btn.text = "🌐 Toàn Cảnh Lâu Đài"
-			_panorama_btn.modulate = Color(0.85, 0.92, 1.0)
+			view_cycle_btn.text = "🏰 Tầng 1 ↻"
+			view_cycle_btn.modulate = Color(0.88, 0.96, 1.0)
 
-	for f_num in _floor_buttons.keys():
-		var btn: Button = _floor_buttons[f_num]
-		var is_active := (int(f_num) == _current_lobby_floor and not _panorama_mode)
-		var active_prefix := "▶ " if is_active else ""
-		if int(f_num) == 1:
-			btn.text = "%s🏰 Hạ Thành T1 (100×100)" % active_prefix
-		else:
-			btn.text = "%s👑 Thượng Thành T2 (60×100)" % active_prefix
-		btn.modulate = Color(1.0, 0.92, 0.45) if is_active else Color(0.84, 0.95, 0.88)
+	if build_drawer_btn != null and floor_elevator_panel != null:
+		build_drawer_btn.modulate = Color(1.0, 0.92, 0.45) if (floor_elevator_panel.visible or _grid_edit_mode != GridEditMode.NONE) else Color(1, 1, 1)
 
 	if _build_menu_btn != null:
 		_build_menu_btn.text = "🏗️ Xây Công Trình (%d/%d)" % [built_cnt, max_plots]
@@ -1956,6 +2014,23 @@ func _setup_top_hud_styles() -> void:
 	_style_resource_pill(gems_pill, Color(0.2, 0.45, 0.75, 0.65))
 	_style_resource_pill(gold_pill, Color(0.75, 0.55, 0.2, 0.65))
 	_style_resource_pill(ration_pill, Color(0.75, 0.35, 0.2, 0.65))
+
+	if status_toast_panel != null:
+		_style_resource_pill(status_toast_panel, Color(0.45, 0.58, 0.78, 0.55))
+	if enter_pve_btn != null:
+		var cta_style := StyleBoxFlat.new()
+		cta_style.bg_color = Color(0.42, 0.16, 0.08, 0.96)
+		cta_style.border_width_left = 2
+		cta_style.border_width_top = 2
+		cta_style.border_width_right = 2
+		cta_style.border_width_bottom = 2
+		cta_style.border_color = Color(1.0, 0.80, 0.28, 0.95)
+		cta_style.corner_radius_top_left = 8
+		cta_style.corner_radius_top_right = 8
+		cta_style.corner_radius_bottom_left = 8
+		cta_style.corner_radius_bottom_right = 8
+		enter_pve_btn.add_theme_stylebox_override("normal", cta_style)
+		enter_pve_btn.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
 
 func _style_resource_pill(pill: PanelContainer, border_col: Color) -> void:
 	if pill == null: return
@@ -2807,37 +2882,77 @@ func _open_hero_picker_for_facility(ctx_mode: int = 0, allowed_classes: Array = 
 	)
 	$HUD.add_child(modal)
 
-func _open_worker_assignment_modal(building_id: String, building_name: String, building_code: String, remaining_slots: int) -> void:
+func _open_worker_assignment_modal(building_id: String, building_name: String, building_code: String, max_workers: int) -> void:
 	var existing = $HUD.get_node_or_null("HeroPickerModal")
 	if existing != null:
 		existing.queue_free()
 
 	var assigned_map := GameState.get_worker_assignment_map()
-	var exclude_ids: Array = assigned_map.keys()
+	var current_worker_ids: Array = []
+	var other_assigned_ids: Array = []
+	for hid in assigned_map.keys():
+		var b_info: Dictionary = assigned_map[hid].get("building", {})
+		if str(b_info.get("id", "")) == building_id:
+			current_worker_ids.append(hid)
+		else:
+			other_assigned_ids.append(hid)
+
 	var allowed_cls: Array = ["MAGE"] if building_code == "LIBRARY" else []
 	var ctx_mode: int = UniversalHeroCardScript.ContextMode.LIBRARY if building_code == "LIBRARY" else UniversalHeroCardScript.ContextMode.DEFAULT
+	var remaining := maxi(0, max_workers - current_worker_ids.size())
 
 	var modal = HeroPickerModalScript.new()
 	modal.exclude_deployed = true
+	modal.allow_worker_release = true
+	modal.prioritized_hero_ids = current_worker_ids
+	modal.max_building_workers = max_workers
 	modal.name = "HeroPickerModal"
-	var sub := "Chọn Hero đảm nhận vị trí nhân sự tại công trình (Còn %d chỗ trống)" % remaining_slots
+	var sub := "Đang làm: %d/%d • Còn %d chỗ trống (Có thể chọn nhiều tối đa %d Hero)" % [current_worker_ids.size(), max_workers, remaining, max_workers]
 	if building_code == "LIBRARY":
 		sub += " • Yêu cầu: Hệ MAGE"
 
 	modal.configure(
-		"Phân Công Hero: %s" % building_name,
-		false,
-		1,
+		"Quản Lý Nhân Công: %s" % building_name,
+		true,
+		maxi(1, max_workers),
 		ctx_mode,
 		allowed_cls,
-		exclude_ids,
-		["Tất cả", "Chưa xếp", "Trong Đội PvE"],
+		other_assigned_ids,
+		["Tất cả", "Chưa xếp", "Đang phân công", "Trong Đội PvE"],
 		sub
 	)
-	modal.hero_picked.connect(func(picked_hero: Dictionary):
-		var hid := str(picked_hero.get("id", ""))
-		var hname := str(picked_hero.get("name", "Hero"))
-		_assign_worker_to_building(building_id, hid, hname, building_name)
+	modal.heroes_picked.connect(func(picked_heroes: Array):
+		for picked_hero in picked_heroes:
+			if picked_hero is Dictionary:
+				var hid := str(picked_hero.get("id", ""))
+				var hname := str(picked_hero.get("name", "Hero"))
+				await _assign_worker_to_building(building_id, hid, hname, building_name)
+	)
+	modal.heroes_released.connect(func(released_heroes: Array):
+		for rel_hero in released_heroes:
+			if rel_hero is Dictionary:
+				var hid := str(rel_hero.get("id", ""))
+				var hname := str(rel_hero.get("name", "Hero"))
+				await _remove_worker_from_building(building_id, hid, hname)
+		if is_instance_valid(modal):
+			var next_map := GameState.get_worker_assignment_map()
+			var next_cur: Array = []
+			var next_other: Array = []
+			for hid in next_map.keys():
+				var bi: Dictionary = next_map[hid].get("building", {})
+				if str(bi.get("id", "")) == building_id:
+					next_cur.append(hid)
+				else:
+					next_other.append(hid)
+			modal.prioritized_hero_ids = next_cur
+			modal.excluded_hero_ids = next_other
+			var rem := maxi(0, max_workers - next_cur.size())
+			var next_sub := "Đang làm: %d/%d • Còn %d chỗ trống (Có thể chọn nhiều tối đa %d Hero)" % [next_cur.size(), max_workers, rem, max_workers]
+			if building_code == "LIBRARY":
+				next_sub += " • Yêu cầu: Hệ MAGE"
+			modal.subtitle_label.text = next_sub
+			modal._populate_browser()
+			modal.set_feedback("✅ Đã giải phóng Hero. Hiện còn %d chỗ trống!" % rem, false)
 	)
 	$HUD.add_child(modal)
 
@@ -3149,6 +3264,11 @@ func _on_action_bar_info_pressed(b_data: Dictionary) -> void:
 		if _building_action_bar != null:
 			_building_action_bar._close()
 	)
+	popup.worker_remove_requested.connect(func(b_id: String, h_id: String, h_name: String):
+		await _remove_worker_from_building(b_id, h_id, h_name)
+		if _building_action_bar != null:
+			_building_action_bar._close()
+	)
 	$HUD.add_child(popup)
 
 func _on_action_bar_upgrade_pressed(b_data: Dictionary) -> void:
@@ -3176,6 +3296,15 @@ func _on_action_bar_facility_pressed(b_data: Dictionary, action_code: String) ->
 			var shop = preload("res://scripts/ui/airship_shop_modal.gd").new()
 			shop.closed.connect(func(): await _sync_all_from_backend())
 			$HUD.add_child(shop)
+		"ALLIANCE_HALL":
+			var existing = $HUD.get_node_or_null("AllianceModal")
+			if existing != null: existing.queue_free()
+			var al_script = load("res://scripts/ui/alliance_modal.gd")
+			if al_script != null:
+				var modal = al_script.new()
+				modal.name = "AllianceModal"
+				modal.closed.connect(func(): await _sync_all_from_backend())
+				$HUD.add_child(modal)
 		"HERO_CHRONICLE":
 			var modal = preload("res://scripts/ui/hero_chronicle_modal.gd").new()
 			modal.closed.connect(func(): await _sync_all_from_backend())
@@ -3264,27 +3393,68 @@ func _open_dormitory_modal(b_data: Dictionary) -> void:
 	$HUD.add_child(modal)
 	modal.setup(b_data)
 	modal.hero_rest_toggled.connect(func(hid, hname, is_resting):
-		await _toggle_hero_rest(hid, hname, is_resting)
 		if is_instance_valid(modal):
+			modal.set_feedback("⏳ Đang cập nhật trạng thái nghỉ ngơi cho [%s]..." % hname, false)
+		var res: Dictionary = await _toggle_hero_rest(hid, hname, is_resting, str(b_data.get("id", "")))
+		if is_instance_valid(modal):
+			modal.set_feedback(str(res.get("message", "")), not bool(res.get("ok", false)))
 			modal.refresh_ui()
 	)
 	modal.squad_rest_requested.connect(func(is_resting):
+		var target_bid := str(b_data.get("id", ""))
+		var any_updated := false
+		var last_msg := ""
+		var last_err := false
 		for hid in GameState.active_party_ids:
-			if not GameState.is_hero_available(GameState.get_hero_by_id(str(hid))):
+			var h_obj := GameState.get_hero_by_id(str(hid))
+			if not GameState.is_hero_available(h_obj):
 				continue
-			var hname := "Hero"
-			for h in GameState.heroes:
-				if h is Dictionary and str(h.get("id", "")) == hid:
-					hname = str(h.get("name", "Hero"))
-					break
-			await _toggle_hero_rest(hid, hname, not is_resting)
+			if not is_resting and not target_bid.is_empty():
+				var cur_hb := str(h_obj.get("housingBuildingId", "")) if h_obj.get("housingBuildingId") != null else ""
+				if cur_hb != target_bid:
+					continue
+			var hname := str(h_obj.get("name", "Hero"))
+			var res: Dictionary = await _toggle_hero_rest(hid, hname, not is_resting, target_bid)
+			any_updated = true
+			last_msg = str(res.get("message", ""))
+			last_err = not bool(res.get("ok", false))
 		if is_instance_valid(modal):
+			if any_updated:
+				modal.set_feedback(last_msg, last_err)
+			else:
+				modal.set_feedback("ℹ️ Không có Hero khả dụng trong đội hình PvE.", true)
 			modal.refresh_ui()
 	)
 	modal.feed_hero_requested.connect(func(hid, hname):
 		await _feed_hero(hid, hname)
 		if is_instance_valid(modal):
+			modal.set_feedback(status_banner_label.text, status_banner_label.text.begins_with("❌") or status_banner_label.text.begins_with("ℹ️"))
 			modal.refresh_ui()
+	)
+	modal.housing_assign_requested.connect(func(b_id: String, hid: String, swap_id: String):
+		if is_instance_valid(modal):
+			modal.set_feedback("⏳ Đang xếp chỗ cư trú...", false)
+		var body: Dictionary = {"heroId": hid}
+		if not swap_id.is_empty():
+			body["swapWithHeroId"] = swap_id
+		var res := await ApiClient.post_req("/api/survival/housing/%s/assign" % b_id, body)
+		if res.get("ok", false):
+			await _sync_all_from_backend()
+			if is_instance_valid(modal):
+				modal.set_feedback("🏠 Đã cập nhật chỗ ở cho Hero thành công!" if swap_id.is_empty() else "🔄 Đã đổi chỗ Hero thành công!", false)
+				modal.refresh_ui()
+		elif is_instance_valid(modal):
+			modal.set_feedback("❌ " + str(res.get("error", "Không thể xếp chỗ")), true)
+	)
+	modal.housing_remove_requested.connect(func(hid: String):
+		var res := await ApiClient.delete_req("/api/survival/housing/heroes/%s" % hid)
+		if res.get("ok", false):
+			await _sync_all_from_backend()
+			if is_instance_valid(modal):
+				modal.set_feedback("🚪 Đã đưa Hero ra khỏi nhà ở.", false)
+				modal.refresh_ui()
+		elif is_instance_valid(modal):
+			modal.set_feedback("❌ " + str(res.get("error", "Không thể rút Hero")), true)
 	)
 	modal.closed.connect(func():
 		await _sync_all_from_backend()
@@ -3321,10 +3491,8 @@ func _on_action_bar_workers_pressed(b_data: Dictionary) -> void:
 	var b_id := str(b_data.get("id", ""))
 	var b_name := str(b_data.get("typeName", "Công trình"))
 	var b_code := str(b_data.get("buildingType", ""))
-	var max_w := int(b_data.get("maxWorkers", 0))
-	var workers: Array = b_data.get("workers", [])
-	var remaining := maxi(1, max_w - workers.size())
-	_open_worker_assignment_modal(b_id, b_name, b_code, remaining)
+	var max_w := maxi(1, int(b_data.get("maxWorkers", 1)))
+	_open_worker_assignment_modal(b_id, b_name, b_code, max_w)
 
 func _on_action_bar_collect_pressed(b_data: Dictionary) -> void:
 	var b_id := str(b_data.get("id", ""))
@@ -4422,21 +4590,42 @@ func _awaken_hero(hero_id: String, hero_name: String) -> void:
 	else:
 		status_banner_label.text = "ℹ️ Chưa đủ nguyên liệu Thức Tỉnh: " + str(res["error"])
 
-func _toggle_hero_rest(hero_id: String, hero_name: String, is_currently_resting: bool) -> void:
+func _toggle_hero_rest(hero_id: String, hero_name: String, is_currently_resting: bool, building_id: String = "") -> Dictionary:
 	var res: Dictionary
 	if is_currently_resting:
 		res = await ApiClient.delete_req("/api/survival/heroes/%s/rest" % hero_id)
 	else:
-		res = await ApiClient.post_req("/api/survival/heroes/%s/rest" % hero_id, {})
+		var payload: Dictionary = {}
+		if not building_id.is_empty():
+			payload["buildingId"] = building_id
+		res = await ApiClient.post_req("/api/survival/heroes/%s/rest" % hero_id, payload)
 	if res["ok"]:
-		status_banner_label.text = (
+		var next_resting := not is_currently_resting
+		var next_housing: Variant = null
+		if res.get("data") is Dictionary:
+			if res["data"].has("isResting"):
+				next_resting = bool(res["data"].get("isResting", next_resting))
+			if res["data"].has("housingBuildingId"):
+				next_housing = res["data"].get("housingBuildingId")
+		var ok_msg := (
 			"🌅 [%s] đã kết thúc nghỉ ngơi và sẵn sàng làm việc!" % hero_name
-			if is_currently_resting
+			if not next_resting
 			else "🛏️ [%s] đã bắt đầu nghỉ ngơi hồi phục thể lực!" % hero_name
 		)
+		status_banner_label.text = ok_msg
 		await _sync_all_from_backend()
+		for h in GameState.heroes:
+			if h is Dictionary and str(h.get("id", "")) == hero_id:
+				h["isResting"] = next_resting
+				if next_housing != null:
+					h["housingBuildingId"] = next_housing
+				break
+		EventBus.heroes_updated.emit(GameState.heroes)
+		return {"ok": true, "message": ok_msg}
 	else:
-		status_banner_label.text = "ℹ️ Không thể đổi trạng thái nghỉ ngơi: " + str(res["error"])
+		var err_msg := "ℹ️ Không thể đổi trạng thái nghỉ ngơi: " + str(res.get("error", "Lỗi kết nối"))
+		status_banner_label.text = err_msg
+		return {"ok": false, "message": err_msg}
 
 func _upgrade_building(building_id: String) -> void:
 	status_banner_label.text = "⬆️ Đang nâng cấp công trình..."
@@ -5009,15 +5198,35 @@ func _on_enter_pve_pressed() -> void:
 	modal.mode_selected.connect(_on_pve_mode_selected)
 
 func _on_pve_mode_selected(mode_id: String) -> void:
+	if mode_id == "DUNGEON":
+		var existing = $HUD.get_node_or_null("AncientDungeonModal")
+		if existing != null: existing.queue_free()
+		var d_script = load("res://scripts/ui/ancient_dungeon_modal.gd")
+		if d_script != null:
+			var modal = d_script.new()
+			modal.name = "AncientDungeonModal"
+			modal.closed.connect(func(): await _sync_all_from_backend())
+			$HUD.add_child(modal)
+		return
+	if mode_id == "EXPEDITION":
+		var existing = $HUD.get_node_or_null("WorldExpeditionModal")
+		if existing != null: existing.queue_free()
+		var e_script = load("res://scripts/ui/world_expedition_modal.gd")
+		if e_script != null:
+			var modal = e_script.new()
+			modal.name = "WorldExpeditionModal"
+			modal.closed.connect(func(): await _sync_all_from_backend())
+			$HUD.add_child(modal)
+		return
 	if mode_id != "TOWER":
 		return
 	_switch_to_lobby_floor(1)
 	if camera_rig != null and dungeon_portal_mesh != null:
 		camera_rig.focus_action_unit(dungeon_portal_mesh.global_position, 8.5, 0.35)
 	if status_banner_label != null:
-		status_banner_label.text = "🌀 Đang mở bản đồ chinh phạt PvE..."
+		status_banner_label.text = "🗼 Đang mở Tháp Thử Thách PvE..."
 	await get_tree().create_timer(0.4).timeout
-	get_tree().change_scene_to_file("res://scenes/pve/pve_map.tscn")
+	get_tree().change_scene_to_file("res://scenes/pve/pve_tower.tscn")
 
 const RecoveryCenterModalScript = preload("res://scripts/ui/recovery_center_modal.gd")
 

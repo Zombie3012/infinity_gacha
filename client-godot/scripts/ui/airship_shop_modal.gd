@@ -97,7 +97,10 @@ func _ready() -> void:
 	_grid.add_theme_constant_override("h_separation", 10)
 	_grid.add_theme_constant_override("v_separation", 10)
 	scroll.add_child(_grid)
-	scroll.resized.connect(func(): _grid.columns = maxi(1, mini(5, int(scroll.size.x / 180.0))))
+	scroll.resized.connect(func():
+		var avail := scroll.size.x - 16.0
+		_grid.columns = maxi(1, int((avail + 10.0) / 102.0))
+	)
 	var details := VBoxContainer.new()
 	details.custom_minimum_size.x = 250
 	columns.add_child(details)
@@ -167,6 +170,7 @@ func _render_items() -> void:
 		if _category != "" and str(item.get("category", "")) != _category: continue
 		if not _search.text.is_empty() and not str(item.get("name", "")).to_lower().contains(_search.text.to_lower()): continue
 		var card = ItemCard.new()
+		card.enable_hover_popover = false
 		_grid.add_child(card)
 		card.setup(item)
 		card.add_badge("%s bạc" % str(item.get("priceSilver", "1")), Color(0.2, 0.32, 0.38), Color(1, 0.9, 0.55))

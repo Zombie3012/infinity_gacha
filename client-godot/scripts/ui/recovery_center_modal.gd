@@ -219,15 +219,19 @@ func refresh_facility_data() -> void:
 
 	if res["ok"] and res["data"] is Dictionary:
 		var d: Dictionary = res["data"]
-		var fac: Dictionary = d.get("facility", {})
+		var fac_val: Variant = d.get("facility")
+		var fac: Dictionary = fac_val if fac_val is Dictionary else {}
 		facility_level = int(fac.get("level", 1))
 		bed_capacity = int(d.get("capacity", facility_level * 2))
 		max_queue = int(d.get("maxQueue", bed_capacity * 3))
-		active_treatments = d.get("activeTreatments", [])
-		queued_treatments = d.get("queuedTreatments", [])
+		var active_val: Variant = d.get("activeTreatments")
+		active_treatments = active_val if active_val is Array else []
+		var queued_val: Variant = d.get("queuedTreatments")
+		queued_treatments = queued_val if queued_val is Array else []
 		var beds_free: int = int(d.get("bedsFree", 0))
 
-		var workers: Array = fac.get("workers", [])
+		var workers_val: Variant = fac.get("workers")
+		var workers: Array = workers_val if workers_val is Array else []
 		if not workers.is_empty() and workers[0] is Dictionary:
 			assigned_worker_name = str(workers[0].get("heroName", "Y Sĩ"))
 		else:

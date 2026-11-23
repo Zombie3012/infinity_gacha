@@ -8,6 +8,7 @@ import {
 import { mulberry32 } from '@infiniti-gacha/shared';
 import { resolveBattleV2 } from '../combat/combat-v2.engine.js';
 import { combatV2Service } from '../combat/combat-v2.service.js';
+import { assertHeroesActivityReadiness } from '../combat/combat-readiness.js';
 import {
   fetchMasterHeroesWithPower, fetchMasterTopCombatPower, fetchPartyCombatPower,
 } from '../hero/hero-combat-power.js';
@@ -82,6 +83,7 @@ export class ExpeditionService {
     }
     const busy = new Set(await this.busyHeroIds(masterId));
     if (heroIds.some(id => busy.has(id))) throw new ExpeditionError('ERR_EXPEDITION_HERO_BUSY', 409);
+    await assertHeroesActivityReadiness(db, masterId, heroIds, new Date(), 'ANY');
 
     // Attacking another Master's territory is a hero-vs-hero fight (no army).
     if (mission === 'ATTACK') {

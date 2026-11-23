@@ -23,7 +23,7 @@ import { resolveBattleV2, type CombatV2UnitInput, type CombatV2Report, type Comb
 import { settleCombat } from '../combat/combat-settlement.js';
 import { chargeCombatDispatch } from '../combat/combat-readiness.js';
 import { isV2Origin } from '../hero/hero-progression.js';
-import { applyActivity, applyDrift, isImmobilised, starvationMultiplier } from '../survival/survival-rules.js';
+import { applyActivity, applyDrift, checkActivityRefusal, starvationMultiplier } from '../survival/survival-rules.js';
 import { injuryMultiplier } from '../medical/medical-rules.js';
 import { loyaltyCombatMultiplier, relationshipTier, resonanceMultiplier } from '../personality/personality-rules.js';
 import { questService } from '../quest/quest.service.js';
@@ -104,30 +104,49 @@ export class PveService {
     return result;
   }
 
-  async enter(masterId: string, key: string) {
-    return this.command(masterId, 'ENTER', key, {}, async (tx, now) => {
+  async enter(masterId: string, key: string, requestedFloor?: number) {
+    return this.command(masterId, 'ENTER', key, { floor: requestedFloor ?? null }, async (tx, now) => {
       const current = await this.activeMap(tx, masterId);
-      if (current) return { mapId: current.id, floor: current.floor, status: current.status };
+      const [world] = await tx.select().from(worlds).where(eq(worlds.masterId, masterId)).orderBy(asc(worlds.createdAt), asc(worlds.id)).limit(1).for('update');
+      if (!world) throw new PveError('ERR_PVE_NO_WORLD');
+      const targetFloor = requestedFloor !== undefined && requestedFloor !== null
+        ? Math.trunc(Number(requestedFloor))
+        : world.currentFloor;
+      if (!Number.isFinite(targetFloor) || targetFloor < 1 || targetFloor > world.currentFloor) {
+        throw new PveError('ERR_PVE_FLOOR_LOCKED', 403);
+      }
+      if (current) {
+        if (requestedFloor !== undefined && requestedFloor !== null && current.floor !== targetFloor) {
+          throw new PveError('ERR_PVE_ACTIVE_MAP_EXISTS', 409);
+        }
+        return { mapId: current.id, floor: current.floor, status: current.status };
+      }
       const legacy = await tx.select({ id: combatSessions.id }).from(combatSessions)
         .where(and(eq(combatSessions.masterId, masterId), inArray(combatSessions.status, ['ACTIVE', 'RESOLVING']))).limit(1);
       if (legacy.length) throw new PveError('ERR_PVE_LEGACY_COMBAT_ACTIVE');
       const dungeon = await tx.select({ id: dungeonInstances.id }).from(dungeonInstances)
         .where(and(eq(dungeonInstances.masterId, masterId), eq(dungeonInstances.status, 'ACTIVE'))).limit(1);
       if (dungeon.length) throw new PveError('ERR_PVE_LEGACY_DUNGEON_ACTIVE');
-      const [world] = await tx.select().from(worlds).where(eq(worlds.masterId, masterId)).orderBy(asc(worlds.createdAt), asc(worlds.id)).limit(1).for('update');
-      if (!world) throw new PveError('ERR_PVE_NO_WORLD');
-      const [existing] = await tx.select().from(pveMaps).where(and(eq(pveMaps.worldId, world.id), eq(pveMaps.floor, world.currentFloor), eq(pveMaps.run, world.pveRun)));
-      if (existing) throw new PveError('ERR_PVE_FLOOR_ALREADY_CLEARED');
+      const existingRows = await tx.select({ run: pveMaps.run }).from(pveMaps)
+        .where(and(eq(pveMaps.worldId, world.id), eq(pveMaps.floor, targetFloor)))
+        .orderBy(desc(pveMaps.run));
+      let nextRun = world.pveRun;
+      if (existingRows.length > 0) {
+        if (targetFloor === world.currentFloor && existingRows.some(r => r.run === world.pveRun)) {
+          throw new PveError('ERR_PVE_FLOOR_ALREADY_CLEARED');
+        }
+        nextRun = Math.max(world.pveRun, existingRows[0].run + 1);
+      }
       const foes = await tx.select().from(enemyTemplates).where(eq(enemyTemplates.isActive, true)).orderBy(asc(enemyTemplates.code));
       if (!foes.some(row => row.isBoss) || !foes.some(row => !row.isBoss)) throw new PveError('ERR_PVE_ENCOUNTERS_NOT_CONFIGURED', 503);
-      const exploration = createPveExploration(world.worldSeed, world.currentFloor);
-      const [rule] = await tx.select().from(pveFloorRules).where(eq(pveFloorRules.floor, world.currentFloor));
+      const exploration = createPveExploration(world.worldSeed, targetFloor);
+      const [rule] = await tx.select().from(pveFloorRules).where(eq(pveFloorRules.floor, targetFloor));
       const root = exploration.areas.floor;
       const layout = { algorithmVersion: exploration.version, width: root.width, height: root.height, tiles: root.tiles };
-      const scale = world.difficultyMultiplier * (1 + (world.currentFloor - 1) * 0.08);
+      const scale = world.difficultyMultiplier * (1 + (targetFloor - 1) * 0.08);
       const [map] = await tx.insert(pveMaps).values({
-        id: uuid(), masterId, worldId: world.id, floor: world.currentFloor, run: world.pveRun,
-        recallPolicy: rule?.recallPolicy ?? defaultPveRecallPolicy(world.currentFloor), layout, exploration,
+        id: uuid(), masterId, worldId: world.id, floor: targetFloor, run: nextRun,
+        recallPolicy: rule?.recallPolicy ?? defaultPveRecallPolicy(targetFloor), layout, exploration,
         discovered: root.discovered, createdAt: now,
         encounterCatalog: foes.map(foe => ({ code: foe.code, name: foe.name,
           hp: Math.max(1, Math.round(foe.baseHp * scale)), attack: Math.max(1, Math.round(foe.baseAttack * scale)),
@@ -210,8 +229,8 @@ export class PveService {
     });
   }
 
-  async deploy(masterId: string, partyId: string, key: string) {
-    return this.command(masterId, `DEPLOY:${partyId}`, key, {}, async (tx, now) => {
+  async deploy(masterId: string, partyId: string, key: string, forceRecall = false) {
+    return this.command(masterId, `DEPLOY:${partyId}`, key, { forceRecall }, async (tx, now) => {
       const map = await this.activeMap(tx, masterId);
       if (!map) throw new PveError('ERR_PVE_NO_ACTIVE_MAP');
       const squads = await tx.select().from(pveSquads).where(and(eq(pveSquads.masterId, masterId), inArray(pveSquads.status, ACTIVE)));
@@ -221,11 +240,14 @@ export class PveService {
       const roster = await tx.select().from(heroes).where(and(eq(heroes.masterId, masterId), inArray(heroes.id, ids))).orderBy(asc(heroes.id)).for('update');
       if (roster.length !== ids.length || roster.some(hero => ['DEAD', 'DISABLED'].includes(hero.state) || hero.hp <= 0)) throw new PveError('ERR_PVE_HERO_UNAVAILABLE');
       if ((await tx.select().from(pveHeroReservations).where(inArray(pveHeroReservations.heroId, ids))).length) throw new PveError('ERR_PVE_HERO_DEPLOYED');
-      await this.checkOtherActivities(tx, masterId, ids);
+      await this.checkOtherActivities(tx, masterId, ids, forceRecall);
       const [stored] = await tx.select().from(pvePartyPlans).where(eq(pvePartyPlans.partyId, partyId));
       const plan = stored ? validatePvePlan(stored.plan, ids) : defaultPvePlan(ids);
       await this.validateSkills(tx, plan);
-      const { rations: needed } = await chargeCombatDispatch(tx, masterId, ids, now);
+      const { rations: needed } = await chargeCombatDispatch(tx, masterId, ids, now, 'TOWER', forceRecall);
+      if (forceRecall) {
+        await tx.delete(buildingWorkerAssignments).where(inArray(buildingWorkerAssignments.heroInstanceId, ids));
+      }
       const [squad] = await tx.insert(pveSquads).values({ id: uuid(), masterId, mapId: map.id, partyId, name: party.name, plan, deployedAt: now }).returning();
       await reserveConsumables(tx, masterId, squad.id, ids);
       await tx.insert(pveHeroReservations).values(ids.map(heroId => ({ heroId, masterId, mapId: map.id, squadId: squad.id, reservedAt: now })));
@@ -234,9 +256,11 @@ export class PveService {
     });
   }
 
-  private async checkOtherActivities(tx: GameTransaction, masterId: string, ids: string[]) {
+  private async checkOtherActivities(tx: GameTransaction, masterId: string, ids: string[], forceRecall = false) {
     // One transaction owns one PostgreSQL connection: queries must be sequential.
-    const workers = await tx.select().from(buildingWorkerAssignments).where(inArray(buildingWorkerAssignments.heroInstanceId, ids));
+    const workers = forceRecall
+      ? []
+      : await tx.select().from(buildingWorkerAssignments).where(inArray(buildingWorkerAssignments.heroInstanceId, ids));
     const treatment = await tx.select().from(heroTreatments).where(and(inArray(heroTreatments.heroId, ids), inArray(heroTreatments.status, ['ACTIVE', 'QUEUED'])));
     const expeditions = await tx.select({ id: expeditionMembers.heroId }).from(expeditionMembers)
       .innerJoin(heroExpeditions, eq(heroExpeditions.id, expeditionMembers.expeditionId))
@@ -619,7 +643,7 @@ export class PveService {
       if (['DEAD', 'DISABLED'].includes(hero.state) || hero.hp <= 0) throw new PveError('ERR_PVE_HERO_UNAVAILABLE');
       const state = states.find(row => row.heroId === hero.id);
       const drift = applyDrift(state ?? { hungerScore: hero.hunger, fatigueScore: hero.fatigue, isResting: false, lastTickAt: now }, now, (food?.quantity ?? 0) > 0);
-      if (isImmobilised(drift.hungerScore, drift.fatigueScore)) throw new PveError('ERR_PVE_HERO_EXHAUSTED');
+      if (checkActivityRefusal(drift.hungerScore, drift.fatigueScore, 'ANY').refused) throw new PveError('ERR_PVE_HERO_EXHAUSTED');
       readiness[hero.id] = starvationMultiplier(drift.hungerScore);
       penalty[hero.id] = Math.min(1, ...injuries.filter(row => row.heroId === hero.id).map(row => injuryMultiplier(row.penaltyPercent)));
       personality[hero.id] = { loyalty: loyaltyCombatMultiplier(traits.find(row => row.heroId === hero.id)?.loyaltyScore ?? 50),

@@ -22,10 +22,14 @@ export const REST_RECOVERY_PER_HOUR = 15;
 export const FEED_HUNGER_RELIEF = 20;
 export const STARVATION_PENALTY_MULTIPLIER = 0.6;
 export const FOOD_PER_HERO_PER_DAY = 2;
+export const REFUSE_ALL_THRESHOLD = 90;
+export const REFUSE_TOWER_THRESHOLD = 60;
+export const REFUSE_DUNGEON_THRESHOLD = 80;
 
 export type HungerState = 'FULL' | 'SATISFIED' | 'HUNGRY' | 'STARVING' | 'CRITICAL';
 export type FatigueState = 'RESTED' | 'NORMAL' | 'TIRED' | 'EXHAUSTED' | 'CRITICAL' | 'OVEREXHAUSTED';
 export type RationContext = 'DUNGEON' | 'WAR';
+export type ActivityGate = 'ANY' | 'TOWER' | 'DUNGEON';
 
 export const clampScore = (value: number): number => Math.min(100, Math.max(0, Math.round(value * 100) / 100));
 
@@ -55,6 +59,37 @@ export function starvationMultiplier(score: number): number {
 
 export function isImmobilised(hungerScore: number, fatigueScore: number): boolean {
   return clampScore(hungerScore) >= 100 || clampScore(fatigueScore) >= 100;
+}
+
+export function refusalThresholdFor(gate: ActivityGate): number {
+  if (gate === 'TOWER') return REFUSE_TOWER_THRESHOLD;
+  if (gate === 'DUNGEON') return REFUSE_DUNGEON_THRESHOLD;
+  return REFUSE_ALL_THRESHOLD;
+}
+
+export function checkActivityRefusal(
+  hungerScore: number,
+  fatigueScore: number,
+  gate: ActivityGate,
+): { refused: boolean; reason: 'HUNGER' | 'FATIGUE' | null; threshold: number } {
+  const threshold = refusalThresholdFor(gate);
+  const h = clampScore(hungerScore);
+  const f = clampScore(fatigueScore);
+  if (f >= threshold) return { refused: true, reason: 'FATIGUE', threshold };
+  if (h >= threshold) return { refused: true, reason: 'HUNGER', threshold };
+  return { refused: false, reason: null, threshold };
+}
+
+export function housingCapacityFor(buildingType: string, level: number): number {
+  if (buildingType === 'PARTY_MANSION') return 5;
+  if (buildingType === 'HOUSE') return level <= 1 ? 5 : level === 2 ? 7 : 10;
+  return 0;
+}
+
+export function housingRecoveryMultiplierFor(buildingType: string, level: number): number {
+  if (buildingType === 'PARTY_MANSION') return 4.0;
+  if (buildingType === 'HOUSE') return level <= 1 ? 1.0 : level === 2 ? 1.5 : 2.0;
+  return 0;
 }
 
 /** Arena rounds: rations are charged per Hero dispatched. */

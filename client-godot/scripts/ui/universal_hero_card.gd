@@ -8,6 +8,8 @@ extends PanelContainer
 signal card_clicked(hero_data: Dictionary)
 signal selection_toggled(hero_data: Dictionary, is_selected: bool)
 
+const RarityStyleScript = preload("res://scripts/ui/rarity_style.gd")
+
 enum ContextMode {
 	DEFAULT,       ## Standard profile: Stars, CP, Level, Class
 	RECOVERY,      ## Recovery Center: HP Bar, Injury debuff, Bed / Queue status
@@ -314,6 +316,8 @@ func _rebuild_ui() -> void:
 	_refresh_badges()
 
 	_update_selection_visual()
+	if star >= 7:
+		RarityStyleScript.attach_rainbow_border(self, 10.0, 3.0)
 	_set_children_mouse_filter_ignore(self)
 
 func _apply_context_rules() -> void:
@@ -351,6 +355,10 @@ func _apply_context_rules() -> void:
 
 		ContextMode.DORMITORY:
 			var fat: float = float(hero_data.get("fatigue", 0))
+			var has_scope := hero_data.has("_dorm_target_building_id")
+			var in_other := bool(hero_data.get("_dorm_in_other_house", false))
+			var in_here := bool(hero_data.get("_dorm_is_resident_here", false))
+			var is_resting_here := bool(hero_data.get("_dorm_is_resting_here", false)) if has_scope else (bool(hero_data.get("isResting", false)) or str(hero_data.get("state", "")) == "RESTING")
 			var bar_col := Color(0.35, 0.85, 0.45)
 			if fat > 75.0:
 				bar_col = Color(0.92, 0.28, 0.28)
@@ -358,14 +366,21 @@ func _apply_context_rules() -> void:
 				bar_col = Color(0.95, 0.65, 0.25)
 			set_status_bar(fat, 100.0, "Mệt mỏi: %d%%" % int(fat), bar_col)
 
-			var is_resting := str(hero_data.get("state", "")) == "RESTING"
-			if is_resting:
+			if is_resting_here:
 				add_badge("💤 Đang nghỉ ngơi", Color(0.25, 0.55, 0.95, 0.9))
+			elif in_here:
+				add_badge("🏠 Ở nhà này", Color(0.22, 0.65, 0.48, 0.9))
+			elif in_other:
+				add_badge("🏘️ Ở nhà khác", Color(0.55, 0.48, 0.28, 0.9))
+			elif has_scope:
+				add_badge("⛺ Ở ngoài", Color(0.35, 0.42, 0.52, 0.85))
 
 		ContextMode.LIBRARY:
 			var hexp: float = float(hero_data.get("exp", 0))
 			var req_exp: float = maxf(1.0, float(hero_data.get("nextLevelExp", 1000)))
 			set_status_bar(hexp, req_exp, "EXP: %d/%d" % [int(hexp), int(req_exp)], Color(0.35, 0.75, 1.0))
+			if bool(hero_data.get("_worker_priority", false)):
+				add_badge("🔨 Đang làm việc", Color(0.28, 0.72, 0.48, 0.95))
 			var cls: String = str(hero_data.get("classCode", hero_data.get("heroClass", ""))).to_upper()
 			if cls == "MAGE":
 				add_badge("🔮 MAGE (Hợp lệ)", Color(0.55, 0.32, 0.92, 0.9))
@@ -421,9 +436,12 @@ func _apply_context_rules() -> void:
 			var def_v: int = int(hero_data.get("defense", 10))
 			var spd: int = int(hero_data.get("speed", 10))
 			var cp: int = int(hero_data.get("combatPower", mhp + atk * 4 + def_v * 3 + spd * 2))
+			var is_working := bool(hero_data.get("_worker_priority", false))
 			_status_bar_label.text = "🔥 LC: %s" % _format_number(cp)
 			_status_bar_label.add_theme_color_override("font_color", Color(1.0, 0.65, 0.25))
 			_status_bar.visible = false
+			if is_working:
+				add_badge("🔨 Đang làm việc", Color(0.28, 0.72, 0.48, 0.95))
 
 func _refresh_badges() -> void:
 	if _badge_container == null:
@@ -535,19 +553,7 @@ func _on_mouse_exited() -> void:
 # ==============================================================================
 
 func _get_rarity_color(star: int) -> Color:
-	if star >= 7:
-		return Color(1.0, 0.45, 0.95, 1.0) # 7★ Prismatic Rainbow
-	elif star == 6:
-		return Color(0.95, 0.22, 0.28, 1.0) # 6★ Crimson / Mythic Red
-	elif star == 5:
-		return Color(1.0, 0.82, 0.24, 0.95) # 5★ Gold
-	elif star == 4:
-		return Color(0.78, 0.48, 0.95, 0.95) # 4★ Purple
-	elif star == 3:
-		return Color(0.32, 0.72, 0.95, 0.90) # 3★ Blue
-	elif star == 2:
-		return Color(0.35, 0.85, 0.50, 0.90) # 2★ Green
-	return Color(0.68, 0.72, 0.78, 0.85)     # 1★ Gray/Bronze
+	return RarityStyleScript.color_for_star(star)
 
 func _get_element_color(elem: String) -> Color:
 	match elem.to_upper():

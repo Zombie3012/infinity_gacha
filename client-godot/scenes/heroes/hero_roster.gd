@@ -5,6 +5,7 @@ extends Control
 
 const UnitActorScene: PackedScene = preload("res://scenes/common/unit_actor_3d.tscn")
 const UniversalHeroCardScript = preload("res://scripts/ui/universal_hero_card.gd")
+const RarityStyleScript = preload("res://scripts/ui/rarity_style.gd")
 
 @onready var hero_item_list: ItemList = %HeroItemList
 @onready var hero_name_label: Label = %HeroNameLabel
@@ -138,13 +139,7 @@ func _get_hero_element_color(element: String) -> Color:
 		_: return Color(0.65, 0.75, 0.85)
 
 func _get_rarity_border_color(star: int) -> Color:
-	if star >= 5:
-		return Color(1.0, 0.82, 0.24, 0.95)
-	elif star == 4:
-		return Color(0.78, 0.48, 0.95, 0.95)
-	elif star == 3:
-		return Color(0.32, 0.72, 0.95, 0.90)
-	return Color(0.68, 0.52, 0.36, 0.90)
+	return RarityStyleScript.color_for_star(star)
 
 func _get_rarity_rank_name(star: int) -> String:
 	return str(clampi(star, 1, 7)) + "\u2605"
@@ -2756,7 +2751,9 @@ func _render_tab_equipment(h: Dictionary) -> void:
 	for it in matching_items:
 		var tmpl: Dictionary = it.get("template", {}) if it.get("template") is Dictionary else it
 		var r_star: int = int(tmpl.get("rarity", 1))
-		if _equipment_rarity_filter == 5 and r_star < 5:
+		if _equipment_rarity_filter == 6 and r_star < 6:
+			continue
+		elif _equipment_rarity_filter == 5 and r_star != 5:
 			continue
 		elif _equipment_rarity_filter == 4 and r_star != 4:
 			continue
@@ -2809,6 +2806,7 @@ func _render_tab_equipment(h: Dictionary) -> void:
 
 	for f_opt in [
 		{"label": "Tất Cả", "val": 0},
+		{"label": "6-7★", "val": 6},
 		{"label": "5★", "val": 5},
 		{"label": "4★", "val": 4},
 		{"label": "1-3★", "val": 3}

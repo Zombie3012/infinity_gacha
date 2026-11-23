@@ -56,14 +56,14 @@ static func _build_default_modes() -> Array:
 		},
 		{
 			"id": "DUNGEON",
-			"badge": "🕳️ HẦM NGỤC • SẮP RA MẮT",
+			"badge": "🕳️ HẦM NGỤC • ĐANG MỞ",
 			"title": "Hầm Ngục Cổ Đại (Dungeon)",
 			"subtitle": "Thám hiểm theo phiên • World Seed",
-			"requirement": "🔑 Yêu cầu: Mở khóa sau Tầng 1 Tháp",
+			"requirement": "🔑 Yêu cầu: Sẵn sàng thám hiểm",
 			"accent": Color(0.35, 0.78, 1.0),
 			"bg": Color(0.08, 0.13, 0.22, 0.96),
-			"available": false,
-			"enter_label": "🚧 Đang hoàn thiện giao diện 3D",
+			"available": true,
+			"enter_label": "🕳️ Tiến Vào Hầm Ngục",
 			"highlights": [
 				"• Bản đồ sinh ngẫu nhiên theo World Seed từng tầng",
 				"• Đối mặt Quái tinh nhuệ & Bẫy hầm ngục với phần thưởng hiếm",
@@ -73,36 +73,19 @@ static func _build_default_modes() -> Array:
 		},
 		{
 			"id": "EXPEDITION",
-			"badge": "🧭 VIỄN CHINH • SẮP RA MẮT",
+			"badge": "🧭 VIỄN CHINH • ĐANG MỞ",
 			"title": "Viễn Chinh Thế Giới (Expedition)",
 			"subtitle": "Cử đội thám hiểm dài ngày",
-			"requirement": "👥 Yêu cầu: Tối thiểu 1 Đội Tướng rảnh",
+			"requirement": "👥 Yêu cầu: Tối thiểu 1 Tướng rảnh",
 			"accent": Color(0.42, 0.92, 0.68),
 			"bg": Color(0.07, 0.16, 0.15, 0.96),
-			"available": false,
-			"enter_label": "🚧 Đang hoàn thiện giao diện 3D",
+			"available": true,
+			"enter_label": "🧭 Mở Viễn Chinh Thế Giới",
 			"highlights": [
 				"• Cử Tướng đi thu thập Lương thực, Gỗ, Đá và Bạc tự động",
 				"• Thời gian thực theo khu vực tài nguyên ngoài Lâu Đài",
 				"• Có thể triệu hồi đội về sớm khi cần nhân lực phòng thủ",
 				"• Tối ưu hóa Tướng không nằm trong đội hình leo Tháp"
-			]
-		},
-		{
-			"id": "CONQUEST",
-			"badge": "🏰 CHINH PHẠT • SẮP RA MẮT",
-			"title": "Chinh Phạt Lãnh Thổ (Conquest)",
-			"subtitle": "Chiến trường Liên Minh & Kỳ Quan",
-			"requirement": "🏳️ Yêu cầu: Tham gia Liên Minh",
-			"accent": Color(0.96, 0.46, 0.48),
-			"bg": Color(0.18, 0.08, 0.12, 0.96),
-			"available": false,
-			"enter_label": "🚧 Đang hoàn thiện giao diện 3D",
-			"highlights": [
-				"• Chiếm đóng các Ô tài nguyên & Kỳ Quan trên Bản đồ Thế giới",
-				"• Cạnh tranh Bảng Xếp Hạng Mùa Giải cùng Liên Minh",
-				"• Nhận danh hiệu, Đá Quý và rương phần thưởng cuối mùa",
-				"• Thiết lập đội hình phòng thủ lãnh thổ"
 			]
 		}
 	]

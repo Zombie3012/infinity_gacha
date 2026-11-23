@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { timingSafeEqual } from 'node:crypto';
 import { aggregateEquipment, BREAKTHROUGH_SILVER_COST, breakthroughMaxLevel, eligibleClasses, heroEffectiveMaxLevel, roleForClass, rollElementAffinity, starMaxLevel, type EquipmentItemInput, type EquipmentV2Stats, type HeroClass, type StarRating } from '@infiniti-gacha/shared';
 import { db, pool } from './database/db.js';
-import { accounts, accountSessions, playerProfiles, banners, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits, heroImprints, imprintDefinitions } from './database/drizzle-schema.js';
+import { accounts, accountSessions, playerProfiles, banners, summonRewardPool, heroes, heroTemplates, heroSkillTemplates, heroSkillInstances, masters, masterParties, combatSessions, worlds, masterSummonInventory, masterItems, weeklyScrollExchanges, summonHistory, equipmentInstances, equipmentTemplates, heroLevelConfigs, heroDevelopmentConfigs, featureUnlockConfigs, heroElementAffinities, heroPersonalityTraits, heroImprints, imprintDefinitions, heroSurvivalStates } from './database/drizzle-schema.js';
 import { CLASS_CHANGE_ITEM, CLASS_CHANGE_SILVER, ProgressionError, allocateTraining, classChangeCheck, isV2Origin, originOf, progressionFor } from './modules/hero/hero-progression.js';
 import { legacyClassFor } from './modules/hero/hero-generation.js';
 import { imprintSlotsFor } from './modules/hero/imprint-rules.js';
@@ -31,6 +31,7 @@ import { monitoringService } from './modules/admin/monitoring.service.js';
 import { rateGuard, securityAlertService } from './modules/admin/security.service.js';
 import { BaseError, buildingService } from './modules/base/building.service.js';
 import { SurvivalError, survivalService } from './modules/survival/survival.service.js';
+import { applyDrift } from './modules/survival/survival-rules.js';
 import { MedicalError, medicalService } from './modules/medical/medical.service.js';
 import { heroChronicleService } from './modules/hero/hero-chronicle.service.js';
 import { PersonalityError, personalityService } from './modules/personality/personality.service.js';
@@ -49,6 +50,7 @@ import { SupportError, supportService } from './modules/support/support.service.
 import { WorldError, worldService } from './modules/world/world.service.js';
 import { ExpeditionError, expeditionService } from './modules/world/expedition.service.js';
 import { AllianceError, allianceService } from './modules/world/alliance.service.js';
+import { ChatError, chatService } from './modules/world/chat.service.js';
 import { ConquestError, conquestService } from './modules/world/conquest.service.js';
 import { getBattleRules } from './modules/admin/runtime-rules.js';
 import { PveRuleError } from '@infiniti-gacha/shared';
@@ -1060,6 +1062,39 @@ export function createApp() {
       ));
     } catch (error) {
       if (allianceError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/chat/world', requireAccount, asyncRoute(async (_req, res) => {
+    return res.json(await chatService.listWorld(50));
+  }));
+
+  app.post('/api/chat/world', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.status(201).json(await chatService.sendWorld(master.id, req.body?.body));
+    } catch (error) {
+      if (error instanceof ChatError) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+  }));
+
+  app.get('/api/chat/private', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    const peer = typeof req.query.peer === 'string' ? req.query.peer : undefined;
+    return res.json(await chatService.listPrivate(master.id, peer, 50));
+  }));
+
+  app.post('/api/chat/private', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.status(201).json(await chatService.sendPrivate(master.id, req.body ?? {}));
+    } catch (error) {
+      if (error instanceof ChatError) return res.status(error.statusCode).json({ error: error.message });
       throw error;
     }
   }));
@@ -2163,7 +2198,10 @@ export function createApp() {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
-      return res.json(await survivalService.setResting(master.id, String(req.params.heroId), true));
+      const buildingId = req.body && typeof req.body === 'object' && (req.body as { buildingId?: unknown }).buildingId
+        ? String((req.body as { buildingId?: unknown }).buildingId)
+        : null;
+      return res.json(await survivalService.setResting(master.id, String(req.params.heroId), true, buildingId));
     } catch (error) {
       if (survivalError(res, error)) return undefined;
       throw error;
@@ -2175,6 +2213,33 @@ export function createApp() {
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
       return res.json(await survivalService.setResting(master.id, String(req.params.heroId), false));
+    } catch (error) {
+      if (survivalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/survival/housing/:buildingId/assign', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await survivalService.assignHousing(
+        master.id,
+        String(req.params.buildingId),
+        String(req.body?.heroId ?? ''),
+        req.body?.swapWithHeroId ? String(req.body.swapWithHeroId) : null,
+      ));
+    } catch (error) {
+      if (survivalError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.delete('/api/survival/housing/heroes/:heroId', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await survivalService.removeHousing(master.id, String(req.params.heroId)));
     } catch (error) {
       if (survivalError(res, error)) return undefined;
       throw error;
@@ -2471,6 +2536,12 @@ export function createApp() {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     const collection = await db.select().from(heroes).where(eq(heroes.masterId, master.id)).orderBy(desc(heroes.rarity), heroes.name);
+    const survivalRows = collection.length ? await db.select().from(heroSurvivalStates).where(inArray(heroSurvivalStates.heroId, collection.map(hero => hero.id))) : [];
+    const survivalByHero = new Map(survivalRows.map(row => [row.heroId, row]));
+    const [foodRow] = await db.select({ quantity: masterItems.quantity }).from(masterItems)
+      .where(and(eq(masterItems.masterId, master.id), eq(masterItems.itemId, 'FOOD'))).limit(1);
+    const hasFood = (foodRow?.quantity ?? 0) > 0;
+    const survivalNow = new Date();
     const deployments = collection.length ? await db.select({ heroId: pveHeroReservations.heroId, squadId: pveSquads.id,
       mapId: pveSquads.mapId, name: pveSquads.name }).from(pveHeroReservations)
       .innerJoin(pveSquads, eq(pveSquads.id, pveHeroReservations.squadId)).where(eq(pveHeroReservations.masterId, master.id)) : [];
@@ -2595,8 +2666,23 @@ export function createApp() {
         ? Object.entries(elementAffinities).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0]
         : undefined;
 
+      const survivalState = survivalByHero.get(hero.id);
+      const drift = applyDrift(
+        survivalState ?? { hungerScore: hero.hunger, fatigueScore: hero.fatigue, isResting: false, lastTickAt: survivalNow },
+        survivalNow,
+        hasFood,
+      );
+      const effectiveResting = survivalState?.isResting
+        ? (survivalState.fatigueScore <= 0 ? true : drift.isResting)
+        : false;
+
       return {
-        ...hero, pveDeployment: deploymentByHero.get(hero.id) ?? null,
+        ...hero,
+        hunger: drift.hungerScore,
+        fatigue: drift.fatigueScore,
+        isResting: effectiveResting,
+        housingBuildingId: survivalState?.housingBuildingId ?? null,
+        pveDeployment: deploymentByHero.get(hero.id) ?? null,
         heroClass: effectiveClass, element: strongestElement ?? template?.element ?? 'NEUTRAL', exp: hero.exp.toString(),
         nextLevelExp: expThresholdByLevel.get(hero.level + 1) ?? null,
         currentLevelExp: expThresholdByLevel.get(hero.level) ?? '0',
@@ -3647,7 +3733,11 @@ export function createApp() {
   app.post('/api/pve/enter', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
-    return res.status(201).json(await pveService.enter(master.id, req.header('Idempotency-Key') ?? ''));
+    const rawFloor = req.body && typeof req.body === 'object' ? (req.body as { floor?: unknown }).floor : undefined;
+    const requestedFloor = typeof rawFloor === 'number' || (typeof rawFloor === 'string' && rawFloor.trim() !== '')
+      ? Number(rawFloor)
+      : undefined;
+    return res.status(201).json(await pveService.enter(master.id, req.header('Idempotency-Key') ?? '', requestedFloor));
   }));
 
   app.post('/api/pve/parties', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
@@ -3671,7 +3761,8 @@ export function createApp() {
   app.post('/api/pve/parties/:partyId/deploy', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'ERR_PVE_NO_MASTER' });
-    return res.status(201).json(await pveService.deploy(master.id, String(req.params.partyId), req.header('Idempotency-Key') ?? ''));
+    const forceRecall = Boolean(req.body && typeof req.body === 'object' && (req.body as { forceRecall?: unknown }).forceRecall);
+    return res.status(201).json(await pveService.deploy(master.id, String(req.params.partyId), req.header('Idempotency-Key') ?? '', forceRecall));
   }));
 
   app.post('/api/pve/squads/:squadId/move', requireAccount, requireFeature('PVE_COMBAT'), asyncRoute(async (req, res) => {

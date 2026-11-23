@@ -895,3 +895,22 @@ Signed: Antigravity, project assistant
 - Executed `npm run db:migrate` successfully, applying migrations 0044 through 0059. Resolved missing `pve_run` column on table `worlds`.
 - Updated Godot `isometric_base_3d.gd` `_sync_all_from_backend` to automatically recover authentication and clear the offline banner upon manual refresh.
 - Verified encoding (355 files passed) and Godot syntax check.
+
+
+## Update - 2026-11-23 (UTC+7): completed M01-M12 unattended /goal queue (UI, Gacha, Forge/Warehouse, Survival, Hero Lifecycle, Events/Quests/Mailbox, Dungeon, Expedition, Alliance Hall, 3-Channel Chat, Account Security)
+
+Signed: Antigravity, project assistant
+
+- Completed all 12 milestones (`M01`–`M12`) in `GOAL_QUEUE.md`:
+  - `M01`: Synced `RarityStyle` (1★–7★ + Rainbow) and `UniversalItemCard` across `hero_roster.gd`, `pve_field_items_modal.gd`, and `magic_hall_modal.gd`.
+  - `M02`: Added Gacha history view (`GET /api/gacha/history`) and double-submit guards in `summon_banner_modal.gd`; verified via `scripts/test-godot-gacha.mjs` (9 checks, PASS).
+  - `M03`: Added floor-drop recovery (`GET /api/equipment/floor-drops`, `POST /api/equipment/:itemId/pickup`) in `gear_warehouse_modal.gd`; verified Forge + Warehouse via `scripts/test-godot-forge-warehouse.mjs` (13 checks, PASS).
+  - `M04`: Verified Survival, Kitchen, Dormitory, Personality/Loyalty, and Medical flows via `scripts/test-godot-medical.mjs` (16 checks, PASS) and `scripts/test-godot-survival-dorm.mjs` (12 checks, PASS).
+  - `M05`: Verified Hero lifecycle & development endpoints via `hero_lifecycle_ui_test.tscn` (33 checks, PASS) and `scripts/test-godot-hero-dev.mjs` (8 checks, PASS).
+  - `M06`: Replaced `DailyEventBtn` with `MailboxEventBtn` on the Top-Right Event Strip and added `events_quests_modal.gd` (Events, Quests, Achievements); verified via `scripts/test-godot-events-quests.mjs` (4 checks, PASS).
+  - `M07`: Added `mailbox_modal.gd` (Mailbox claim/claim-all + Economy Ledger); verified via `scripts/test-godot-mailbox.mjs` (4 checks, PASS).
+  - `M08`: Removed `CONQUEST` from `pve_mode_modal.gd`, enabled `DUNGEON` & `EXPEDITION`, and added `ancient_dungeon_modal.gd`; verified via `scripts/test-godot-ancient-dungeon.mjs` (5 checks, PASS).
+  - `M09`: Added `world_expedition_modal.gd` and `GameState.refresh_away_heroes()`; verified via `scripts/test-godot-world-expedition.mjs` (4 checks, PASS).
+  - `M10`: Registered `ALLIANCE_HALL` building (seed + 3D mesh + `"Liên minh"` nameplate + `BuildingActionBar` + `alliance_modal.gd`, excluding Tech Upgrade & Alliance Wars); verified via `scripts/test-godot-alliance-building.mjs` (5 checks, PASS).
+  - `M11`: Added `0060_chat_channels.sql`, `chatMessages` schema, `chat.service.ts` (`/api/chat/world`, `/api/chat/private`), and `chat_panel_modal.gd` (World / Alliance / Private) wired to `ChatBtn`; verified via `scripts/test-godot-chat-channels.mjs` (4 checks, PASS).
+  - `M12`: Added Security & Account Recovery tab (`Bảo Mật & Tài Khoản`) to `player_profile_modal.gd` while preserving auto-demo session login in `login_screen.gd`; verified via `scripts/test-godot-auth-account.mjs` (4 checks, PASS), `npx tsc -p packages/server/tsconfig.json --noEmit`, `base_presentation_ui_test.tscn` (49 checks, PASS), and `pve_ui_test.tscn` (78 checks, 0 failures).

@@ -128,6 +128,128 @@ func _ready() -> void:
 	await get_tree().process_frame
 	expect(selected_modes == ["TOWER"], "Clicking Enter Tower emits TOWER mode selection")
 
+	var rarity_script = load("res://scripts/ui/rarity_style.gd")
+	expect(rarity_script.color_for_star(1) == Color("c4cdd9"), "1-star rarity color is Silver")
+	expect(rarity_script.color_for_star(2) == Color("3cd070"), "2-star rarity color is Green")
+	expect(rarity_script.color_for_star(3) == Color("3898ff"), "3-star rarity color is Blue")
+	expect(rarity_script.color_for_star(4) == Color("b55cff"), "4-star rarity color is Purple")
+	expect(rarity_script.color_for_star(5) == Color("ffd23f"), "5-star rarity color is Gold")
+	expect(rarity_script.color_for_star(6) == Color("ff4757"), "6-star rarity color is Red")
+
+	var item_card: Control = load("res://scripts/ui/universal_item_card.gd").new()
+	add_child(item_card)
+	item_card.setup({"id": "itm-7", "name": "Thánh Kiếm Cầu Vồng", "starLevel": 7, "slot": "WEAPON", "quantity": 957, "source": "Tháp PvE Tầng 10"}, 0, false)
+	await get_tree().process_frame
+	expect(item_card.custom_minimum_size == Vector2(92, 92) and item_card.get_node_or_null("RainbowBorder") != null, "7-star UniversalItemCard is compact 92x92 with RainbowBorder")
+	expect(item_card._qty_label.text == "957", "Item card displays stack quantity at bottom-right")
+
+	var hero_card: Control = load("res://scripts/ui/universal_hero_card.gd").new()
+	add_child(hero_card)
+	hero_card.setup({"id": "h-7", "name": "Lucifer", "rarity": 7, "level": 10, "maxLevel": 20, "classCode": "MAGE"}, 0, false)
+	await get_tree().process_frame
+	expect(hero_card.get_node_or_null("RainbowBorder") != null, "7-star UniversalHeroCard attaches RainbowBorder")
+
+	var pop: Control = load("res://scripts/ui/item_detail_popover.gd").new()
+	add_child(pop)
+	pop.setup({"id": "itm-7", "name": "Thánh Kiếm Cầu Vồng", "starLevel": 7, "slot": "POTION", "quantity": 5, "source": "Xưởng Giả Kim"}, Rect2(100, 100, 92, 92), 0, true)
+	await get_tree().process_frame
+	expect(texts(pop).contains("Nguồn gốc: Xưởng Giả Kim") and texts(pop).contains("Dùng") and texts(pop).contains("Chia") and texts(pop).contains("Bỏ"), "ItemDetailPopover shows origin, use, split and drop actions")
+	var pop_actions: Array = []
+	pop.action_requested.connect(func(code: String, _d: Dictionary, qty: int): pop_actions.append([code, qty]))
+	var split_btn: Button = pop.find_children("*", "Button", true, false).filter(func(b): return b.text.contains("Chia"))[0]
+	pop._qty_spin.value = 3
+	split_btn.pressed.emit()
+	await get_tree().process_frame
+	expect(pop_actions.size() == 1 and pop_actions[0] == ["SPLIT", 3], "ItemDetailPopover emits split action with selected quantity")
+	item_card.queue_free()
+	hero_card.queue_free()
+
+	# Warehouse unified categories & per-category filters
+	GameState.equipment_list = [
+		{"id": "eq-1", "name": "Kiếm Thép", "slot": "WEAPON", "starLevel": 3, "atkBonus": 25},
+	]
+	GameState.inventory_items = [
+		{"id": "inv-wood", "itemId": "WOOD", "name": "Gỗ Sồi", "category": "MATERIAL", "rarity": 1, "quantity": 120},
+		{"id": "inv-enh", "itemId": "ENHANCEMENT_STONE", "name": "Đá Cường Hóa", "category": "MATERIAL", "rarity": 2, "quantity": 15},
+		{"id": "inv-exp", "itemId": "SAMPLE_HERO_EXP_100", "name": "Sách EXP Sơ Cấp", "category": "DEVELOPMENT", "rarity": 2, "quantity": 8, "canUse": true},
+		{"id": "inv-seal", "itemId": "SAMPLE_HERO_PROMOTION_SEAL", "name": "Ấn Thăng Bậc", "category": "DEVELOPMENT", "rarity": 3, "quantity": 2},
+		{"id": "inv-pot", "itemId": "POTION_HP_SMALL", "name": "Thuốc Hồi Máu Nhỏ", "category": "CONSUMABLE", "rarity": 2, "quantity": 5, "canUse": true},
+		{"id": "inv-food", "itemId": "FOOD", "name": "Lương Thực Khô", "category": "CONSUMABLE", "rarity": 1, "quantity": 50},
+	]
+	GameState.summon_scrolls_list = [
+		{"id": "SCROLL_NORMAL", "itemId": "SCROLL_NORMAL", "name": "Thiên Thư Triệu Hồi Thường", "category": "TICKET", "rarity": 3, "starLevel": 3, "slot": "SCROLL", "quantity": 4},
+	]
+	var warehouse: Control = load("res://scripts/ui/gear_warehouse_modal.gd").new()
+	add_child(warehouse)
+	await get_tree().process_frame
+	expect(warehouse.browser.filtered_items.size() == 8, "Warehouse ALL category displays all 8 mixed items (gear, materials, dev, consumables, food, scrolls)")
+	warehouse.select_category("DEVELOPMENT")
+	await get_tree().process_frame
+	expect(warehouse.browser.filtered_items.size() == 2, "Warehouse DEVELOPMENT category shows only 2 dev items")
+	var exp_pill: Button = warehouse.browser.find_children("*", "Button", true, false).filter(func(b): return b.text == "Sách EXP")[0]
+	exp_pill.pressed.emit()
+	await get_tree().process_frame
+	expect(warehouse.browser.filtered_items.size() == 1 and str(warehouse.browser.filtered_items[0].get("itemId", "")) == "SAMPLE_HERO_EXP_100", "Per-category filter 'Sách EXP' inside DEVELOPMENT filters to EXP book only")
+	warehouse.select_category("MATERIAL")
+	await get_tree().process_frame
+	var raw_pill: Button = warehouse.browser.find_children("*", "Button", true, false).filter(func(b): return b.text == "Gỗ & Đá & Sắt")[0]
+	raw_pill.pressed.emit()
+	await get_tree().process_frame
+	expect(warehouse.browser.filtered_items.size() == 1 and str(warehouse.browser.filtered_items[0].get("itemId", "")) == "WOOD", "Per-category filter 'Gỗ & Đá & Sắt' inside MATERIAL filters to raw resource only")
+	expect(not ("hệ phái" in warehouse.browser.search_input.placeholder_text) and not warehouse.browser.bottom_action_container.visible, "Warehouse ItemGridBrowser uses item placeholder and hides bottom action bar")
+	warehouse.select_category("CONSUMABLE")
+	await get_tree().process_frame
+	expect(warehouse.browser.current_filter_pill_idx == 0, "Switching warehouse category resets filter pill index to 0")
+	warehouse.select_category("ALL")
+	await get_tree().process_frame
+	warehouse.browser.filter_btn.pressed.emit()
+	await get_tree().process_frame
+	expect(str(warehouse.browser.filtered_items[0].get("itemId", "")) == "WOOD", "ItemGridBrowser sort mode 1 sorts by Quantity descending (WOOD=120 first)")
+	warehouse.queue_free()
+
+	var item_browser: Control = load("res://scripts/ui/item_grid_browser.gd").new()
+	add_child(item_browser)
+	item_browser.configure_header("Forge Test", ["Tất cả", "Chưa đạt +15", "Đạt +15"])
+	item_browser.set_items([
+		{"id": "eq-low", "name": "Kiếm +5", "enhanceLevel": 5, "starLevel": 2},
+		{"id": "eq-max", "name": "Kiếm +15", "enhanceLevel": 15, "starLevel": 5},
+	])
+	await get_tree().process_frame
+	var max_pill: Button = item_browser.find_children("*", "Button", true, false).filter(func(b): return b.text == "Đạt +15")[0]
+	max_pill.pressed.emit()
+	await get_tree().process_frame
+	expect(item_browser.filtered_items.size() == 1 and str(item_browser.filtered_items[0].get("id", "")) == "eq-max", "ItemGridBrowser Forge filter 'Đạt +15' filters to +15 gear only")
+	item_browser.queue_free()
+
+	# Main Screen HUD layout & controls verification
+	var base_scene: Node3D = load("res://scenes/base/isometric_base_3d.tscn").instantiate()
+	add_child(base_scene)
+	expect(base_scene.floor_elevator_panel != null and not base_scene.floor_elevator_panel.visible, "Build tools drawer is hidden by default to keep 3D center clear")
+	expect(base_scene.view_cycle_btn != null and base_scene.view_cycle_btn.text.contains("Tầng 1"), "Single view cycle button starts at Floor 1")
+	base_scene.view_cycle_btn.pressed.emit()
+	expect(base_scene._current_lobby_floor == 2 and not base_scene._panorama_mode and base_scene.view_cycle_btn.text.contains("Tầng 2"), "First click on view cycle button switches to Floor 2")
+	base_scene.view_cycle_btn.pressed.emit()
+	expect(base_scene._panorama_mode and base_scene.view_cycle_btn.text.contains("Toàn Cảnh"), "Second click on view cycle button switches to Panorama mode")
+	base_scene.view_cycle_btn.pressed.emit()
+	expect(base_scene._current_lobby_floor == 1 and not base_scene._panorama_mode and base_scene.view_cycle_btn.text.contains("Tầng 1"), "Third click on view cycle button cycles back to Floor 1")
+	base_scene.build_drawer_btn.pressed.emit()
+	expect(base_scene.floor_elevator_panel.visible, "Clicking Build Drawer button opens build tools drawer")
+	base_scene.build_drawer_btn.pressed.emit()
+	expect(not base_scene.floor_elevator_panel.visible, "Clicking Build Drawer button again hides build tools drawer")
+	expect(base_scene.event_buttons_box != null and base_scene.event_buttons_box.visible, "Event strip below top-right resources is visible by default")
+	base_scene.event_strip_toggle_btn.pressed.emit()
+	expect(not base_scene.event_buttons_box.visible, "Event strip toggle collapses event buttons")
+	base_scene.queue_free()
+
+	# M01: RarityStyle & UniversalItemCard consistency in hero_roster, pve_field_items, magic_hall
+	var roster_script = load("res://scenes/heroes/hero_roster.gd")
+	expect(roster_script != null, "hero_roster.gd compiles cleanly with RarityStyleScript")
+	var field_modal: Control = load("res://scripts/ui/pve_field_items_modal.gd").new()
+	add_child(field_modal)
+	await get_tree().process_frame
+	expect(field_modal != null, "pve_field_items_modal.gd instantiates cleanly with RarityStyle")
+	field_modal.queue_free()
+
 	bar.queue_free()
 	plot.queue_free()
 	camera.queue_free()
