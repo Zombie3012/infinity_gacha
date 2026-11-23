@@ -1,17 +1,20 @@
 # Godot client: trạng thái và backlog
 
-Cập nhật: **22/11/2026 (UTC+7)**. Đối chiếu với code hiện tại; checklist thiết kế P0–P3 chỉ phản ánh phạm vi prototype tại thời điểm viết.
+Cập nhật: **23/11/2026 (UTC+7)**. Đối chiếu với code hiện tại; checklist thiết kế P0–P3 chỉ phản ánh phạm vi prototype tại thời điểm viết.
 
 ## Đã có trong code
 
-- Căn cứ 3D isometric, camera, tương tác ô đất/công trình, phân công Hero.
-- Action bar, thông tin/nâng cấp công trình và đếm ngược xây dựng.
-- Modal hồi phục, bếp/nhà ăn, ký túc xá, huấn luyện, lò rèn và kho.
-- Hero roster dạng thẻ, xem nhân vật 3D, huấn luyện, kỹ năng, thức tỉnh, ấn ký, trang bị và chọn phôi thăng sao.
-- HUD Master, hồ sơ, avatar, giftcode và gửi ticket hỗ trợ.
-- Gacha hai banner, chọn ngang, tỷ lệ lấy từ API, ×1/×10, hiệu ứng triệu hồi và thẻ kết quả.
-- Đấu trường PvE với diễn hoạt replay, tốc độ phát và dynamic camera.
-- REST client và đồng bộ profile, Hero, căn cứ, trang bị, vật phẩm, đội hình.
+- Căn cứ 3D isometric, camera, tương tác ô đất/công trình, xây/nâng cấp tức thì, phân công đa nhân sự & giải phóng nhân sự.
+- HUD màn hình chính gọn: Top-Right 3 tài nguyên + thanh Sự Kiện (`Thương Thuyền`, `Sự Kiện`, `Hòm Thư`), nút xoay vòng góc nhìn T1/T2/Toàn cảnh, Build Drawer ẩn mặc định và Bottom-Right Dock + CTA `Tháp PvE`.
+- Hệ thống thẻ dùng chung 1–7★ (`RarityStyle` + viền Rainbow 7★), thẻ vật phẩm `92×92` + `ItemDetailPopover`, tách 3 lớp browser (`BaseCardBrowser`, `CardGridBrowser`, `ItemGridBrowser`).
+- Nhà Kho Tổng Hợp (`GearWarehouseModal`) chứa mọi loại vật phẩm theo 6 phân loại, bộ lọc riêng từng phân loại và thu hồi đồ rơi tầng.
+- Modal hồi phục, bếp/nhà ăn (tâm lý/loyalty), ký túc xá tách biệt từng tòa, huấn luyện, lò rèn (có lọc `+15`), Đại Sảnh Ma Thuật, Thương Thuyền Khinh Khí, Sử Điện Anh Hùng, và Công trình 3D Đại Sảnh Liên Minh (`ALLIANCE_HALL`).
+- Modal Sự Kiện/Nhiệm Vụ/Thành Tựu (`events_quests_modal.gd`), Hòm Thư & Sổ Giao Dịch (`mailbox_modal.gd`), Hầm Ngục Cổ Đại (`ancient_dungeon_modal.gd`), Viễn Chinh Thế Giới (`world_expedition_modal.gd`), và Chat 3 kênh Thế Giới / Liên Minh / Riêng Tư (`chat_panel_modal.gd`).
+- Hero roster dạng thẻ, xem nhân vật 3D, khóa, huấn luyện, kỹ năng, thức tỉnh, ấn ký, trang bị và chọn phôi thăng sao.
+- HUD Master, hồ sơ, avatar, giftcode, tab Bảo mật/Định danh/Mã khôi phục (giữ auto-demo khi mở game để test nhanh) và gửi ticket hỗ trợ.
+- Gacha hai banner, chọn ngang, tỷ lệ lấy từ API, lịch sử triệu hồi, đổi Thiên Thư nhanh, ×1/×10, hiệu ứng triệu hồi và chống double-submit.
+- Đấu trường PvE (Auto/Thủ công 10s/lượt, 5 ô thuốc/Hero) với diễn hoạt replay, tốc độ phát và dynamic camera.
+- REST client và đồng bộ profile, Hero (gồm trạng thái đi PvE & Viễn chinh), căn cứ, trang bị, vật phẩm, đội hình.
 
 ## PvE đã triển khai theo `thaoluan.md`
 
@@ -34,25 +37,26 @@ PvE dùng map và encounter riêng theo đội, tái sử dụng Combat v2. Lu�
 
 ## Ưu tiên 2: hoàn thiện các luồng đã có UI
 
-- [ ] Kiểm thử gacha NORMAL dùng scroll và SPECIAL dùng 100 Gem/lượt, refresh ví, thiếu tài nguyên và gửi lại yêu cầu.
-- [ ] Kiểm thử toàn luồng xây/nâng cấp, rèn/cường hóa/ghép đồ, ăn/nghỉ/hồi phục.
-- [ ] Kiểm thử Hero bị khóa, chết, đang đi expedition, phôi thăng sao và thay trang bị.
-- [ ] Rà soát thao tác ấn ký, chọn kỹ năng thức tỉnh và thông báo điều kiện chưa đủ.
-- [ ] Kiểm tra layout, resize, input, tooltip và phản hồi lỗi trong engine.
+- [x] Kiểm thử gacha NORMAL dùng scroll và SPECIAL dùng 100 Gem/lượt, lịch sử summon, đổi Thiên Thư, refresh ví, thiếu tài nguyên (`scripts/test-godot-gacha.mjs`).
+- [x] Kiểm thử toàn luồng xây/nâng cấp tức thì, rèn/cường hóa/ghép đồ/thu hồi đồ rơi, ăn/nghỉ/hồi phục (`scripts/test-godot-forge-warehouse.mjs`, `scripts/test-godot-survival-dorm.mjs`, `scripts/test-godot-medical.mjs`).
+- [x] Kiểm thử Hero bị khóa, chết, đang đi expedition, phôi thăng sao và thay trang bị (`hero_lifecycle_ui_test.tscn`, `scripts/test-godot-hero-dev.mjs`, `scripts/test-godot-world-expedition.mjs`).
+- [x] Rà soát thao tác ấn ký, chọn kỹ năng thức tỉnh và thông báo điều kiện chưa đủ (`scripts/test-godot-magic-hall.mjs`, `scripts/test-godot-hero-dev.mjs`).
+- [ ] Kiểm tra trực quan layout, resize, input, tooltip và phản hồi lỗi trong engine (chơi thử có hình).
 
 Gacha hiện không có pity. Banner seed NORMAL ra 1–3★, SPECIAL ra 2–5★; Hero procedural luôn sinh instance riêng. Quy tắc đầy đủ ở [README](README.md#quy-tắc-gacha-hiện-hành).
 
 ## Ưu tiên 3: đưa các API còn lại lên Godot
 
-- [ ] Nhiệm vụ, thành tựu, shop và mailbox.
-- [ ] LiveOps, mission sự kiện và bảng xếp hạng.
-- [ ] Bản đồ thế giới, lãnh thổ, expedition và chiến báo/replay PvP.
-- [ ] Liên minh, chat, chiến tranh và mùa chinh phục.
+- [x] Nhiệm vụ, thành tựu, shop (`SHOP_AIRSHIP`) và hòm thư (`EventsQuestsModal`, `MailboxModal`, `scripts/test-godot-events-quests.mjs`, `scripts/test-godot-mailbox.mjs`).
+- [x] LiveOps & mission sự kiện (`EventsQuestsModal`); Bảng xếp hạng chủ động để lại cho đợt sau.
+- [x] Hầm Ngục Cổ Đại (`AncientDungeonModal`) & Viễn Chinh Thế Giới (`WorldExpeditionModal`) — đã bỏ chế độ Chinh Phạt Lãnh Thổ khỏi `PveModeModal`.
+- [x] Công trình 3D Đại Sảnh Liên Minh (`ALLIANCE_HALL` + `AllianceModal`) & Hệ thống Chat 3 kênh Thế Giới / Liên Minh / Riêng Tư (`ChatPanelModal`); Công nghệ & Chiến tranh Liên minh chủ động để lại cho đợt sau.
 - [ ] Luồng mua hàng sau khi tích hợp store thật; không coi receipt HMAC hiện tại là IAP sản xuất.
 
 ## Ưu tiên 4: tài khoản và phát hành
 
-- [ ] Bỏ tự đăng nhập demo ở scene khởi động; hoàn thiện đăng nhập/đăng xuất và lưu phiên.
+- [x] Hoàn thiện tab Bảo mật, Định danh, Mã khôi phục và Đăng xuất trong `PlayerProfileModal` (`scripts/test-godot-auth-account.mjs`), giữ nguyên auto-demo khi khởi động để test nhanh.
+- [ ] Bỏ tự đăng nhập demo ở scene khởi động khi đóng gói bản phát hành thật.
 - [ ] Thay dữ liệu mặc định trên client bằng trạng thái tải/lỗi rõ ràng.
 - [ ] Hoàn thiện BGM, SFX, asset nhân vật, VFX và tối ưu hiệu năng.
 - [ ] Thiết lập và kiểm thử export PC/mobile theo nền tảng đã chọn.

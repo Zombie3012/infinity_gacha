@@ -2,9 +2,9 @@
 
 Game quản lý Hero, sinh tồn và chiến thuật. Client hiện tại là **Godot 3D isometric**, kết nối REST API Node.js/Express và PostgreSQL. Web React/Vite đã được gỡ khỏi workspace.
 
-Cập nhật: **22/11/2026 (UTC+7)**. Đây là bản prototype đang hoàn thiện, với dữ liệu cân bằng mẫu; các checklist P0–P3 cũ không có nghĩa toàn bộ game đã sẵn sàng phát hành.
+Cập nhật: **23/11/2026 (UTC+7)**. Đây là bản prototype đang hoàn thiện, với dữ liệu cân bằng mẫu; các checklist P0–P3 cũ không có nghĩa toàn bộ game đã sẵn sàng phát hành.
 
-Hero và vật liệu dùng độ hiếm **1–7★**. Mọi Hero đều có thể tử trận; hồ sơ được giữ tại công trình **Sử Điện Anh Hùng**. Dùng **1 Ngọc hồi sinh 7★** để hồi sinh một Hero về **100% HP**, không phí thêm. Xem [cơ chế và API](docs/HERO_CHRONICLE.md).
+Hero và vật liệu dùng độ hiếm **1–7★** (1★ Bạc, 2★ Xanh lá, 3★ Xanh dương, 4★ Tím, 5★ Vàng, 6★ Đỏ, 7★ viền Rainbow). Mọi Hero đều có thể tử trận; hồ sơ được giữ tại công trình **Sử Điện Anh Hùng**. Dùng **1 Ngọc hồi sinh 7★** để hồi sinh một Hero về **100% HP**, không phí thêm. Xem [cơ chế và API](docs/HERO_CHRONICLE.md).
 
 Công trình **[Thương Thuyền Khinh Khí](docs/SHOP_AIRSHIP.md)** là cửa hàng dạng khinh khí cầu tại căn cứ. Danh mục tạm bán vật phẩm dùng được, trang bị và Thiên Thư thường với giá **1 bạc/món**, gồm cả Ngọc hồi sinh 7★.
 
@@ -12,32 +12,34 @@ Công trình **[Thương Thuyền Khinh Khí](docs/SHOP_AIRSHIP.md)** là cửa 
 
 **[Đại Sảnh Ma Thuật](docs/MAGIC_HALL.md)** tích hợp Thư viện, Giả kim và Nghiên cứu. Ba phân khu giữ chức năng nhưng không còn là công trình xây riêng.
 
+Công trình **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** cho phép xây dựng ngay tại căn cứ 3D (nhãn `"Liên minh"`) để lập hội, tìm kiếm, gia nhập, quản lý thành viên và thông báo nội bộ (chưa mở Công nghệ & Chiến tranh Liên minh).
+
 ## Cấu trúc
 
 ```text
 client-godot/                   Client Godot, giao diện và diễn hoạt 3D
 packages/shared/               Combat v2, sinh chỉ số, công thức, hằng số
 packages/server/               Express API, domain services, Drizzle ORM
-packages/server/drizzle/       Lịch sử migration (0000–0052)
+packages/server/drizzle/       Lịch sử migration (0000–0060)
 packages/server/src/database/seeds/  Dữ liệu mẫu
 docs/design_drafts/            Đặc tả/checklist lịch sử P0–P3
-scripts/                       Build cleanup, encoding, seed và tài liệu API
+scripts/                       Build cleanup, encoding, seed, test Godot và tài liệu API
 ```
 
 ## Trạng thái hiện tại
 
 | Hệ thống | Backend | Client Godot |
 |---|---|---|
-| Tài khoản, Master, World | JWT có thu hồi phiên, khởi tạo và lưu PostgreSQL | Có đăng nhập/đăng ký; scene khởi động hiện tự dùng tài khoản demo |
-| Gacha | Pool theo trọng số cố định, giao dịch nguyên tử, idempotency, lịch sử summon | Hai banner, chọn ngang, xem tỷ lệ, triệu hồi ×1/×10 và hiệu ứng kết quả |
-| Hero | Sinh instance ngẫu nhiên, huấn luyện, kỹ năng, đổi nghề, thức tỉnh, ấn ký, thăng sao | Danh sách/thẻ Hero, chi tiết 3D, trang bị và các thao tác phát triển |
-| Căn cứ | Xây/nâng cấp, mở rộng, sản xuất và phân công Hero | Căn cứ 3D, thao tác công trình và các modal chuyên dụng |
-| Sinh tồn, y tế, chế tạo | Có API và lưu trạng thái | Có giao diện bếp, ký túc xá, hồi phục, rèn và kho; cần kiểm thử toàn luồng trong engine |
-| Giả kim và công nghệ | Nghiên cứu tức thì, chế ba loại thuốc, dược liệu 1–7★ và tiến độ theo Master | Cây Giả kim, chế/dùng thuốc trong Đại Sảnh; [hướng dẫn](docs/ALCHEMY_PVE_CONSUMABLES.md) |
-| PvE map / Combat v2 | Map ba cấp, radar/phục kích, ba đội, năm ô tiêu hao/Hero; auto hoặc thủ công 10 giây/lượt | Điều quân, cấu hình thuốc, điều khiển kỹ năng/mục tiêu/vật phẩm, đội hình 3×3 và replay |
-| Cửa hàng khinh khí cầu | Danh mục, mua bằng bạc, chống trả tiền hai lần | Mô hình khinh khí cầu và giao diện mua hàng Godot |
-| Nhiệm vụ, mail, LiveOps, bảng xếp hạng, IAP | Có API prototype | Chưa có luồng Godot đầy đủ |
-| Thế giới, PvP, liên minh, chiến tranh | Có API; PvP Hero dùng Combat v2, siege Kỳ Quan dùng so sánh sức mạnh | Chưa có bản đồ và luồng Godot đầy đủ |
+| Tài khoản, Master, World | JWT có thu hồi phiên, định danh, mã khôi phục, lưu PostgreSQL | Có đăng nhập/đăng ký, tab Bảo mật & Tài khoản trong Hồ sơ Master; vẫn giữ auto-demo khi mở game để test nhanh |
+| Gacha | Pool theo trọng số cố định, giao dịch nguyên tử, idempotency, lịch sử summon | Hai banner, chọn ngang, xem tỷ lệ, lịch sử triệu hồi, đổi Thiên Thư nhanh, triệu hồi ×1/×10 và chống double-submit |
+| Hero | Sinh instance ngẫu nhiên, huấn luyện, kỹ năng, đổi nghề, thức tỉnh, ấn ký, thăng sao | Thẻ Hero dùng chung 1–7★ (`CardGridBrowser`), chi tiết 3D, khóa/đột phá/ấn ký/trang bị/thăng sao |
+| Căn cứ & HUD chính | Xây/nâng cấp tức thì, mở rộng, sản xuất, tách biệt ký túc xá và phân công Hero | Căn cứ 3D thoáng với Top-Right 3 tài nguyên + thanh Sự Kiện, nút xoay vòng góc nhìn T1/T2/Toàn cảnh, Build Drawer ẩn mặc định và Dock CTA |
+| Sinh tồn, y tế, rèn & kho | Có API đầy đủ và lưu trạng thái | Bếp/tâm lý, ký túc xá, hồi phục, lò rèn (`ItemGridBrowser` + lọc `+15`) và Nhà Kho tổng hợp mọi vật phẩm theo phân loại + thu hồi đồ rơi tầng |
+| Giả kim và công nghệ | Nghiên cứu tức thì, chế ba loại thuốc, dược liệu 1–7★ và tiến độ theo Master | Cây Giả kim, chế/dùng thuốc và thẻ kho vật phẩm 1–7★ trong Đại Sảnh; [hướng dẫn](docs/ALCHEMY_PVE_CONSUMABLES.md) |
+| PvE, Hầm Ngục & Viễn Chinh | Map PvE ba cấp, Combat v2 (Auto/Thủ công), Hầm Ngục Cổ Đại (`/api/dungeon`), Viễn Chinh (`/api/world/expeditions`) | `PveModeModal` 3 chế độ (Tháp PvE, Hầm Ngục Cổ Đại, Viễn Chinh Thế Giới — đã bỏ Chinh Phạt Lãnh Thổ), replay Combat v2 và đồng bộ Hero đi viễn chinh |
+| Cửa hàng khinh khí cầu | Danh mục, mua bằng bạc, chống trả tiền hai lần | Mô hình khinh khí cầu và giao diện mua hàng auto-fit thẻ 92×92 Godot |
+| Sự kiện, nhiệm vụ, hòm thư | API LiveOps, nhiệm vụ, thành tựu, hòm thư và sổ giao dịch ví | `EventsQuestsModal` (3 tab Sự Kiện / Nhiệm Vụ / Thành Tựu) và `MailboxModal` (Hòm Thư + Sổ giao dịch) gắn trực tiếp trên thanh Sự Kiện Top-Right |
+| Liên minh & Chat 3 kênh | API Liên minh cơ bản, Chat Liên minh (`/api/alliance/chat`), Chat Thế Giới (`/api/chat/world`), Chat Riêng Tư (`/api/chat/private`) | Công trình 3D `ALLIANCE_HALL` mở `AllianceModal` (chưa gồm Công nghệ/Chiến tranh Liên minh) và `ChatPanelModal` 3 kênh tại góc dưới trái |
 | Vận hành | Admin API key, cấu hình, audit, analytics, hỗ trợ | Có gửi ticket trong hồ sơ; console quản trị Web cũ đã gỡ |
 
 ## Quy tắc gacha hiện hành
@@ -120,10 +122,10 @@ Tiến độ và phần thưởng được xử lý khi đọc trạng thái ho�
 ## Phần còn lại
 
 1. Chơi thử trực quan và cân bằng PvE bằng đội Hero có chỉ số thực tế; hoàn thiện asset, VFX và khả năng sử dụng trên màn hình mục tiêu.
-2. Hoàn thiện UI Godot cho nhiệm vụ, mail, sự kiện, bản đồ và liên minh.
-3. Thay auto-login demo bằng luồng tài khoản và lưu phiên phù hợp bản phát hành.
+2. Mở rộng thêm khi có nhu cầu: Bảng xếp hạng, Công nghệ Liên minh, Chiến tranh Liên minh.
+3. Thay auto-login demo bằng luồng tài khoản và lưu phiên phù hợp khi đóng gói bản phát hành (hiện giữ auto-demo để test nhanh).
 4. Thay mô phỏng OAuth/IAP bằng tích hợp nhà cung cấp thật. Hiện xác minh bằng HMAC; refund mới thu hồi Gem, chưa thu hồi Silver/item đính kèm.
-5. Bổ sung Redis/timer dùng chung cho nhiều API instance, rà soát siege Kỳ Quan và cân bằng dữ liệu mẫu.
+5. Bổ sung Redis/timer dùng chung cho nhiều API instance và cân bằng dữ liệu mẫu.
 6. Kiểm thử trực tiếp Godot, âm thanh/asset, hiệu năng và export cho nền tảng mục tiêu.
 
 ## Tài liệu

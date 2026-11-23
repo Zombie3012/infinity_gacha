@@ -1,6 +1,6 @@
 # Infinite Gacha — Godot client
 
-Client chính thức đang phát triển: **3D isometric** cho căn cứ và đấu trường. Cập nhật **22/11/2026 (UTC+7)**.
+Client chính thức đang phát triển: **3D isometric** cho căn cứ và đấu trường. Cập nhật **23/11/2026 (UTC+7)**.
 
 ## Mở dự án
 
@@ -87,10 +87,46 @@ node scripts/test-godot-pve.mjs --lifecycle
 
 Chi tiết hợp đồng và kiểm thử ở [PVE_IMPLEMENTATION.md](../docs/PVE_IMPLEMENTATION.md).
 
+## Kiến trúc UI, Màn hình chính & Các hệ thống mới (23/11/2026)
+
+- **Thẻ & Độ hiếm 1–7★ (`rarity_style.gd`, `universal_item_card.gd`, `universal_hero_card.gd`, `item_detail_popover.gd`):**
+  - Thứ tự màu chuẩn: `1★` Bạc, `2★` Xanh lá, `3★` Xanh dương, `4★` Tím, `5★` Vàng, `6★` Đỏ, `7★` viền Rainbow chuyển sắc.
+  - Thẻ vật phẩm gọn `92×92` tự giãn số cột theo khung chứa; di chuột hoặc chạm mở `ItemDetailPopover` (chi tiết, nguồn gốc, chia số lượng, Dùng / Mặc / Tháo / Bỏ).
+- **Tách lớp Browser dùng chung:**
+  - `base_card_browser.gd`: Khung dùng chung (Header, Search, Sort, Filter Pills tự reset index về `0` khi đổi bộ lọc, Bottom Action Bar ẩn/hiện tùy chọn).
+  - `card_grid_browser.gd`: Kế thừa `BaseCardBrowser`, chuyên biệt cho Hero.
+  - `item_grid_browser.gd`: Kế thừa `BaseCardBrowser`, chuyên biệt cho Vật phẩm (Nhà Kho, Xưởng Rèn với bộ lọc `+15`, sắp xếp theo ★ / Số lượng / Tên / Cường hóa).
+- **Nhà Kho Tổng Hợp (`gear_warehouse_modal.gd`):** Lưu trữ và hiển thị toàn bộ vật phẩm (Trang bị, Tiêu hao/Thuốc, Nguyên liệu, Sách/Phát triển, Lương thực & Thiên Thư) với 6 tab phân loại, bộ lọc riêng từng phân loại và nút thu hồi đồ rơi tầng.
+- **HUD Màn hình chính (`isometric_base_3d.tscn` / `.gd`):**
+  - Top-Right: 3 tài nguyên gọn (`💎 Gem`, `🪙 Bạc`, `🍖 Lương thực`) và thanh Sự Kiện thu gọn được (`🎈 Thương Thuyền`, `📜 Sự Kiện`, `✉️ Hòm Thư`).
+  - Bottom-Left: 1 nút xoay vòng góc nhìn (`🏰 Tầng 1 ↻` → `👑 Tầng 2 ↻` → `🌐 Toàn Cảnh ↻`), nút `👥 Nhân Sự`, nút `💬 Chat` (3 kênh: Thế Giới, Liên Minh, Riêng Tư qua `chat_panel_modal.gd`) và thanh toast mảnh.
+  - Bottom-Right: Cụm Dock (`✨ Triệu Hồi`, `🛡️ Anh Hùng`, `📦 Nhà Kho`, `🏗️ Xây Dựng` bật/tắt Build Drawer ẩn mặc định) và nút CTA `⚔️ THÁP PvE`.
+- **Chế độ PvE, Sự kiện, Hòm thư & Đại Sảnh Liên Minh:**
+  - `pve_mode_modal.gd` có 3 chế độ mở khóa: **Tháp PvE (`TOWER`)**, **Hầm Ngục Cổ Đại (`DUNGEON` → `ancient_dungeon_modal.gd`)**, và **Viễn Chinh Thế Giới (`EXPEDITION` → `world_expedition_modal.gd`)** (đã gỡ Chinh Phạt Lãnh Thổ).
+  - `events_quests_modal.gd` (Sự Kiện LiveOps, Nhiệm Vụ, Thành Tựu) và `mailbox_modal.gd` (Hòm Thư + Sổ Giao Dịch).
+  - Công trình 3D **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** mở `alliance_modal.gd` (lập hội, tìm kiếm, gia nhập, quản lý thành viên & thông báo; chưa gồm Công nghệ/Chiến tranh Liên minh).
+  - Hồ sơ Master (`player_profile_modal.gd`) bổ sung tab **Bảo Mật & Tài Khoản** (định danh, mã khôi phục, đăng xuất) trong khi vẫn giữ auto-demo khi mở game để test nhanh.
+
+## Kiểm thử Headless Targeted
+
+Từ root, đặt `GODOT_BIN` tới engine console rồi chạy từng suite mục tiêu (không chạy full suite trừ khi được yêu cầu):
+
+```powershell
+node scripts/test-godot-gacha.mjs
+node scripts/test-godot-forge-warehouse.mjs
+node scripts/test-godot-survival-dorm.mjs
+node scripts/test-godot-hero-dev.mjs
+node scripts/test-godot-events-quests.mjs
+node scripts/test-godot-mailbox.mjs
+node scripts/test-godot-ancient-dungeon.mjs
+node scripts/test-godot-world-expedition.mjs
+node scripts/test-godot-alliance-building.mjs
+node scripts/test-godot-chat-channels.mjs
+node scripts/test-godot-auth-account.mjs
+```
+
 ## Giới hạn hiện tại
 
-Các API nhiệm vụ, mailbox, LiveOps, bản đồ PvP và liên minh chưa có giao diện Godot đầy đủ. Map PvE vẫn dùng balance/asset prototype; chưa có phối hợp liên đội, mục tiêu hộ tống/tìm vật phẩm hoặc morale mới.
-
-`npm run verify` ở root kiểm tra encoding, build và test Node/TypeScript; không xác minh scene hay gameplay trong engine. Chạy project bằng Godot để kiểm tra UI, input, camera, VFX và tương tác thực tế.
+Các tính năng chủ động để lại cho đợt sau gồm: Bảng xếp hạng, Công nghệ Liên minh, Chiến tranh Liên minh, tích hợp IAP store thật và gỡ auto-demo trước khi phát hành. Map PvE vẫn dùng balance/asset prototype; kiểm thử headless không thay thế việc chơi thử trực quan trên engine.
 
 Theo dõi việc còn lại trong [GODOT_BACKLOG.md](../GODOT_BACKLOG.md).
