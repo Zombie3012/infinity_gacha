@@ -95,6 +95,39 @@ func _ready() -> void:
 	await get_tree().process_frame
 	expect(summon._selected_banner.get("id") == "normal", "Focused banner also opens with Enter")
 	summon.queue_free()
+
+	var pve_modal: Control = load("res://scripts/ui/pve_mode_modal.gd").new()
+	add_child(pve_modal)
+	pve_modal.setup()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var tower_card: Control = pve_modal.find_children("*", "PanelContainer", true, false).filter(func(panel): return panel.tooltip_text == "Xem chế độ Tháp Thử Thách (PvE Tower)")[0]
+	expect(is_equal_approx(tower_card.size.x, 429.0) and pve_modal._mode_scroll.size.x <= 880.0, "PvE mode carousel shows 2 cards per viewport")
+	var next_btn: Button = pve_modal.find_children("*", "Button", true, false).filter(func(btn): return btn.text == "▶")[0]
+	next_btn.pressed.emit()
+	await get_tree().create_timer(0.28).timeout
+	expect(pve_modal._mode_scroll.scroll_horizontal == pve_modal.CARD_STEP, "Advancing carousel scrolls first card out of view")
+	var prev_btn: Button = pve_modal.find_children("*", "Button", true, false).filter(func(btn): return btn.text == "◀")[0]
+	prev_btn.pressed.emit()
+	await get_tree().create_timer(0.28).timeout
+	expect(pve_modal._mode_scroll.scroll_horizontal == 0, "Stepping back returns to the first two cards")
+	var tower_click := tower_card.get_global_rect().get_center()
+	mouse(tower_click, true)
+	mouse(tower_click + Vector2(30, 0), false)
+	await get_tree().process_frame
+	expect(pve_modal._selected_mode.is_empty(), "Dragging inside a PvE mode card does not accidentally enter it")
+	mouse(tower_click, true)
+	mouse(tower_click, false)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	expect(pve_modal._selected_mode.get("id") == "TOWER", "Clicking PvE Tower card opens Tower detail view")
+	var selected_modes: Array[String] = []
+	pve_modal.mode_selected.connect(func(mode_id: String): selected_modes.append(mode_id))
+	var enter_btn: Button = pve_modal.find_children("*", "Button", true, false).filter(func(btn): return btn.text.contains("Tiến Vào Tháp PvE"))[0]
+	enter_btn.pressed.emit()
+	await get_tree().process_frame
+	expect(selected_modes == ["TOWER"], "Clicking Enter Tower emits TOWER mode selection")
+
 	bar.queue_free()
 	plot.queue_free()
 	camera.queue_free()

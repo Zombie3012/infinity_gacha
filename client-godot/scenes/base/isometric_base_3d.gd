@@ -40,6 +40,7 @@ const DormitoryModalScript := preload("res://scripts/ui/dormitory_modal.gd")
 const TrainingCenterModalScript := preload("res://scripts/ui/training_center_modal.gd")
 const PlayerProfileModalScript := preload("res://scripts/ui/player_profile_modal.gd")
 const SummonBannerModalScript := preload("res://scripts/ui/summon_banner_modal.gd")
+const PveModeModalScript := preload("res://scripts/ui/pve_mode_modal.gd")
 const BuildingLabelStyle := preload("res://scripts/base/building_label_style.gd")
 var _landmark_nameplates: Array[Label3D] = []
 
@@ -145,7 +146,6 @@ var _floor_buttons: Dictionary = {} # floor_num (1..2) -> Button
 var _panorama_btn: Button = null
 var _manage_floor_heroes_btn: Button = null
 var _build_menu_btn: Button = null
-var _move_mode_btn: Button = null
 var _road_paint_btn: Button = null
 var _road_erase_btn: Button = null
 var _cancel_grid_btn: Button = null
@@ -189,6 +189,19 @@ var _pressed_hero: UnitActor3D = null
 var _dragging_hero: UnitActor3D = null
 var _press_screen_pos: Vector2 = Vector2.ZERO
 const DRAG_THRESHOLD_PX := 8.0
+
+# Structure Long-Press 3D Drag & Drop state
+var _pressed_structure_id: String = ""
+var _pressed_structure_screen_pos: Vector2 = Vector2.ZERO
+var _structure_hold_elapsed: float = 0.0
+var _dragging_structure: bool = false
+const STRUCTURE_LONG_PRESS_SEC := 0.35
+const STRUCTURE_HOLD_MOVE_TOLERANCE_PX := 16.0
+
+# Map Press-and-Drag Panning state (Mouse Left & Mobile Touch)
+var _lmb_pressed: bool = false
+var _is_panning_map: bool = false
+var _last_pan_screen_pos: Vector2 = Vector2.ZERO
 
 # Lighting / Ambiance state (0 = Day, 1 = Sunset, 2 = Night Campfire)
 var _lighting_mode: int = 0
@@ -1660,12 +1673,6 @@ func _build_floor_elevator_buttons() -> void:
 	_build_menu_btn.pressed.connect(_open_free_grid_build_catalog)
 	floor_buttons_container.add_child(_build_menu_btn)
 
-	_move_mode_btn = Button.new()
-	_move_mode_btn.custom_minimum_size = Vector2(0, 34)
-	_move_mode_btn.text = "✥ Di Dời Công Trình"
-	_move_mode_btn.pressed.connect(_toggle_move_structure_prompt)
-	floor_buttons_container.add_child(_move_mode_btn)
-
 	_road_paint_btn = Button.new()
 	_road_paint_btn.custom_minimum_size = Vector2(0, 32)
 	_road_paint_btn.text = "🧱 Lát Đường Đá (1×1)"
@@ -1761,10 +1768,26 @@ func _process(delta: float) -> void:
 		bonfire_light.light_energy = base_energy + sin(_bonfire_time) * 0.22 + cos(_bonfire_time * 1.7) * 0.12
 	if dungeon_portal_mesh != null:
 		dungeon_portal_mesh.rotate_z(delta * 0.85)
+	if _pressed_structure_id != "" and not _dragging_structure and _grid_edit_mode == GridEditMode.NONE:
+		_structure_hold_elapsed += delta
+		if _structure_hold_elapsed >= STRUCTURE_LONG_PRESS_SEC:
+			_begin_structure_long_press_drag()
+	if _lmb_pressed and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		_lmb_pressed = false
+		_is_panning_map = false
+		_pressed_structure_id = ""
+		_structure_hold_elapsed = 0.0
 
 func _sync_all_from_backend() -> void:
 	var generation := _scene_generation
 	if not _scene_is_current(generation): return
+	if not GameState.is_logged_in():
+		var demo_ok := await GameState.ensure_demo_session()
+		if not _scene_is_current(generation): return
+		if not demo_ok:
+			if status_banner_label != null:
+				status_banner_label.text = "⚠️ KHÔNG THỂ KẾT NỐI SERVER BACKEND (PORT 3000)! Vui lòng kiểm tra lại server."
+			return
 	for refresh in _backend_refresh_steps():
 		await refresh.call()
 		if not _scene_is_current(generation): return
@@ -1772,6 +1795,8 @@ func _sync_all_from_backend() -> void:
 	_refresh_3d_plots()
 	_spawn_resident_heroes()
 	_re_render_inspector_if_open()
+	if status_banner_label != null and status_banner_label.text.begins_with("⚠️"):
+		status_banner_label.text = "🏰 Lâu Đài 2 Tầng Liền Khối (100×100 Hạ Thành + 60×100 Thượng Thành) — Tự do đặt Công trình & Lát Đường trên lưới!"
 
 func _backend_refresh_steps() -> Array[Callable]:
 	return [GameState.refresh_profile, GameState.refresh_base_overview, GameState.refresh_inventory,
@@ -1859,8 +1884,6 @@ func _refresh_hud() -> void:
 	if _build_menu_btn != null:
 		_build_menu_btn.text = "🏗️ Xây Công Trình (%d/%d)" % [built_cnt, max_plots]
 		_build_menu_btn.modulate = Color(0.55, 1.0, 0.68) if _grid_edit_mode == GridEditMode.PLACE_NEW_BUILDING else Color(0.92, 0.96, 1.0)
-	if _move_mode_btn != null:
-		_move_mode_btn.modulate = Color(1.0, 0.88, 0.38) if _grid_edit_mode == GridEditMode.MOVE_STRUCTURE else Color(0.92, 0.96, 1.0)
 	if _road_paint_btn != null:
 		_road_paint_btn.modulate = Color(0.55, 0.92, 1.0) if _grid_edit_mode == GridEditMode.ROAD_PAINT else Color(0.92, 0.96, 1.0)
 	if _road_erase_btn != null:
@@ -2166,9 +2189,28 @@ func _exit_grid_edit_mode() -> void:
 	_pending_build_name = ""
 	_moving_structure_id = ""
 	_is_painting_road_drag = false
+	_pressed_structure_id = ""
+	_structure_hold_elapsed = 0.0
+	_dragging_structure = false
 	if _grid_overlay_root != null:
 		_grid_overlay_root.visible = false
 	_refresh_hud()
+
+func _begin_structure_long_press_drag() -> void:
+	var target_id := _pressed_structure_id
+	_pressed_structure_id = ""
+	_structure_hold_elapsed = 0.0
+	if target_id == "" or target_id == "DUNGEON_PORTAL":
+		return
+	_dragging_structure = true
+	_start_moving_structure(target_id)
+	var vp := get_viewport()
+	if vp != null:
+		_update_grid_ghost_preview(vp.get_mouse_position())
+	var d_name := _get_structure_display_name(target_id)
+	var f_size := _get_structure_footprint_size(target_id)
+	if status_banner_label != null:
+		status_banner_label.text = "✥ Đang kéo di dời [%s] (%d×%d Ô): Kéo tới vị trí mới trên lưới Tầng 1 hoặc Tầng 2 • Thả chuột để Đặt • Nhấn [R] xoay 90° • Chuột Phải/ESC để hủy." % [d_name, f_size.x, f_size.y]
 
 func _enter_place_new_building_mode(b_code: String, b_name: String) -> void:
 	var free_plot := _find_first_free_unlocked_plot_index()
@@ -2340,6 +2382,11 @@ func _unhandled_input(event: InputEvent) -> void:
 					_set_road_at_cell(_hover_gx, _hover_gz, false)
 			return
 
+		if _pressed_structure_id != "" and not _dragging_structure:
+			if mm.position.distance_to(_pressed_structure_screen_pos) > STRUCTURE_HOLD_MOVE_TOLERANCE_PX:
+				_pressed_structure_id = ""
+				_structure_hold_elapsed = 0.0
+
 		if _pressed_hero != null and _dragging_hero == null:
 			if mm.position.distance_to(_press_screen_pos) >= DRAG_THRESHOLD_PX:
 				_dragging_hero = _pressed_hero
@@ -2350,6 +2397,17 @@ func _unhandled_input(event: InputEvent) -> void:
 			var ground_hit := _project_mouse_to_castle_ground(mm.position)
 			_dragging_hero.update_drag_ground_position(ground_hit)
 			_update_hover_feedback(mm.position, true)
+		elif _lmb_pressed:
+			if not _is_panning_map and mm.position.distance_to(_press_screen_pos) >= DRAG_THRESHOLD_PX:
+				_is_panning_map = true
+				_pressed_structure_id = ""
+				_structure_hold_elapsed = 0.0
+				_last_pan_screen_pos = mm.position
+			if _is_panning_map:
+				var pan_delta := mm.position - _last_pan_screen_pos
+				_last_pan_screen_pos = mm.position
+				if camera_rig != null:
+					camera_rig.pan_by_screen_delta(pan_delta)
 		else:
 			_update_hover_feedback(mm.position, false)
 
@@ -2376,21 +2434,39 @@ func _on_left_mouse_down(screen_pos: Vector2) -> void:
 			_set_road_at_cell(_hover_gx, _hover_gz, false)
 		return
 
+	_lmb_pressed = true
+	_is_panning_map = false
 	_press_screen_pos = screen_pos
+	_last_pan_screen_pos = screen_pos
 	_pressed_hero = null
 	_dragging_hero = null
+	_pressed_structure_id = ""
+	_structure_hold_elapsed = 0.0
+	_dragging_structure = false
 
 	var hit := _raycast_3d(screen_pos)
 	if hit.is_empty():
 		return
 	var collider: Object = hit.get("collider")
 	if collider is Node and collider.has_meta("interactable_type"):
-		if str(collider.get_meta("interactable_type")) == "HERO":
+		var itype := str(collider.get_meta("interactable_type"))
+		if itype == "HERO":
 			var hero_actor: UnitActor3D = collider.get_meta("hero_node")
 			if hero_actor != null:
 				_pressed_hero = hero_actor
+		elif itype == "PLOT":
+			var plot_node: BasePlot3D = collider.get_meta("plot_node")
+			if plot_node != null and not plot_node.building_data.is_empty():
+				_pressed_structure_id = "PLOT:%d" % plot_node.plot_index
+				_pressed_structure_screen_pos = screen_pos
+		elif itype == "LANDMARK":
+			var l_code := str(collider.get_meta("landmark_code"))
+			if l_code != "" and l_code != "DUNGEON_PORTAL":
+				_pressed_structure_id = l_code
+				_pressed_structure_screen_pos = screen_pos
 
 func _on_left_mouse_up(screen_pos: Vector2) -> void:
+	_lmb_pressed = false
 	if _grid_edit_mode != GridEditMode.NONE:
 		_is_painting_road_drag = false
 		_update_grid_ghost_preview(screen_pos)
@@ -2415,8 +2491,13 @@ func _on_left_mouse_up(screen_pos: Vector2) -> void:
 			await _construct_building_on_plot(b_code, free_plot)
 			return
 		elif _grid_edit_mode == GridEditMode.MOVE_STRUCTURE:
+			var was_drag_move := _dragging_structure
+			_dragging_structure = false
 			if not _hover_valid:
-				status_banner_label.text = "❌ Vị trí mới bị vướng hoặc nằm ngoài khuôn viên Lâu Đài!"
+				if was_drag_move:
+					status_banner_label.text = "❌ Vị trí thả bị vướng! Di chuột chọn ô xanh rồi Chuột Trái để Đặt, hoặc Chuột Phải/ESC để hủy."
+				else:
+					status_banner_label.text = "❌ Vị trí mới bị vướng hoặc nằm ngoài khuôn viên Lâu Đài!"
 				return
 			var s_id := _moving_structure_id
 			var d_name := _get_structure_display_name(s_id)
@@ -2434,6 +2515,18 @@ func _on_left_mouse_up(screen_pos: Vector2) -> void:
 			_re_render_inspector_if_open()
 			return
 		return
+
+	if _is_panning_map:
+		_is_panning_map = false
+		_pressed_structure_id = ""
+		_structure_hold_elapsed = 0.0
+		_dragging_structure = false
+		_pressed_hero = null
+		return
+
+	_pressed_structure_id = ""
+	_structure_hold_elapsed = 0.0
+	_dragging_structure = false
 
 	if _dragging_hero != null:
 		var dropped_hero := _dragging_hero
@@ -3946,16 +4039,6 @@ func _add_inspector_grid_placement_controls(structure_key: String) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 
-	var move_btn := Button.new()
-	move_btn.text = "✥ Di Dời Trên Lưới (%d×%d Ô)" % [fp.x, fp.y]
-	move_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	move_btn.custom_minimum_size = Vector2(0, 32)
-	move_btn.modulate = Color(0.55, 0.96, 0.72)
-	move_btn.pressed.connect(func():
-		_start_moving_structure(structure_key)
-	)
-	row.add_child(move_btn)
-
 	var rot_btn := Button.new()
 	rot_btn.text = "🔄 Xoay 90° (%d°)" % rot
 	rot_btn.custom_minimum_size = Vector2(115, 32)
@@ -4010,10 +4093,6 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 					{
 						"icon": "✨", "label": "Triệu Hồi", "color": Color(1.0, 0.85, 0.35),
 						"callback": func(): _open_summon_banner_modal()
-					},
-					{
-						"icon": "✥", "label": "Di Dời", "color": Color(0.85, 0.6, 1.0),
-						"callback": func(): _on_landmark_move_clicked("SUMMON_ALTAR")
 					}
 				]
 			)
@@ -4060,10 +4139,6 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 					{
 						"icon": "👥", "label": "Quản Lý Tầng", "color": Color(0.45, 0.95, 0.65),
 						"callback": func(): _open_floor_hero_manager(_current_lobby_floor)
-					},
-					{
-						"icon": "✥", "label": "Di Dời", "color": Color(0.85, 0.6, 1.0),
-						"callback": func(): _on_landmark_move_clicked("BARRACKS")
 					}
 				]
 			)
@@ -4084,10 +4159,6 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 					{
 						"icon": "🌤️", "label": "Đổi Thời Tiết", "color": Color(1.0, 0.85, 0.4),
 						"callback": _on_lighting_toggle_pressed
-					},
-					{
-						"icon": "✥", "label": "Di Dời", "color": Color(0.85, 0.6, 1.0),
-						"callback": func(): _on_landmark_move_clicked("FOUNTAIN")
 					}
 				]
 			)
@@ -4107,10 +4178,6 @@ func _open_landmark_inspector(landmark_code: String, focus_cam: bool = true) -> 
 					{
 						"icon": "🏥", "label": "Hồi Phục Y Tế", "color": Color(0.4, 0.95, 0.7),
 						"callback": _open_recovery_center_modal
-					},
-					{
-						"icon": "✥", "label": "Di Dời", "color": Color(0.85, 0.6, 1.0),
-						"callback": func(): _on_landmark_move_clicked("INFIRMARY")
 					}
 				]
 			)
@@ -4932,9 +4999,23 @@ func _on_barracks_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/heroes/hero_roster.tscn")
 
 func _on_enter_pve_pressed() -> void:
+	var existing := $HUD.get_node_or_null("PveModeModal")
+	if existing != null:
+		existing.queue_free()
+	var modal := PveModeModalScript.new()
+	modal.name = "PveModeModal"
+	$HUD.add_child(modal)
+	modal.setup()
+	modal.mode_selected.connect(_on_pve_mode_selected)
+
+func _on_pve_mode_selected(mode_id: String) -> void:
+	if mode_id != "TOWER":
+		return
 	_switch_to_lobby_floor(1)
-	camera_rig.focus_action_unit(dungeon_portal_mesh.global_position, 8.5, 0.35)
-	status_banner_label.text = "🌀 Đang mở bản đồ chinh phạt PvE..."
+	if camera_rig != null and dungeon_portal_mesh != null:
+		camera_rig.focus_action_unit(dungeon_portal_mesh.global_position, 8.5, 0.35)
+	if status_banner_label != null:
+		status_banner_label.text = "🌀 Đang mở bản đồ chinh phạt PvE..."
 	await get_tree().create_timer(0.4).timeout
 	get_tree().change_scene_to_file("res://scenes/pve/pve_map.tscn")
 

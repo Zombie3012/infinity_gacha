@@ -885,3 +885,13 @@ Signed: Codex, project assistant
 - Fixed late backend sync callbacks updating the base after navigation. Base scene enter/exit increments a generation; initialization and each awaited refresh check the captured generation, tree membership and queued deletion before continuing. Re-entry cannot revive a previous sync. Backend refresh steps remain sequential and stop when the scene leaves. Grid transforms, plot refresh and resident spawning also guard scene lifetime; detached/freed/queued plot entries are skipped.
 - BasePlot3D caption fitting now checks the plot, all three labels, viewport and active camera before reading global transforms. Shared building label fitting safely skips detached labels/cameras as well. Detached setup can still update local caption data; fitting resumes when nodes are attached again.
 - Added base_scene_lifecycle_test.tscn with controlled async responses. Eleven checks passed for exit during the first/last response, queued deletion, remove/re-enter while a request is pending, a fresh sync after re-entry, detached plot setup, invalid viewport/camera contexts and resumed fitting. Existing base presentation (13) and Hall sidebar (9) checks passed, totaling 33 targeted Godot checks with no engine errors in the final runs. Encoding/whitespace checks passed. No full suite/npm run verify, backend/schema changes or commit/deployment.
+
+## Update - 2026-11-23 (UTC+7): workspace link, migration 0044 idempotency and pve_run column
+
+Signed: Antigravity, project assistant
+
+- Restored npm workspace junction for `@infiniti-gacha/shared` via `npm install` and clean build.
+- Fixed `0044_messy_stryfe.sql` to use `DROP CONSTRAINT IF EXISTS` for `uq_master_hero_template`, `hero_treatments_status_check`, and `heroes_config_id_hero_templates_code_fk`.
+- Executed `npm run db:migrate` successfully, applying migrations 0044 through 0059. Resolved missing `pve_run` column on table `worlds`.
+- Updated Godot `isometric_base_3d.gd` `_sync_all_from_backend` to automatically recover authentication and clear the offline banner upon manual refresh.
+- Verified encoding (355 files passed) and Godot syntax check.

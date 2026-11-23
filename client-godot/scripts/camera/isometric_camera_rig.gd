@@ -54,11 +54,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			_rmb_panning = mb.pressed
 	elif event is InputEventMouseMotion and _rmb_panning:
 		var mm := event as InputEventMouseMotion
-		var forward := Vector3(-1.0, 0.0, -1.0).normalized()
-		var right := Vector3(1.0, 0.0, -1.0).normalized()
-		var scale_factor := camera.size * 0.0022
-		global_position += (-right * mm.relative.x + forward * mm.relative.y) * scale_factor
-		_clamp_and_settle_pan_position(0.25)
+		pan_by_screen_delta(mm.relative)
+
+func pan_by_screen_delta(screen_delta: Vector2) -> void:
+	if not allow_manual_pan or camera == null:
+		return
+	var forward := Vector3(-1.0, 0.0, -1.0).normalized()
+	var right := Vector3(1.0, 0.0, -1.0).normalized()
+	var scale_factor := camera.size * 0.0022
+	global_position += (-right * screen_delta.x + forward * screen_delta.y) * scale_factor
+	_clamp_and_settle_pan_position(0.25)
 
 func _process(delta: float) -> void:
 	if not allow_manual_pan:
