@@ -1,11 +1,17 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, between, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
-  heroes, masterWorldStatus, masters, territories, territoryEvents, tileClearances, tileDiscoveries, worldTiles, worlds,
+  heroes, masterWorldStatus, masters, territories, territoryEvents, tileClearances, tileDiscoveries,
+  worldDungeons, worldTiles, worlds,
 } from '../../database/drizzle-schema.js';
 import { topCombatPower } from '../liveops/liveops-rules.js';
 import { expeditionService } from './expedition.service.js';
+import { worldDungeonService } from './world-dungeon.service.js';
+import {
+  clampChunkRadius, clampGridY, DEFAULT_CHUNK_RADIUS, MIN_SPAWN_SPACING_TILES, PLANET_GRID_HEIGHT,
+  PLANET_GRID_WIDTH, PLAYABLE_CONTINENTS, planetTileDistance, SPAWNABLE_TERRAINS, wrapGridX,
+} from './planet-grid-rules.js';
 import {
   CLAIM_COST_SILVER, DISCOVERY_RADIUS, MAX_TERRITORIES, MAX_TERRITORY_LEVEL, abandonAt, canClaim,
   canUnlockGlobal, isDiscoverable, protectionUntil, shieldUntil, territoryYield, upgradeCost,
@@ -74,7 +80,8 @@ export class WorldService {
       eligible: canUnlockGlobal({ masterLevel: master.level, clearedFloor: world?.currentFloor ?? 1 }),
       masterLevel: master.level,
       clearedFloor: world?.currentFloor ?? 1,
-      base: status ? { x: status.baseX, y: status.baseY } : null,
+      base: status ? { x: status.baseX, y: status.baseY, continentId: status.continentId } : null,
+      worldGrid: { width: PLANET_GRID_WIDTH, height: PLANET_GRID_HEIGHT },
       unlockedAt: status?.unlockedAt ?? null,
       shieldUntil: status?.shieldUntil ?? null,
       shieldActive: status ? status.shieldUntil > now : false,
@@ -88,8 +95,84 @@ export class WorldService {
     };
   }
 
-  /** Scenario P3-01: unlock at level 15 + floor 10, random outer-rim base, 48h shield. */
-  async unlock(masterId: string, now = new Date()) {
+  /**
+   * RTS Smart Random Spawn:
+   * - Balances new players across all 5 playable continents (or honors optional `continentId`).
+   * - Picks an unoccupied Outer Rim land tile (`PLAINS` / `FOREST` / `HILLS`, never `OCEAN` or `WONDER`)
+   *   maintaining >= MIN_SPAWN_SPACING_TILES (10) distance from all existing player bases (soft fallback 6->3->1).
+   * - Auto-discovers nearby land tiles and seeds local Emerging Dungeons around the new base.
+   */
+  private async pickRandomSpawnTile(preferredContinentId?: string | null) {
+    const validPreferred = preferredContinentId && (PLAYABLE_CONTINENTS as readonly string[]).includes(preferredContinentId)
+      ? preferredContinentId
+      : null;
+
+    // Count active bases per continent to balance population across all 5 continents
+    const popRows = await db.select({
+      continentId: masterWorldStatus.continentId,
+      total: sql<number>`count(*)::int`,
+    }).from(masterWorldStatus).groupBy(masterWorldStatus.continentId);
+    const popByContinent = new Map(popRows.map(r => [r.continentId, r.total]));
+
+    let continentOrder: string[];
+    if (validPreferred) {
+      continentOrder = [validPreferred, ...PLAYABLE_CONTINENTS.filter(c => c !== validPreferred)];
+    } else {
+      // Sort continents by lowest population, randomizing ties so consecutive new players spread naturally
+      const shuffled = [...PLAYABLE_CONTINENTS].sort(() => Math.random() - 0.5);
+      continentOrder = shuffled.sort((a, b) => (popByContinent.get(a) ?? 0) - (popByContinent.get(b) ?? 0));
+    }
+
+    const allBases = await db.select({
+      x: masterWorldStatus.baseX,
+      y: masterWorldStatus.baseY,
+      continentId: masterWorldStatus.continentId,
+    }).from(masterWorldStatus);
+    const occupiedBaseKeys = new Set(allBases.map(b => `${b.x},${b.y}`));
+
+    for (const cid of continentOrder) {
+      const candidates = await db.select().from(worldTiles)
+        .where(and(
+          eq(worldTiles.isOuterRim, true),
+          eq(worldTiles.continentId, cid),
+          inArray(worldTiles.terrain, [...SPAWNABLE_TERRAINS]),
+        ))
+        .orderBy(sql`random()`)
+        .limit(120);
+      if (candidates.length === 0) continue;
+
+      const candIds = candidates.map(c => c.id);
+      const [ownedTerrs, activeDungs] = await Promise.all([
+        db.select({ tileId: territories.tileId }).from(territories)
+          .where(and(inArray(territories.tileId, candIds), sql`${territories.masterId} IS NOT NULL`)),
+        db.select({ tileId: worldDungeons.tileId }).from(worldDungeons)
+          .where(and(inArray(worldDungeons.tileId, candIds), eq(worldDungeons.status, 'ACTIVE'))),
+      ]);
+      const blockedIds = new Set([...ownedTerrs.map(r => r.tileId), ...activeDungs.map(r => r.tileId)]);
+      const free = candidates.filter(c => !occupiedBaseKeys.has(`${c.x},${c.y}`) && !blockedIds.has(c.id));
+      if (free.length === 0) continue;
+
+      const contBases = allBases.filter(b => b.continentId === cid);
+      for (const minSpacing of [MIN_SPAWN_SPACING_TILES, 6, 3, 1]) {
+        const spaced = free.find(tile => contBases.every(b => planetTileDistance(tile, b) >= minSpacing));
+        if (spaced) return spaced;
+      }
+      return free[0];
+    }
+
+    // Ultimate fallback (e.g., tiny custom test DB without continent metadata)
+    const [fallback] = await db.select().from(worldTiles)
+      .where(and(eq(worldTiles.isOuterRim, true), sql`${worldTiles.terrain} <> 'OCEAN'`))
+      .orderBy(sql`random()`)
+      .limit(1);
+    return fallback ?? null;
+  }
+
+  /** Unlock Global World with RTS Random Spawn, 48h Novice Shield, and local dungeons. */
+  async unlock(masterId: string, optionsOrNow: { continentId?: string | null } | Date = {}, maybeNow?: Date) {
+    const now = optionsOrNow instanceof Date ? optionsOrNow : (maybeNow ?? new Date());
+    const preferredContinent = optionsOrNow instanceof Date ? null : (optionsOrNow?.continentId ?? null);
+
     const [master, world] = await Promise.all([
       this.master(masterId),
       db.select().from(worlds).where(eq(worlds.masterId, masterId)).limit(1).then(rows => rows[0]),
@@ -100,53 +183,101 @@ export class WorldService {
     const existing = await this.statusRow(masterId);
     if (existing) return this.status(masterId, now);
 
-    const candidates = await db.select().from(worldTiles).where(eq(worldTiles.isOuterRim, true)).orderBy(asc(worldTiles.x), asc(worldTiles.y));
-    if (candidates.length === 0) throw new WorldError('Bản đồ thế giới chưa được cấu hình.', 503);
-    let hash = 2166136261;
-    for (const char of masterId) {
-      hash ^= char.charCodeAt(0);
-      hash = Math.imul(hash, 16777619);
-    }
-    const base = candidates[Math.abs(hash) % candidates.length];
+    const base = await this.pickRandomSpawnTile(preferredContinent);
+    if (!base) throw new WorldError('Bản đồ thế giới chưa được cấu hình.', 503);
 
     await db.insert(masterWorldStatus).values({
-      masterId, unlockedAt: now, baseX: base.x, baseY: base.y, shieldUntil: shieldUntil(now),
+      masterId,
+      unlockedAt: now,
+      baseX: base.x,
+      baseY: base.y,
+      continentId: base.continentId ?? 'emerald_reach',
+      shieldUntil: shieldUntil(now),
     });
 
-    const nearby = candidates.filter(tile => isDiscoverable({ x: tile.x, y: tile.y }, { x: base.x, y: base.y }, []));
+    // Discover nearby LAND tiles inside DISCOVERY_RADIUS using fast indexed bounding box
+    const minX = Math.max(0, base.x - DISCOVERY_RADIUS);
+    const maxX = Math.min(PLANET_GRID_WIDTH - 1, base.x + DISCOVERY_RADIUS);
+    const minY = clampGridY(base.y - DISCOVERY_RADIUS);
+    const maxY = clampGridY(base.y + DISCOVERY_RADIUS);
+    const nearby = await db.select().from(worldTiles).where(and(
+      between(worldTiles.x, minX, maxX),
+      between(worldTiles.y, minY, maxY),
+      sql`${worldTiles.terrain} NOT IN ('OCEAN', 'WONDER')`,
+    ));
     if (nearby.length > 0) {
       await db.insert(tileDiscoveries).values(nearby.map(tile => ({
         id: uuidv4(), masterId, tileId: tile.id, discoveredAt: now,
       }))).onConflictDoNothing();
     }
+
     await db.insert(territoryEvents).values({
       id: uuidv4(), tileId: base.id, masterId, action: 'BASE_UNLOCKED',
-      detail: { x: base.x, y: base.y }, createdAt: now,
+      detail: { x: base.x, y: base.y, continentId: base.continentId }, createdAt: now,
     });
+
+    // Seed at least 1 starter dungeon inside home vision (radius 2) + 4 more across the surrounding chunk (radius 12)
+    await worldDungeonService.ensureDungeonsNear(base.x, base.y, 2, 1, now)
+      .then(() => worldDungeonService.ensureDungeonsNear(base.x, base.y, DEFAULT_CHUNK_RADIUS, 5, now))
+      .catch(err => console.error('[world.unlock] ensureDungeonsNear failed', err));
+
     return this.status(masterId, now);
   }
 
-  async map(masterId: string, now = new Date()) {
+  async map(masterId: string, optionsOrNow: { cx?: unknown; cy?: unknown; radius?: unknown } | Date = {}, maybeNow?: Date) {
+    const now = optionsOrNow instanceof Date ? optionsOrNow : (maybeNow ?? new Date());
+    const opts = optionsOrNow instanceof Date ? {} : (optionsOrNow ?? {});
+
     await this.settle(now);
     const status = await this.statusRow(masterId);
     if (!status) throw new WorldError('ERR_WORLD_LOCKED', 409);
 
-    const tiles = await db.select().from(worldTiles).orderBy(asc(worldTiles.y), asc(worldTiles.x));
-    const territoryRows = await db.select().from(territories);
-    const owners = await db.select({ id: masters.id, name: masters.masterName }).from(masters);
+    const cx = opts.cx !== undefined ? wrapGridX(Number(opts.cx)) : status.baseX;
+    const cy = opts.cy !== undefined ? clampGridY(Number(opts.cy)) : status.baseY;
+    const radius = clampChunkRadius(opts.radius ?? DEFAULT_CHUNK_RADIUS);
+    const minX = Math.max(0, cx - radius);
+    const maxX = Math.min(PLANET_GRID_WIDTH - 1, cx + radius);
+    const minY = clampGridY(cy - radius);
+    const maxY = clampGridY(cy + radius);
+
+    const [discoveries, ownedRows] = await Promise.all([
+      db.select().from(tileDiscoveries).where(eq(tileDiscoveries.masterId, masterId)),
+      db.select({ tileId: territories.tileId }).from(territories).where(eq(territories.masterId, masterId)),
+    ]);
+    const discovered = new Set(discoveries.map(row => row.tileId));
+    const pinnedIds = Array.from(new Set([...discovered, ...ownedRows.map(r => r.tileId)]));
+
+    const tiles = await db.select().from(worldTiles)
+      .where(pinnedIds.length > 0
+        ? or(
+            and(between(worldTiles.x, minX, maxX), between(worldTiles.y, minY, maxY)),
+            inArray(worldTiles.id, pinnedIds),
+          )
+        : and(between(worldTiles.x, minX, maxX), between(worldTiles.y, minY, maxY)))
+      .orderBy(asc(worldTiles.y), asc(worldTiles.x));
+
+    const tileIds = tiles.map(t => t.id);
+    const territoryRows = tileIds.length > 0
+      ? await db.select().from(territories).where(inArray(territories.tileId, tileIds))
+      : [];
+    const ownerIds = Array.from(new Set(territoryRows.map(r => r.masterId).filter((id): id is string => Boolean(id))));
+    const owners = ownerIds.length > 0
+      ? await db.select({ id: masters.id, name: masters.masterName }).from(masters).where(inArray(masters.id, ownerIds))
+      : [];
     const nameById = new Map(owners.map(row => [row.id, row.name]));
     const territoryByTile = new Map(territoryRows.map(row => [row.tileId, row]));
-    const discoveries = await db.select().from(tileDiscoveries).where(eq(tileDiscoveries.masterId, masterId));
-    const discovered = new Set(discoveries.map(row => row.tileId));
 
     return {
-      base: { x: status.baseX, y: status.baseY },
+      base: { x: status.baseX, y: status.baseY, continentId: status.continentId },
+      worldGrid: { width: PLANET_GRID_WIDTH, height: PLANET_GRID_HEIGHT },
+      chunkCenter: { x: cx, y: cy, radius },
       shieldUntil: status.shieldUntil,
       tiles: tiles.map(tile => {
         const territoryRow = territoryByTile.get(tile.id);
         const ownerName = territoryRow?.masterId ? nameById.get(territoryRow.masterId) ?? '—' : null;
         return {
           id: tile.id, x: tile.x, y: tile.y, terrain: tile.terrain, resourceType: tile.resourceType,
+          continentId: tile.continentId, regionId: tile.regionId, zoneTier: tile.zoneTier,
           baseYieldPerHour: tile.baseYieldPerHour, requiredPower: tile.requiredPower,
           discovered: discovered.has(tile.id),
           owner: territoryRow?.masterId ? { masterId: territoryRow.masterId, name: ownerName, level: territoryRow.level, status: territoryRow.status } : null,
@@ -204,6 +335,7 @@ export class WorldService {
     if (!status) throw new WorldError('ERR_WORLD_LOCKED', 409);
     const [tile] = await db.select().from(worldTiles).where(eq(worldTiles.id, tileId)).limit(1);
     if (!tile) throw new WorldError('Ô đất không tồn tại.', 404);
+    if (tile.terrain === 'OCEAN') throw new WorldError('ERR_OCEAN_UNCLAIMABLE', 409);
 
     const [discovery] = await db.select().from(tileDiscoveries)
       .where(and(eq(tileDiscoveries.masterId, masterId), eq(tileDiscoveries.tileId, tileId))).limit(1);

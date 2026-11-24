@@ -127,6 +127,7 @@ var back_hub_btn: Button = null
 @onready var view_cycle_btn: Button = get_node_or_null("%ViewCycleBtn")
 @onready var manage_floor_heroes_btn: Button = get_node_or_null("%ManageFloorHeroesBtn")
 @onready var chat_btn: Button = get_node_or_null("%ChatBtn")
+@onready var friends_btn: Button = get_node_or_null("%FriendsBtn")
 @onready var status_toast_panel: PanelContainer = get_node_or_null("%StatusToastPanel")
 
 @onready var event_buttons_box: HBoxContainer = get_node_or_null("%EventButtonsBox")
@@ -150,6 +151,15 @@ var back_hub_btn: Button = null
 @onready var inspector_action_container: VBoxContainer = %InspectorActionContainer
 
 var _building_action_bar = null
+var _red_dot_badges: Dictionary = {}
+var _toast_queue: Array[Dictionary] = []
+var _toast_active: bool = false
+var _toast_tween: Tween = null
+var _sse_client: HTTPClient = null
+var _sse_buffer: String = ""
+var _sse_requested: bool = false
+var _sse_reconnect_cooldown: float = 0.0
+var _social_scan_timer: float = 0.0
 
 var _current_lobby_floor: int = 1
 var _plot_nodes: Dictionary = {} # plot_index (1..48) -> BasePlot3D
@@ -287,16 +297,31 @@ func _ready() -> void:
 	if manage_floor_heroes_btn != null:
 		manage_floor_heroes_btn.pressed.connect(func(): _open_floor_hero_manager(_current_lobby_floor))
 	if chat_btn != null:
-		chat_btn.pressed.connect(func():
+		chat_btn.pressed.connect(func(): _open_chat_modal())
+	if friends_btn != null:
+		friends_btn.pressed.connect(func():
 			_exit_grid_edit_mode()
-			var existing = $HUD.get_node_or_null("ChatPanelModal")
+			var existing = $HUD.get_node_or_null("FriendsModal")
 			if existing != null: existing.queue_free()
-			var c_script = load("res://scripts/ui/chat_panel_modal.gd")
-			if c_script != null:
-				var modal = c_script.new()
-				modal.name = "ChatPanelModal"
+			var f_script = load("res://scripts/ui/friends_modal.gd")
+			if f_script != null:
+				var modal = f_script.new()
+				modal.name = "FriendsModal"
+				modal.private_chat_requested.connect(func(peer_name: String, _peer_id: String):
+					_open_chat_modal(peer_name)
+				)
+				modal.closed.connect(func(): await GameState.refresh_notification_badges())
 				$HUD.add_child(modal)
 		)
+	_init_red_dot_badges()
+	_setup_hud_tooltips()
+	if not EventBus.badges_updated.is_connected(_update_red_dot_badges):
+		EventBus.badges_updated.connect(_update_red_dot_badges)
+	if not EventBus.notification_requested.is_connected(_on_notification_requested):
+		EventBus.notification_requested.connect(_on_notification_requested)
+	if not EventBus.graphics_quality_changed.is_connected(_apply_graphics_quality):
+		EventBus.graphics_quality_changed.connect(_apply_graphics_quality)
+	_apply_graphics_quality(GameState.graphics_quality)
 	if airship_event_btn != null:
 		airship_event_btn.pressed.connect(func():
 			_exit_grid_edit_mode()
@@ -1482,6 +1507,53 @@ func _save_castle_grid_layout() -> void:
 		f.store_string(JSON.stringify(payload, "\t"))
 		f.close()
 
+func save_layout_preset(slot: int) -> bool:
+	var s := clampi(slot, 1, 3)
+	var path := "user://castle_layout_preset_%d.json" % s
+	var payload := {
+		"version": 4,
+		"structures": _grid_structures.duplicate(true),
+		"roads": _grid_roads.duplicate(true),
+	}
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(JSON.stringify(payload, "\t"))
+	f.close()
+	show_status_toast("💾 Đã lưu Bố cục %d!" % s, "success")
+	return true
+
+func load_layout_preset(slot: int) -> bool:
+	var s := clampi(slot, 1, 3)
+	var path := "user://castle_layout_preset_%d.json" % s
+	if not FileAccess.file_exists(path):
+		show_status_toast("ℹ️ Bố cục %d chưa có dữ liệu lưu." % s, "warn")
+		return false
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return false
+	var raw := f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(raw)
+	if not (parsed is Dictionary) or int(parsed.get("version", 0)) < 4:
+		return false
+	var saved_structs: Variant = parsed.get("structures", {})
+	if saved_structs is Dictionary:
+		for k in saved_structs.keys():
+			if saved_structs[k] is Dictionary:
+				_grid_structures[str(k)] = saved_structs[k]
+	var saved_roads: Variant = parsed.get("roads", {})
+	if saved_roads is Dictionary:
+		_grid_roads.clear()
+		for rk in saved_roads.keys():
+			if bool(saved_roads[rk]):
+				_grid_roads[str(rk)] = true
+	_apply_all_grid_transforms()
+	_rebuild_all_road_meshes()
+	_save_castle_grid_layout()
+	show_status_toast("📂 Đã nạp Bố cục %d!" % s, "success")
+	return true
+
 func _setup_grid_overlay_and_roads() -> void:
 	if _roads_container != null and is_instance_valid(_roads_container):
 		_roads_container.queue_free()
@@ -1740,6 +1812,30 @@ func _build_floor_elevator_buttons() -> void:
 	_cancel_grid_btn.pressed.connect(_exit_grid_edit_mode)
 	floor_buttons_container.add_child(_cancel_grid_btn)
 
+	var preset_hdr := Label.new()
+	preset_hdr.text = "📐 BỐ CỤC LÂU ĐÀI (3 SLOT)"
+	preset_hdr.add_theme_font_size_override("font_size", 11)
+	preset_hdr.add_theme_color_override("font_color", Color(0.85, 0.90, 0.98))
+	floor_buttons_container.add_child(preset_hdr)
+	for slot in range(1, 4):
+		var prow := HBoxContainer.new()
+		prow.add_theme_constant_override("separation", 4)
+		floor_buttons_container.add_child(prow)
+		var plbl := Label.new()
+		plbl.text = "Bố cục %d" % slot
+		plbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		plbl.add_theme_font_size_override("font_size", 11)
+		prow.add_child(plbl)
+		var s_idx := slot
+		var save_p_btn := Button.new()
+		save_p_btn.text = "💾 Lưu"
+		save_p_btn.pressed.connect(func(): save_layout_preset(s_idx))
+		prow.add_child(save_p_btn)
+		var load_p_btn := Button.new()
+		load_p_btn.text = "📂 Nạp"
+		load_p_btn.pressed.connect(func(): load_layout_preset(s_idx))
+		prow.add_child(load_p_btn)
+
 	_manage_floor_heroes_btn = manage_floor_heroes_btn
 
 func _on_cycle_camera_view_pressed() -> void:
@@ -1830,6 +1926,8 @@ func _process(delta: float) -> void:
 		bonfire_light.light_energy = base_energy + sin(_bonfire_time) * 0.22 + cos(_bonfire_time * 1.7) * 0.12
 	if dungeon_portal_mesh != null:
 		dungeon_portal_mesh.rotate_z(delta * 0.85)
+	_poll_chat_sse(delta)
+	_process_hero_social_and_icons(delta, label_camera)
 	if _pressed_structure_id != "" and not _dragging_structure and _grid_edit_mode == GridEditMode.NONE:
 		_structure_hold_elapsed += delta
 		if _structure_hold_elapsed >= STRUCTURE_LONG_PRESS_SEC:
@@ -1862,7 +1960,8 @@ func _sync_all_from_backend() -> void:
 
 func _backend_refresh_steps() -> Array[Callable]:
 	return [GameState.refresh_profile, GameState.refresh_base_overview, GameState.refresh_inventory,
-		GameState.refresh_crafting, GameState.refresh_equipment, GameState.refresh_heroes, GameState.refresh_party]
+		GameState.refresh_crafting, GameState.refresh_equipment, GameState.refresh_heroes, GameState.refresh_party,
+		GameState.refresh_personality, GameState.refresh_notification_badges]
 
 func _format_num(val: int) -> String:
 	var s := str(val)
@@ -1888,7 +1987,7 @@ func _find_first_free_unlocked_plot_index() -> int:
 	return -1
 
 func _refresh_hud() -> void:
-	var m_name := GameState.master_name if GameState.master_name != "" else "Demo Master"
+	var m_name := GameState.master_name if GameState.master_name != "" else ("Lỗi đồng bộ" if not GameState.sync_error.is_empty() else ("Đang đồng bộ..." if not GameState.is_synced else "Master"))
 	var party_cp := GameState.get_party_combat_power()
 	var built_cnt := _get_constructed_building_count()
 	var max_plots := GameState.unlocked_plots
@@ -1952,6 +2051,14 @@ func _refresh_hud() -> void:
 	if _manage_floor_heroes_btn != null:
 		_manage_floor_heroes_btn.text = "👥 Chọn Tướng Tầng %d" % _current_lobby_floor
 		_manage_floor_heroes_btn.disabled = false
+
+	if collect_all_btn != null:
+		var ready_cnt := 0
+		for b in GameState.base_overview.get("buildings", []):
+			if b is Dictionary and float(b.get("stored", 0.0)) >= 1.0:
+				ready_cnt += 1
+		collect_all_btn.visible = ready_cnt >= 1
+		collect_all_btn.text = "🌾 Thu Hoạch Tất Cả (%d)" % ready_cnt
 
 	# Update Expand Quota button (Master Level / Zone expansion)
 	var exp_info: Dictionary = GameState.base_overview.get("expansion", {})
@@ -2017,6 +2124,318 @@ func _setup_top_hud_styles() -> void:
 
 	if status_toast_panel != null:
 		_style_resource_pill(status_toast_panel, Color(0.45, 0.58, 0.78, 0.55))
+
+func _open_hero_quick_interact_popup(hero_actor: UnitActor3D, screen_pos: Vector2) -> void:
+	if hero_actor == null or not has_node("HUD"):
+		return
+	var existing = $HUD.get_node_or_null("HeroQuickInteractPopup")
+	if existing != null:
+		existing.queue_free()
+	var p_script = load("res://scripts/ui/hero_quick_interact_popup.gd")
+	if p_script == null:
+		_open_hero_inspector(hero_actor)
+		return
+	var popup = p_script.new()
+	popup.name = "HeroQuickInteractPopup"
+	popup.setup(hero_actor.hero_raw_data, screen_pos)
+	popup.feed_requested.connect(func(hid: String, hname: String):
+		await _feed_hero(hid, hname)
+	)
+	popup.gift_fav_requested.connect(func(hid: String, hname: String, fav_food: String):
+		var res := await GameState.serve_favorite_meal(hid)
+		if not res.get("ok", false):
+			await _feed_hero(hid, hname)
+		else:
+			show_status_toast("🍰 [%s] rất thích món [%s]! (+Tâm trạng & Trung thành)" % [hname, fav_food], "success")
+			await _sync_all_from_backend()
+	)
+	popup.rest_requested.connect(func(hid: String, hname: String, is_resting: bool):
+		await _toggle_hero_rest(hid, hname, is_resting)
+	)
+	popup.details_requested.connect(func(_hid: String):
+		if is_instance_valid(hero_actor):
+			_open_hero_inspector(hero_actor)
+	)
+	$HUD.add_child(popup)
+
+func _open_codex_modal() -> void:
+	_exit_grid_edit_mode()
+	if not has_node("HUD"):
+		return
+	var existing = $HUD.get_node_or_null("CodexModal")
+	if existing != null:
+		existing.queue_free()
+	var cx_script = load("res://scripts/ui/codex_modal.gd")
+	if cx_script != null:
+		var modal = cx_script.new()
+		modal.name = "CodexModal"
+		$HUD.add_child(modal)
+
+func _open_chat_modal(private_peer_name: String = "") -> void:
+	_exit_grid_edit_mode()
+	GameState.set_badge_count("chat", 0)
+	var existing = $HUD.get_node_or_null("ChatPanelModal")
+	if existing != null: existing.queue_free()
+	var c_script = load("res://scripts/ui/chat_panel_modal.gd")
+	if c_script != null:
+		var modal = c_script.new()
+		modal.name = "ChatPanelModal"
+		if not private_peer_name.is_empty() and modal.has_method("open_private_with"):
+			modal.open_private_with(private_peer_name)
+		$HUD.add_child(modal)
+
+func _setup_hud_tooltips() -> void:
+	if gems_pill != null:
+		gems_pill.tooltip_text = "💎 Đá Quý (Gem): Dùng để triệu hồi Banner Đặc Biệt và mua vật phẩm quý."
+	if gold_pill != null:
+		gold_pill.tooltip_text = "🪙 Bạc (Silver): Dùng để xây/nâng cấp công trình, rèn trang bị và đổi Thiên Thư."
+	if ration_pill != null:
+		ration_pill.tooltip_text = "🍖 Quân Lương: Dùng để hồi thể lực Hero và xuất kích Tháp PvE."
+	if player_card_btn != null:
+		player_card_btn.tooltip_text = "👤 Hồ Sơ Master, Cài Đặt, Bách Khoa & Bảo Mật."
+	if summon_altar_btn != null:
+		summon_altar_btn.tooltip_text = "✨ Tế Đàn Triệu Hồi Anh Hùng (1★–5★)."
+	if barracks_btn != null:
+		barracks_btn.tooltip_text = "🛡️ Doanh Trại: Xem Anh Hùng, Kỹ Năng, Trang Bị & Thăng Sao."
+	if warehouse_btn != null:
+		warehouse_btn.tooltip_text = "📦 Nhà Kho Tổng Hợp: Trang bị, nguyên liệu, sách EXP & thu hồi đồ rơi."
+	if build_drawer_btn != null:
+		build_drawer_btn.tooltip_text = "🏗️ Công Cụ Xây Dựng, Lát Đường Đá & 3 Slot Bố Cục Lâu Đài."
+	if enter_pve_btn != null:
+		enter_pve_btn.tooltip_text = "⚔️ Tiến vào Tháp Thử Thách PvE (12×12 & Combat v2)."
+	if chat_btn != null:
+		chat_btn.tooltip_text = "💬 Kênh Trò Chuyện 3 Kênh (Thế Giới / Liên Minh / Riêng Tư)."
+	if friends_btn != null:
+		friends_btn.tooltip_text = "👥 Bạn Bè, Quà Tình Bạn & Thăm Lâu Đài."
+	if airship_event_btn != null:
+		airship_event_btn.tooltip_text = "🎈 Thương Thuyền Khinh Khí: Cửa hàng vật phẩm."
+	if mailbox_event_btn != null:
+		mailbox_event_btn.tooltip_text = "✉️ Hòm Thư & Sổ Giao Dịch Ví."
+	if quest_event_btn != null:
+		quest_event_btn.tooltip_text = "📜 Sự Kiện LiveOps, Nhiệm Vụ & Thành Tựu."
+
+func _init_red_dot_badges() -> void:
+	_attach_red_dot_badge(mailbox_event_btn, "mailbox")
+	_attach_red_dot_badge(quest_event_btn, "events")
+	_attach_red_dot_badge(friends_btn, "friends")
+	_attach_red_dot_badge(chat_btn, "chat")
+	_update_red_dot_badges(GameState.badge_counts)
+
+func _attach_red_dot_badge(btn: Button, key: String) -> void:
+	if btn == null:
+		return
+	var existing := btn.get_node_or_null("RedDotBadge")
+	if existing is PanelContainer:
+		_red_dot_badges[key] = existing
+		return
+	var badge := PanelContainer.new()
+	badge.name = "RedDotBadge"
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.anchor_left = 1.0
+	badge.anchor_right = 1.0
+	badge.anchor_top = 0.0
+	badge.anchor_bottom = 0.0
+	badge.offset_left = -16.0
+	badge.offset_top = -5.0
+	badge.offset_right = 5.0
+	badge.offset_bottom = 14.0
+	badge.custom_minimum_size = Vector2(18, 18)
+	badge.visible = false
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.90, 0.22, 0.21, 0.98)
+	st.border_width_left = 1
+	st.border_width_top = 1
+	st.border_width_right = 1
+	st.border_width_bottom = 1
+	st.border_color = Color(1.0, 0.95, 0.95, 0.95)
+	st.corner_radius_top_left = 9
+	st.corner_radius_top_right = 9
+	st.corner_radius_bottom_left = 9
+	st.corner_radius_bottom_right = 9
+	badge.add_theme_stylebox_override("panel", st)
+	var lbl := Label.new()
+	lbl.name = "CountLabel"
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 10)
+	lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.add_child(lbl)
+	btn.add_child(badge)
+	_red_dot_badges[key] = badge
+
+func _update_red_dot_badges(counts: Dictionary = GameState.badge_counts) -> void:
+	for key in _red_dot_badges.keys():
+		var badge: Variant = _red_dot_badges[key]
+		if not is_instance_valid(badge):
+			continue
+		var cnt := int(counts.get(key, 0))
+		badge.visible = cnt > 0
+		var lbl: Label = badge.get_node_or_null("CountLabel")
+		if lbl != null:
+			lbl.text = "99+" if cnt > 99 else str(cnt)
+
+func _on_notification_requested(text: String, is_error: bool) -> void:
+	show_status_toast(text, "error" if is_error else "info")
+
+func _poll_chat_sse(delta: float) -> void:
+	if not GameState.is_logged_in() or ApiClient.base_url.is_empty():
+		return
+	if _sse_reconnect_cooldown > 0.0:
+		_sse_reconnect_cooldown -= delta
+		return
+	if _sse_client == null:
+		_sse_client = HTTPClient.new()
+		_sse_requested = false
+		_sse_buffer = ""
+		var url := ApiClient.base_url.strip_edges()
+		var use_tls := url.begins_with("https://")
+		var host_port := url.replace("https://", "").replace("http://", "").split("/")[0]
+		var parts := host_port.split(":")
+		var host := parts[0]
+		var port := int(parts[1]) if parts.size() > 1 else (443 if use_tls else 80)
+		var err := _sse_client.connect_to_host(host, port, TLSOptions.client() if use_tls else null)
+		if err != OK:
+			_sse_client = null
+			_sse_reconnect_cooldown = 5.0
+		return
+
+	_sse_client.poll()
+	var st := _sse_client.get_status()
+	if st == HTTPClient.STATUS_CONNECTED and not _sse_requested:
+		var headers := PackedStringArray([
+			"Authorization: Bearer " + ApiClient.auth_token,
+			"Accept: text/event-stream",
+		])
+		var req_err := _sse_client.request(HTTPClient.METHOD_GET, "/api/chat/stream", headers)
+		if req_err == OK:
+			_sse_requested = true
+		else:
+			_sse_client = null
+			_sse_reconnect_cooldown = 5.0
+	elif st == HTTPClient.STATUS_BODY:
+		var chunk := _sse_client.read_response_body_chunk()
+		if chunk.size() > 0:
+			_sse_buffer += chunk.get_string_from_utf8()
+			_consume_sse_buffer()
+	elif st in [HTTPClient.STATUS_CANT_CONNECT, HTTPClient.STATUS_CANT_RESOLVE, HTTPClient.STATUS_CONNECTION_ERROR, HTTPClient.STATUS_TLS_HANDSHAKE_ERROR, HTTPClient.STATUS_DISCONNECTED]:
+		_sse_client = null
+		_sse_requested = false
+		_sse_reconnect_cooldown = 5.0
+
+func _consume_sse_buffer() -> void:
+	_sse_buffer = _sse_buffer.replace("\r\n", "\n")
+	while "\n\n" in _sse_buffer:
+		var idx := _sse_buffer.find("\n\n")
+		var block := _sse_buffer.substr(0, idx)
+		_sse_buffer = _sse_buffer.substr(idx + 2)
+		var event_name := "message"
+		var data_lines: PackedStringArray = []
+		for line in block.split("\n"):
+			if line.begins_with("event:"):
+				event_name = line.substr(6).strip_edges()
+			elif line.begins_with("data:"):
+				data_lines.append(line.substr(5).strip_edges())
+		if event_name == "message" and not data_lines.is_empty():
+			var parsed = JSON.parse_string("\n".join(data_lines))
+			if parsed is Dictionary:
+				EventBus.chat_message_received.emit(parsed)
+				var ch_str := str(parsed.get("channel", "")).to_upper()
+				var msg: Variant = parsed.get("message")
+				var sender_id := str(msg.get("senderMasterId", "")) if msg is Dictionary else ""
+				var modal_open := has_node("HUD") and $HUD.get_node_or_null("ChatPanelModal") != null
+				if not modal_open and ch_str == "PRIVATE" and sender_id != GameState.master_id:
+					GameState.increment_badge_count("chat", 1)
+
+func _process_hero_social_and_icons(delta: float, cam: Camera3D) -> void:
+	_social_scan_timer += delta
+	if _social_scan_timer < 1.2:
+		return
+	_social_scan_timer = 0.0
+	var active_actors: Array = []
+	for hid in _hero_actors.keys():
+		var act: Variant = _hero_actors[hid]
+		if act != null and is_instance_valid(act) and act.is_on_active_floor:
+			if act.has_method("update_status_icon_visibility"):
+				act.update_status_icon_visibility(cam)
+			if act.mode != UnitActor3D.ActorMode.BASE_DRAGGED and act._social_cooldown <= 0.0 and act._social_pause_timer <= 0.0:
+				active_actors.append(act)
+	for i in range(active_actors.size()):
+		var a: UnitActor3D = active_actors[i]
+		if a._social_cooldown > 0.0:
+			continue
+		for j in range(i + 1, active_actors.size()):
+			var b: UnitActor3D = active_actors[j]
+			if b._social_cooldown > 0.0:
+				continue
+			if a.global_position.distance_to(b.global_position) <= 3.5:
+				var bank = load("res://scripts/actors/hero_dialogue_bank.gd")
+				var pair: Array[String] = bank.pick_social_pair(a.unit_name, b.unit_name)
+				a.start_social_interaction(b, pair[0], 0.0)
+				b.start_social_interaction(a, pair[1], 1.4)
+				break
+
+func show_status_toast(message: String, level: String = "info", duration: float = 2.6) -> void:
+	var clean := message.strip_edges()
+	if clean.is_empty():
+		return
+	GameState.record_castle_activity(clean)
+	if not _toast_queue.is_empty():
+		var last_item: Dictionary = _toast_queue[_toast_queue.size() - 1]
+		if str(last_item.get("message", "")) == clean and str(last_item.get("level", "")) == level:
+			return
+	_toast_queue.append({
+		"message": clean,
+		"level": level,
+		"duration": maxf(0.4, duration),
+	})
+	if not _toast_active:
+		_process_next_toast()
+
+func _process_next_toast() -> void:
+	if _toast_queue.is_empty():
+		_toast_active = false
+		return
+	if status_toast_panel == null or status_banner_label == null:
+		_toast_queue.clear()
+		_toast_active = false
+		return
+	_toast_active = true
+	var item: Dictionary = _toast_queue.pop_front()
+	var msg := str(item.get("message", ""))
+	var level := str(item.get("level", "info"))
+	var dur := float(item.get("duration", 2.6))
+
+	var border_col := Color(0.45, 0.65, 0.92, 0.85)
+	var text_col := Color(0.90, 0.95, 1.0)
+	match level:
+		"success":
+			border_col = Color(0.28, 0.85, 0.48, 0.95)
+			text_col = Color(0.75, 1.0, 0.82)
+		"warn":
+			border_col = Color(0.95, 0.72, 0.25, 0.95)
+			text_col = Color(1.0, 0.88, 0.50)
+		"error":
+			border_col = Color(0.95, 0.30, 0.30, 0.95)
+			text_col = Color(1.0, 0.68, 0.68)
+
+	_style_resource_pill(status_toast_panel, border_col)
+	status_banner_label.add_theme_color_override("font_color", text_col)
+	status_banner_label.text = msg
+	status_toast_panel.visible = true
+	status_toast_panel.modulate.a = 0.0
+
+	if _toast_tween != null and _toast_tween.is_valid():
+		_toast_tween.kill()
+	_toast_tween = create_tween()
+	_toast_tween.tween_property(status_toast_panel, "modulate:a", 1.0, 0.18)
+	_toast_tween.tween_interval(dur)
+	_toast_tween.tween_property(status_toast_panel, "modulate:a", 0.0, 0.35)
+	_toast_tween.finished.connect(func():
+		_toast_active = false
+		if not _toast_queue.is_empty():
+			_process_next_toast()
+	, CONNECT_ONE_SHOT)
 	if enter_pve_btn != null:
 		var cta_style := StyleBoxFlat.new()
 		cta_style.bg_color = Color(0.42, 0.16, 0.08, 0.96)
@@ -2052,7 +2471,7 @@ func _style_resource_pill(pill: PanelContainer, border_col: Color) -> void:
 func _get_avatar_icon() -> String:
 	if GameState.selected_avatar_hero_id != "":
 		for h in GameState.heroes:
-			if h is Dictionary and str(h.get("id", "")) == GameState.selected_avatar_hero_id:
+			if h is Dictionary and GameState.is_hero_alive(h) and str(h.get("id", "")) == GameState.selected_avatar_hero_id:
 				var elem := str(h.get("element", "NEUTRAL")).to_upper()
 				match elem:
 					"FIRE": return "🔥"
@@ -2071,11 +2490,6 @@ func _open_player_profile_modal(tab_idx: int = 0) -> void:
 	var modal = PlayerProfileModalScript.new()
 	modal.name = "PlayerProfileModal"
 	modal.set_anchors_preset(Control.PRESET_FULL_RECT)
-	modal.anchor_right = 1.0
-	modal.anchor_bottom = 1.0
-	var vp_size := get_viewport().get_visible_rect().size
-	if vp_size.x > 0 and vp_size.y > 0:
-		modal.size = vp_size
 	$HUD.add_child(modal)
 	modal.setup(tab_idx)
 	modal.weather_changed.connect(func(preset_name: String):
@@ -2124,11 +2538,12 @@ const MAX_HEROES_PER_FLOOR := 6
 func _spawn_resident_heroes() -> void:
 	if not is_inside_tree() or is_queued_for_deletion(): return
 	for child in heroes_container.get_children():
+		heroes_container.remove_child(child)
 		child.queue_free()
 	_hero_actors.clear()
 
 	var roster := GameState.heroes
-	if roster.is_empty() and not GameState.is_logged_in():
+	if roster.is_empty() and not GameState.is_logged_in() and ApiClient.auth_token.is_empty():
 		roster = [
 			{ "id": "preview-1", "name": "Aaron", "rarity": 4, "level": 12, "classCode": "WARRIOR", "hp": 420, "maxHp": 420 },
 			{ "id": "preview-2", "name": "Jenna", "rarity": 3, "level": 10, "classCode": "THIEF", "hp": 310, "maxHp": 310 },
@@ -2161,7 +2576,7 @@ func _spawn_resident_heroes() -> void:
 			if _plot_nodes.has(p_idx):
 				var plot_node: BasePlot3D = _plot_nodes[p_idx]
 				var f_idx: int = clampi(plot_node.zone_index, 1, MAX_LOBBY_FLOORS)
-				if floor_heroes[f_idx].size() < MAX_HEROES_PER_FLOOR:
+				if not GameState.floor_assigned_hero_ids.has(f_idx) and floor_heroes[f_idx].size() < MAX_HEROES_PER_FLOOR:
 					floor_heroes[f_idx].append(h)
 					assigned_hero_ids[hid] = f_idx
 
@@ -2169,7 +2584,7 @@ func _spawn_resident_heroes() -> void:
 		var hid := str(h.get("id", ""))
 		if assigned_hero_ids.has(hid):
 			continue
-		if GameState.active_party_ids.has(hid) and floor_heroes[1].size() < MAX_HEROES_PER_FLOOR:
+		if not GameState.floor_assigned_hero_ids.has(1) and GameState.active_party_ids.has(hid) and floor_heroes[1].size() < MAX_HEROES_PER_FLOOR:
 			floor_heroes[1].append(h)
 			assigned_hero_ids[hid] = 1
 
@@ -2178,6 +2593,8 @@ func _spawn_resident_heroes() -> void:
 		if assigned_hero_ids.has(hid):
 			continue
 		for f in range(1, MAX_LOBBY_FLOORS + 1):
+			if GameState.floor_assigned_hero_ids.has(f):
+				continue
 			if floor_heroes[f].size() < MAX_HEROES_PER_FLOOR:
 				floor_heroes[f].append(h)
 				assigned_hero_ids[hid] = f
@@ -2225,9 +2642,37 @@ func _spawn_resident_heroes() -> void:
 			default_pos.y = terrace_center.y
 			var in_party := GameState.active_party_ids.has(hid)
 			actor.floor_index = f_num
-			actor.setup_base_resident(h, default_pos, worker_info, in_party, infirmary_mesh.global_position, terrace_center)
+			var routine_targets := _collect_routine_targets(f_num, hub_center)
+			actor.setup_base_resident(h, default_pos, worker_info, in_party, routine_targets.get("infirmary", infirmary_mesh.global_position), terrace_center)
+			actor.apply_routine_targets(routine_targets)
 			actor.set_floor_focus_state(true, false)
 			_hero_actors[hid] = actor
+
+func _collect_routine_targets(floor_num: int, plaza_fallback: Vector3) -> Dictionary:
+	var inf_pos := infirmary_mesh.global_position if infirmary_mesh != null else plaza_fallback
+	var targets := {
+		"plaza": plaza_fallback,
+		"kitchen": plaza_fallback,
+		"dorm": plaza_fallback,
+		"infirmary": inf_pos,
+	}
+	for p_idx in _plot_nodes.keys():
+		var plot_node: BasePlot3D = _plot_nodes[p_idx]
+		if plot_node == null or not is_instance_valid(plot_node):
+			continue
+		var b_data: Dictionary = plot_node.building_data
+		if b_data.is_empty():
+			continue
+		if clampi(plot_node.zone_index, 1, MAX_LOBBY_FLOORS) != floor_num:
+			continue
+		var btype := str(b_data.get("buildingType", "")).to_upper()
+		if btype == "KITCHEN":
+			targets["kitchen"] = plot_node.global_position
+		elif btype in ["DORM", "DORMITORY", "VILLA", "HOUSE"]:
+			targets["dorm"] = plot_node.global_position
+		elif btype in ["INFIRMARY", "HEALING_CENTER", "RECOVERY_CENTER"]:
+			targets["infirmary"] = plot_node.global_position
+	return targets
 
 # ==============================================================================
 # 3D RAYCAST INPUT, GRID PLACEMENT / RELOCATION / ROAD PAINTING & DRAG-AND-DROP
@@ -2614,7 +3059,9 @@ func _on_left_mouse_up(screen_pos: Vector2) -> void:
 	_pressed_hero = null
 
 	if clicked_hero != null:
-		_open_hero_inspector(clicked_hero)
+		clicked_hero.face_camera(camera_rig.get_camera_3d())
+		clicked_hero.show_speech_bubble("👋 Kính chào Master!", 2.4)
+		_open_hero_quick_interact_popup(clicked_hero, screen_pos)
 		return
 
 	var hit := _raycast_3d(screen_pos)
@@ -3292,6 +3739,20 @@ func _on_action_bar_facility_pressed(b_data: Dictionary, action_code: String) ->
 			magic.setup(b_data)
 			magic.closed.connect(func(): await _sync_all_from_backend())
 			$HUD.add_child(magic)
+		"AIRSHIP_PORT":
+			var existing_ap = $HUD.get_node_or_null("AirshipPortModal")
+			if existing_ap != null: existing_ap.queue_free()
+			var ap_script = load("res://scripts/ui/airship_port_modal.gd")
+			if ap_script != null:
+				var modal = ap_script.new()
+				modal.name = "AirshipPortModal"
+				modal.closed.connect(func(): await _sync_all_from_backend())
+				modal.open_rts_map_requested.connect(func():
+					SceneTransition.change_scene("res://scenes/world/world_rts_map.tscn", "🗺️ Đang mở Bản Đồ Viễn Chinh RTS...")
+				)
+				$HUD.add_child(modal)
+		"WORLD_RTS":
+			SceneTransition.change_scene("res://scenes/world/world_rts_map.tscn", "🗺️ Đang mở Bản Đồ Viễn Chinh RTS...")
 		"SHOP_AIRSHIP":
 			var shop = preload("res://scripts/ui/airship_shop_modal.gd").new()
 			shop.closed.connect(func(): await _sync_all_from_backend())
@@ -4631,6 +5092,9 @@ func _upgrade_building(building_id: String) -> void:
 	status_banner_label.text = "⬆️ Đang nâng cấp công trình..."
 	var res := await ApiClient.post_req("/api/base/buildings/%s/upgrade" % building_id, {})
 	if res["ok"]:
+		var b_pos := _find_building_world_pos(building_id)
+		_spawn_floating_resource_text(b_pos, "⬆️ Nâng Cấp Thành Công!", Color(0.55, 0.95, 1.0))
+		_celebrate_nearby_heroes(b_pos)
 		status_banner_label.text = "✅ Đã nâng cấp xong công trình!"
 		await _sync_all_from_backend()
 	else:
@@ -4651,6 +5115,10 @@ func _collect_building(building_id: String) -> void:
 	if res["ok"] and res["data"] is Dictionary:
 		var amt := int(res["data"].get("collected", 0))
 		var rtype := str(res["data"].get("resourceType", ""))
+		var b_pos := _find_building_world_pos(building_id)
+		if amt > 0:
+			_spawn_floating_resource_text(b_pos, "+%d %s" % [amt, _resource_icon_for(rtype)], Color(0.55, 1.0, 0.65))
+			_celebrate_nearby_heroes(b_pos)
 		status_banner_label.text = "🌾 Thu hoạch thành công +%d %s!" % [amt, rtype]
 		if rtype == "MAGIC_OUTPUT":
 			var outputs := PackedStringArray()
@@ -4671,7 +5139,10 @@ func _on_collect_all_pressed() -> void:
 			var bid := str(b.get("id", ""))
 			var res := await ApiClient.post_req("/api/base/buildings/%s/collect" % bid, {})
 			if res["ok"] and res["data"] is Dictionary:
-				total_harvested += int(res["data"].get("collected", 0))
+				var c_amt := int(res["data"].get("collected", 0))
+				total_harvested += c_amt
+				if c_amt > 0:
+					_spawn_floating_resource_text(_find_building_world_pos(bid), "+%d %s" % [c_amt, _resource_icon_for(str(b.get("resourceType", "")))], Color(0.55, 1.0, 0.65))
 	if total_harvested > 0:
 		status_banner_label.text = "🌾 Đã thu hoạch toàn bộ Sảnh Chờ: +%d vật phẩm!" % total_harvested
 		await _sync_all_from_backend()
@@ -4923,185 +5394,16 @@ func _show_gacha_results_modal(roll_count: int, results: Array, highest_rarity: 
 	var existing := $HUD.get_node_or_null("GachaResultsOverlay")
 	if existing != null:
 		existing.queue_free()
-
-	var overlay := ColorRect.new()
-	overlay.name = "GachaResultsOverlay"
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.color = Color(0.03, 0.05, 0.09, 0.82)
-	$HUD.add_child(overlay)
-
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(center)
-
-	var is_single_roll := (results.size() == 1)
-
-	var card_panel := PanelContainer.new()
-	card_panel.custom_minimum_size = Vector2(460, 560) if is_single_roll else Vector2(980, 580)
-	var pstyle := StyleBoxFlat.new()
-	pstyle.bg_color = Color(0.07, 0.10, 0.16, 0.97)
-	pstyle.border_width_left = 2
-	pstyle.border_width_top = 2
-	pstyle.border_width_right = 2
-	pstyle.border_width_bottom = 2
-	pstyle.border_color = Color(1.0, 0.84, 0.25, 0.95) if highest_rarity >= 4 else Color(0.32, 0.78, 1.0, 0.85)
-	pstyle.corner_radius_top_left = 12
-	pstyle.corner_radius_top_right = 12
-	pstyle.corner_radius_bottom_left = 12
-	pstyle.corner_radius_bottom_right = 12
-	card_panel.add_theme_stylebox_override("panel", pstyle)
-	center.add_child(card_panel)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 22)
-	margin.add_theme_constant_override("margin_top", 18)
-	margin.add_theme_constant_override("margin_right", 22)
-	margin.add_theme_constant_override("margin_bottom", 18)
-	card_panel.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(vbox)
-
-	var title := Label.new()
-	title.text = "✨ KẾT QUẢ ĐẠI NGHI THỨC TRIỆU HỒI ×%d ✨" % roll_count
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 20)
-	title.add_theme_color_override("font_color", Color(1.0, 0.90, 0.38) if highest_rarity >= 4 else Color(0.55, 0.92, 1.0))
-	vbox.add_child(title)
-
-	var sub := Label.new()
-	sub.text = "📜 Thiên Thư còn lại: %s  |  💎 Đá Quý: %s  |  🪙 Bạc: %s" % [
-		_format_num(GameState.normal_scrolls),
-		_format_num(GameState.gem_stones),
-		_format_num(GameState.silver_coins),
-	]
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_font_size_override("font_size", 13)
-	sub.add_theme_color_override("font_color", Color(0.80, 0.88, 0.98))
-	vbox.add_child(sub)
-
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
-
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(0, 340)
-	vbox.add_child(scroll)
-
-	var scroll_center := CenterContainer.new()
-	scroll_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.add_child(scroll_center)
-
-	var grid := GridContainer.new()
-	grid.columns = mini(5, maxi(1, results.size()))
-	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	grid.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	scroll_center.add_child(grid)
-
-	for r in results:
-		if not (r is Dictionary):
-			continue
-		var rtype := str(r.get("rewardType", r.get("itemType", "MATERIAL"))).to_upper()
-		var is_hero := (rtype == "HERO")
-		var rname := str(r.get("rewardName", "Anh Hùng" if is_hero else "Vật phẩm"))
-		var rar := int(r.get("rarity", 1))
-
-		if is_hero:
-			var hero_dict: Dictionary = r.get("hero", {}) if r.get("hero") is Dictionary else {}
-			if hero_dict.is_empty():
-				hero_dict = {
-					"id": str(r.get("heroId", r.get("id", ""))),
-					"name": rname,
-					"rarity": rar,
-					"level": 1,
-					"classCode": str(r.get("classCode", "WARRIOR")),
-					"element": str(r.get("element", "NEUTRAL")),
-					"state": "HEALTHY"
-				}
-			else:
-				hero_dict = hero_dict.duplicate()
-				if not hero_dict.has("rarity"):
-					hero_dict["rarity"] = rar
-				if not hero_dict.has("name"):
-					hero_dict["name"] = rname
-
-			var card = UniversalHeroCardScript.new()
-			if is_single_roll:
-				card.custom_minimum_size = Vector2(230, 320)
-			else:
-				card.custom_minimum_size = Vector2(175, 260)
-			card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			card.setup(hero_dict, UniversalHeroCardScript.ContextMode.DEFAULT, false)
-			if bool(r.get("isDuplicate", false)):
-				card.add_badge("🔄 Trùng (+1 Mảnh)", Color(0.85, 0.45, 0.15, 0.95))
-			else:
-				card.add_badge("✨ MỚI", Color(0.18, 0.65, 0.35, 0.95))
-			grid.add_child(card)
-		else:
-			var item_dict := {
-				"id": str(r.get("itemId", r.get("id", ""))),
-				"name": rname,
-				"rarity": rar,
-				"starLevel": rar,
-				"quantity": int(r.get("quantity", 1)),
-				"itemType": rtype,
-				"slot": rtype
-			}
-			var icard = UniversalItemCardScript.new()
-			if is_single_roll:
-				icard.custom_minimum_size = Vector2(230, 270)
-			else:
-				icard.custom_minimum_size = Vector2(175, 210)
-			icard.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-			icard.setup(item_dict, UniversalItemCardScript.ContextMode.MATERIAL, false)
-			icard.add_badge("📦 VẬT PHẨM", Color(0.20, 0.35, 0.55, 0.95))
-			grid.add_child(icard)
-
-	var btn_row := HBoxContainer.new()
-	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 12)
-	vbox.add_child(btn_row)
-
-	var is_special_banner := (banner_type.to_upper() == "SPECIAL")
-
-	var again1_btn := Button.new()
-	again1_btn.text = "💎 Triệu Hồi Tiếp ×1 (100 Gem)" if is_special_banner else "📜 Triệu Hồi Tiếp ×1 (1 Thiên Thư)"
-	again1_btn.custom_minimum_size = Vector2(215, 38)
-	again1_btn.disabled = (GameState.gem_stones < 100) if is_special_banner else (GameState.normal_scrolls < 1 and GameState.silver_coins < 10000)
-	again1_btn.pressed.connect(func():
-		overlay.queue_free()
-		_perform_gacha_summon(1, banner_id, banner_type)
+	var sr_script = load("res://scripts/ui/summon_result_modal.gd")
+	if sr_script == null:
+		return
+	var modal = sr_script.new()
+	modal.name = "GachaResultsOverlay"
+	modal.setup(roll_count, results, mini(5, highest_rarity), banner_id, banner_type)
+	modal.summon_again_requested.connect(func(rc: int, bid: String, btype: String):
+		_perform_gacha_summon(rc, bid, btype)
 	)
-	btn_row.add_child(again1_btn)
-
-	var again10_btn := Button.new()
-	again10_btn.text = "🌟 Triệu Hồi Tiếp ×10 (1,000 Gem)" if is_special_banner else "🌟 Triệu Hồi Tiếp ×10 (10 Thiên Thư)"
-	again10_btn.custom_minimum_size = Vector2(235, 38)
-	again10_btn.disabled = (GameState.gem_stones < 1000) if is_special_banner else (GameState.normal_scrolls < 10 and GameState.silver_coins < (10 - GameState.normal_scrolls) * 10000)
-	again10_btn.pressed.connect(func():
-		overlay.queue_free()
-		_perform_gacha_summon(10, banner_id, banner_type)
-	)
-	btn_row.add_child(again10_btn)
-
-	var roster_btn := Button.new()
-	roster_btn.text = "🛡️ Xem Tướng & Thăng Sao"
-	roster_btn.custom_minimum_size = Vector2(190, 38)
-	roster_btn.pressed.connect(func():
-		overlay.queue_free()
-		_on_barracks_pressed()
-	)
-	btn_row.add_child(roster_btn)
-
-	var close_btn := Button.new()
-	close_btn.text = "✖ Đóng"
-	close_btn.custom_minimum_size = Vector2(110, 38)
-	close_btn.pressed.connect(overlay.queue_free)
-	btn_row.add_child(close_btn)
+	$HUD.add_child(modal)
 
 func _cook_rations(qty: int) -> void:
 	var res := await ApiClient.post_req("/api/survival/kitchen/cook", { "quantity": qty })
@@ -5123,11 +5425,84 @@ func _feed_hero(hero_id: String, hero_name: String) -> void:
 # LIGHTING AMBIANCE & NAVIGATION
 # ==============================================================================
 
+func _find_building_world_pos(building_id: String) -> Vector3:
+	for p_idx in _plot_nodes.keys():
+		var plot_node: BasePlot3D = _plot_nodes[p_idx]
+		if plot_node != null and is_instance_valid(plot_node) and str(plot_node.building_data.get("id", "")) == building_id:
+			return plot_node.global_position
+	return get_floor_terrace_center(_current_lobby_floor)
+
+func _resource_icon_for(rtype: String) -> String:
+	match rtype.to_upper():
+		"FOOD", "RAW_FOOD", "RATION": return "🍖"
+		"SILVER", "GOLD": return "🪙"
+		"WOOD": return "🪵"
+		"STONE": return "🪨"
+		"MAGIC_OUTPUT": return "📚"
+		_: return "✨"
+
+func _spawn_floating_resource_text(world_pos: Vector3, text_str: String, color: Color = Color(1.0, 0.90, 0.42)) -> void:
+	if not is_inside_tree():
+		return
+	var lbl := Label3D.new()
+	lbl.text = text_str
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.font_size = 36
+	lbl.pixel_size = 0.016
+	lbl.modulate = color
+	lbl.position = world_pos + Vector3(0.0, 2.4, 0.0)
+	add_child(lbl)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "position:y", lbl.position.y + 2.2, 1.1).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate:a", 0.0, 1.1).set_delay(0.25)
+	tw.finished.connect(lbl.queue_free, CONNECT_ONE_SHOT)
+
+func _celebrate_nearby_heroes(world_pos: Vector3, radius: float = 12.0) -> void:
+	for hid in _hero_actors.keys():
+		var act: Variant = _hero_actors[hid]
+		if act != null and is_instance_valid(act) and act.is_on_active_floor and act.global_position.distance_to(world_pos) <= radius:
+			act.show_speech_bubble("🎉 Tuyệt vời Master!", 2.8)
+
+func _apply_graphics_quality(quality: String) -> void:
+	var q := quality.to_upper()
+	var vp := get_viewport()
+	match q:
+		"LOW":
+			if dir_light != null:
+				dir_light.shadow_enabled = false
+			if vp != null:
+				vp.msaa_3d = Viewport.MSAA_DISABLED
+			if world_env != null and world_env.environment != null:
+				world_env.environment.glow_enabled = false
+		"MEDIUM":
+			if dir_light != null:
+				dir_light.shadow_enabled = true
+			if vp != null:
+				vp.msaa_3d = Viewport.MSAA_2X
+			if world_env != null and world_env.environment != null:
+				world_env.environment.glow_enabled = true
+		_:
+			if dir_light != null:
+				dir_light.shadow_enabled = true
+			if vp != null:
+				vp.msaa_3d = Viewport.MSAA_4X
+			if world_env != null and world_env.environment != null:
+				world_env.environment.glow_enabled = true
+
 func _on_lighting_toggle_pressed() -> void:
 	_lighting_mode = (_lighting_mode + 1) % 3
 	_apply_lighting_preset(_lighting_mode, true)
 
 func _apply_lighting_preset(mode_idx: int, animate: bool) -> void:
+	var arch := get_node_or_null("BaseArchitecture")
+	var bonfire_node := arch.get_node_or_null("CentralBonfire") as Node3D if arch != null else null
+	var f1_bonfire := bonfire_node.global_position if bonfire_node != null else get_floor_terrace_center(1)
+	var f1_targets := _collect_routine_targets(1, f1_bonfire)
+	for hid in _hero_actors.keys():
+		var act: Variant = _hero_actors[hid]
+		if act != null and is_instance_valid(act) and act.has_method("set_time_of_day"):
+			act.set_time_of_day(mode_idx, f1_bonfire, f1_targets.get("dorm", f1_bonfire))
 	var env := world_env.environment
 	var target_light_col := Color(1.0, 0.98, 0.92)
 	var target_light_energy := 1.15
@@ -5185,7 +5560,7 @@ func _on_barracks_pressed() -> void:
 	camera_rig.focus_action_unit(barracks_mesh.global_position, 8.5, 0.3)
 	status_banner_label.text = "🛡️ Đang mở Doanh Trại & Bảng Thăng Sao (Pick Me Up style)..."
 	await get_tree().create_timer(0.32).timeout
-	get_tree().change_scene_to_file("res://scenes/heroes/hero_roster.tscn")
+	SceneTransition.change_scene("res://scenes/heroes/hero_roster.tscn", "🛡️ Đang mở Doanh Trại Anh Hùng...")
 
 func _on_enter_pve_pressed() -> void:
 	var existing := $HUD.get_node_or_null("PveModeModal")
@@ -5209,14 +5584,7 @@ func _on_pve_mode_selected(mode_id: String) -> void:
 			$HUD.add_child(modal)
 		return
 	if mode_id == "EXPEDITION":
-		var existing = $HUD.get_node_or_null("WorldExpeditionModal")
-		if existing != null: existing.queue_free()
-		var e_script = load("res://scripts/ui/world_expedition_modal.gd")
-		if e_script != null:
-			var modal = e_script.new()
-			modal.name = "WorldExpeditionModal"
-			modal.closed.connect(func(): await _sync_all_from_backend())
-			$HUD.add_child(modal)
+		SceneTransition.change_scene("res://scenes/world/world_rts_map.tscn", "🗺️ Đang mở Bản Đồ Viễn Chinh RTS...")
 		return
 	if mode_id != "TOWER":
 		return
@@ -5226,12 +5594,12 @@ func _on_pve_mode_selected(mode_id: String) -> void:
 	if status_banner_label != null:
 		status_banner_label.text = "🗼 Đang mở Tháp Thử Thách PvE..."
 	await get_tree().create_timer(0.4).timeout
-	get_tree().change_scene_to_file("res://scenes/pve/pve_tower.tscn")
+	SceneTransition.change_scene("res://scenes/pve/pve_tower.tscn", "🗼 Đang tiến vào Tháp Thử Thách PvE...")
 
 const RecoveryCenterModalScript = preload("res://scripts/ui/recovery_center_modal.gd")
 
 func _on_back_hub_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/hub/main_hub.tscn")
+	SceneTransition.change_scene("res://scenes/hub/main_hub.tscn", "🧭 Đang quay về Sảnh Chính...")
 
 func _open_recovery_center_modal() -> void:
 	var existing = $HUD.get_node_or_null("RecoveryCenterModal")

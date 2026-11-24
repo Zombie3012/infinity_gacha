@@ -108,7 +108,7 @@ func show_building(data: Dictionary) -> void:
 	var b_code := str(data.get("buildingType", ""))
 	var b_name := str(data.get("typeName", b_code))
 	var b_lvl := int(data.get("level", 1))
-	var max_lvl := int(data.get("maxLevel", 3))
+	var max_lvl := 5 if b_code == "AIRSHIP_PORT" else int(data.get("maxLevel", 3))
 	var status := str(data.get("status", "READY"))
 	var stored := float(data.get("stored", 0.0))
 	var res_type := str(data.get("resourceType", ""))
@@ -196,6 +196,10 @@ func show_locked_plot(plot_idx: int, zone_idx: int, cost: int, can_unlock: bool)
 
 func _add_facility_action_button(code: String, _lvl: int) -> void:
 	match code:
+		"AIRSHIP_PORT":
+			_add_action_button("⚓", "Xưởng & Bãi Đậu", Color(0.35, 0.82, 1.0), func():
+				facility_action_pressed.emit(current_data, "AIRSHIP_PORT")
+			)
 		"SHOP_AIRSHIP":
 			_add_action_button("🎈", "Cửa hàng", Color(0.95, 0.75, 0.35), func():
 				facility_action_pressed.emit(current_data, "SHOP_AIRSHIP")
@@ -337,6 +341,7 @@ func _close() -> void:
 
 func _get_building_icon(code: String) -> String:
 	match code:
+		"AIRSHIP_PORT": return "⚓"
 		"SHOP_AIRSHIP": return "🎈"
 		"ALLIANCE_HALL": return "🏳️"
 		"KITCHEN": return "🍖"

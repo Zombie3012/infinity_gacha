@@ -26,6 +26,7 @@ EventBus="*res://scripts/core/event_bus.gd"
 ApiClient="*res://scripts/network/api_client.gd"
 GameState="*res://scripts/state/game_state.gd"
 PveState="*res://scripts/state/pve_state.gd"
+SceneTransition="*res://scripts/core/scene_transition.gd"
 
 [display]
 

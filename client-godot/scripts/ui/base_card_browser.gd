@@ -47,6 +47,10 @@ var confirm_action_btn: Button
 var extra_action_box: HBoxContainer
 var _pill_buttons: Array[Button] = []
 var _card_nodes: Dictionary = {}
+const PAGE_SIZE := 80
+var _render_limit: int = PAGE_SIZE
+var _load_more_btn: Button = null
+var _search_debounce_timer: Timer = null
 
 func _init() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -279,6 +283,16 @@ func _build_component_layout() -> void:
 	margin.add_child(grid_container)
 	scroll.resized.connect(func(): _update_responsive_columns(scroll))
 
+	_load_more_btn = Button.new()
+	_load_more_btn.text = "📄 Xem thêm"
+	_load_more_btn.custom_minimum_size = Vector2(0, 34)
+	_load_more_btn.visible = false
+	_load_more_btn.pressed.connect(func():
+		_render_limit += PAGE_SIZE
+		_render_cards()
+	)
+	add_child(_load_more_btn)
+
 	empty_label = Label.new()
 	empty_label.text = "Không tìm thấy kết quả nào phù hợp."
 	empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -380,7 +394,9 @@ func _update_pill_styles() -> void:
 # FILTERING & SORTING LOGIC
 # ==============================================================================
 
-func apply_filter_and_sort() -> void:
+func apply_filter_and_sort(reset_page: bool = true) -> void:
+	if reset_page:
+		_render_limit = PAGE_SIZE
 	filtered_items.clear()
 	var q := current_search_query.strip_edges().to_lower()
 
@@ -430,15 +446,25 @@ func _render_cards() -> void:
 
 	if filtered_items.is_empty():
 		empty_label.visible = true
+		if _load_more_btn != null:
+			_load_more_btn.visible = false
 		return
 	empty_label.visible = false
 
-	for it in filtered_items:
+	var render_count := mini(filtered_items.size(), _render_limit)
+	for i in range(render_count):
+		var it: Dictionary = filtered_items[i]
 		var iid := str(it.get("id", ""))
 		var is_sel := selected_item_ids.has(iid)
 		var card := _create_card_node(it, is_sel)
 		grid_container.add_child(card)
 		_card_nodes[iid] = card
+
+	if _load_more_btn != null:
+		var remaining := filtered_items.size() - render_count
+		_load_more_btn.visible = remaining > 0
+		if remaining > 0:
+			_load_more_btn.text = "📄 Xem thêm (%d còn lại)" % remaining
 
 func _update_card_selection_visuals() -> void:
 	for iid in _card_nodes.keys():
@@ -488,7 +514,19 @@ func _on_card_selection_toggled(data: Dictionary, is_sel: bool) -> void:
 
 func _on_search_text_changed(new_text: String) -> void:
 	current_search_query = new_text
-	apply_filter_and_sort()
+	if not is_inside_tree():
+		apply_filter_and_sort()
+		return
+	if _search_debounce_timer == null:
+		_search_debounce_timer = Timer.new()
+		_search_debounce_timer.one_shot = true
+		_search_debounce_timer.wait_time = 0.15
+		_search_debounce_timer.timeout.connect(func():
+			if is_instance_valid(self):
+				apply_filter_and_sort()
+		)
+		add_child(_search_debounce_timer)
+	_search_debounce_timer.start(0.15)
 
 func _on_sort_toggle_pressed() -> void:
 	var sort_labels := _get_sort_labels()

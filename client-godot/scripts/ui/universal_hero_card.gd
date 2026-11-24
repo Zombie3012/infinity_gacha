@@ -442,6 +442,11 @@ func _apply_context_rules() -> void:
 			_status_bar.visible = false
 			if is_working:
 				add_badge("🔨 Đang làm việc", Color(0.28, 0.72, 0.48, 0.95))
+			var loy := int(hero_data.get("loyaltyScore", hero_data.get("loyalty", -1)))
+			if loy >= 80:
+				add_badge("💛 Trung thành", Color(0.75, 0.58, 0.12, 0.92))
+			elif loy >= 0 and loy <= 30:
+				add_badge("⚠️ Bất mãn", Color(0.82, 0.25, 0.25, 0.92))
 
 func _refresh_badges() -> void:
 	if _badge_container == null:

@@ -914,3 +914,143 @@ Signed: Antigravity, project assistant
   - `M10`: Registered `ALLIANCE_HALL` building (seed + 3D mesh + `"Liên minh"` nameplate + `BuildingActionBar` + `alliance_modal.gd`, excluding Tech Upgrade & Alliance Wars); verified via `scripts/test-godot-alliance-building.mjs` (5 checks, PASS).
   - `M11`: Added `0060_chat_channels.sql`, `chatMessages` schema, `chat.service.ts` (`/api/chat/world`, `/api/chat/private`), and `chat_panel_modal.gd` (World / Alliance / Private) wired to `ChatBtn`; verified via `scripts/test-godot-chat-channels.mjs` (4 checks, PASS).
   - `M12`: Added Security & Account Recovery tab (`Bảo Mật & Tài Khoản`) to `player_profile_modal.gd` while preserving auto-demo session login in `login_screen.gd`; verified via `scripts/test-godot-auth-account.mjs` (4 checks, PASS), `npx tsc -p packages/server/tsconfig.json --noEmit`, `base_presentation_ui_test.tscn` (49 checks, PASS), and `pve_ui_test.tscn` (78 checks, 0 failures).
+
+
+## Update - 2026-11-23 (UTC+7): completed Phase 2 unattended /goal queue (P2-01 through P2-16)
+
+Signed: Antigravity, project assistant
+
+- Completed all 16 milestones (`P2-01` through `P2-16`) in `GOAL_QUEUE_PHASE2.md`:
+  - `P2-01`: Added live Red-Dot notification badges (`mailbox`, `events`, `friends`, `chat`) on HUD buttons and upgraded `StatusToastPanel` into a queued fade-in/fade-out toast system with severity colors (`info`, `success`, `warn`, `error`).
+  - `P2-02` & `P2-03`: Added `0061_friends_system.sql` (`friendships`, `friend_daily_gifts`), `friend.service.ts`, 12 `/api/friends/*` endpoints, private chat block enforcement in `chat.service.ts`, `FriendsModal` (3 tabs + daily gifts + public profile), `FriendsBtn` on HUD, `AllianceModal` add-friend buttons, and `ChatPanelModal` 1-tap friend list (`scripts/test-godot-friends.mjs`: 14 checks, PASS).
+  - `P2-04`: Enforced WORLD chat in-memory live stream (never persisted to PostgreSQL) while keeping ALLIANCE & PRIVATE persisted in PostgreSQL, added `GET /api/chat/stream` SSE endpoint and Godot `HTTPClient` SSE reader with unread red-dot on `ChatBtn` without Mini-Chat Preview (`scripts/test-godot-chat-channels.mjs`: 7 Godot checks + SSE & storage policy, PASS).
+  - `P2-05`: Made `EventsQuestsModal`, `MailboxModal`, `FriendsModal`, `AllianceModal`, and `ChatPanelModal` responsive to viewport size and removed hardcoded dummy defaults from `GameState` in favor of `0` + `is_synced` / `sync_error`.
+  - `P2-06`: Created `SummonResultModal` with sequential card-flip reveal, Skip & Summon Again buttons, and strict 5★ Gold max cap for Gacha (`scripts/test-godot-gacha.mjs`: 11 checks, PASS).
+  - `P2-07` & `P2-08`: Implemented Hero Daily Routine AI (`WORK`, `INJURED`, `HUNGRY`, `TIRED`, `IDLE`), `HeroDialogueBank`, proximity Hero-to-Hero 2-turn social dialogue, and zoom-aware 3D status icons (`🍖`, `💤`, `🩹`, `⚒️`, `📚`, `✨`).
+  - `P2-09` & `P2-10`: Created `HeroQuickInteractPopup` on short-tap of 3D Castle Heroes (4 one-tap actions), synced `/api/personality` into `GameState`, and added Tâm Trạng & Tính Cách card + loyalty badges to `HeroRoster` and `UniversalHeroCard`.
+  - `P2-11` & `P2-12`: Added Day/Sunset/Night Hero routine & bonfire gathering, 3D floating resource text & hero celebration on harvest/upgrade, and Combat v2 floating damage/CRIT/HP/MP/REVIVE numbers + 10s urgent timer & target highlight (`pve_ui_test.tscn`: 79 checks, 0 failures).
+  - `P2-13`: Added 3 Castle Layout Presets (`Bố cục 1/2/3`) in `BuildToolsDrawer` and smart `CollectAllBtn` visibility when `stored >= 1`.
+  - `P2-14`: Created 4-tab `CodexModal` (Hero Templates, Gear & Recipes 1★–7★, Alchemy, Castle Activity Log) + `CodexBtn` on HUD (`scripts/test-godot-codex.mjs`: 5 checks, PASS).
+  - `P2-15`: Added 0.15s search debounce and 80-card pagination ("Xem thêm") to `BaseCardBrowser`, runtime `INFINITI_API_URL` / `user://client_config.json` config in `ApiClient`, `OS.is_debug_build()` guard for Auto-Demo in `login_screen.gd`, and `client-godot/export_presets.cfg` for Windows Desktop.
+  - `P2-16`: Rebuilt server, regenerated `API_Routes.md` (255 routes), passed `check-encoding.mjs` (375 files), and verified targeted Godot suites.
+
+---
+### 2026-11-24 — Bến Thiên Hành (Cảng Tàu Bay `AIRSHIP_PORT`) & Bản Đồ Viễn Chinh RTS
+- **Mở khóa**: Vượt Tháp tầng 25 (`clearedFloor >= 25`) cho cả công trình `AIRSHIP_PORT` và chế độ Bản Đồ Viễn Chinh RTS (`world-rules.ts`, `building.service.ts`, `airship-rules.ts`).
+- **Database & Schema**: Thêm migration `packages/server/drizzle/0062_airship_port_rts.sql` (`master_airships`, `master_airship_techs`, `master_tile_vision`, `world_dungeons`, mở rộng `hero_expeditions` hỗ trợ `airship_id`, `dungeon_id`, `path_tiles`, `STRANDED`, `RESCUE`, `DUNGEON`, `redirected_at`), cập nhật `drizzle-schema.ts` và seed `AIRSHIP_PORT` (`max_level = 5`) trong `building_types.sample.sql`.
+- **Cảng Tàu Bay & Bãi Đậu Grid**:
+  - `airship-rules.ts` & `airship.service.ts`: 4 lớp tàu bay theo 3 hạng kích cỡ (`SCOUT_SKIFF` Nhỏ `2×2` 3 Hero, `RESCUE_CUTTER` Nhỏ `2×3` 6 Hero, `WAR_DREADNOUGHT` Trung bình `3×3` 5 Hero, `TRANSPORT_CARRIER` Lớn `4×5` chở tối đa 15 Hero), bãi đậu dạng lưới từ Lv.1 `4×4` → Lv.5 `8×8` + Cây Công Nghệ 3 nhánh (mở khóa tàu bay, mở rộng diện tích sàn đậu lên tối đa `10×10`, tăng thời gian radar/giảm chi phí sửa).
+  - Routes mới: `/api/base/airships`, `/tech/:techCode/unlock`, `/craft`, `/:airshipId/move`, `/:airshipId/upgrade`, `/:airshipId/repair`, `DELETE /:airshipId`.
+- **Bản Đồ Viễn Chinh RTS**:
+  - `world-dungeon.service.ts` & `expedition.service.ts`: Sương mù chiến tranh động luôn hoạt động (tàu Trinh Sát bay qua lưu tầm nhìn tuyến đường `1 giờ`, sau đó tự che lại), Hầm Ngục Nổi (hạng `D/C/B/A/S`, không dùng điểm khai thác tài nguyên), nhiệm vụ `RESCUE` giải cứu tổ đội `STRANDED`, lệnh đổi hướng trực tiếp `/api/world/expeditions/:id/redirect`, và `/api/world/rts/snapshot`.
+- **Godot Client**:
+  - Công trình 3D `AIRSHIP_PORT` trong `base_plot_3d.gd`, `building_label_style.gd`, `building_action_bar.gd`, `isometric_base_3d.gd`.
+  - `client-godot/scripts/ui/airship_port_modal.gd`: UI 3 tab (Bãi Đậu Lưới Grid tương tác xoay/xếp tàu, Xưởng Chế Tạo, Cây Công Nghệ).
+  - `client-godot/scenes/world/world_rts_map.tscn` & `world_rts_map.gd`: Bản đồ RTS 2D pan/zoom, Minimap, Sương mù 1h, Hầm Ngục Nổi, Hạm đội bay thời gian thực, tín hiệu SOS & Cứu hộ.
+- **Targeted Checks Passed**: `npm --prefix packages/server run build`, `node scripts/test-airship-rts-api.mjs` (9/9), Godot headless `test_airship_port_and_rts_map.tscn` (`GODOT_AIRSHIP_RTS_UI_PASS`), `npm run docs:routes` (265 routes), `node scripts/check-encoding.mjs` (380 files).
+
+---
+### 2026-11-24 — Bản Đồ Hành Tinh Fantasy Stylized 3D cho Chế Độ Viễn Chinh (Expedition World Map System)
+- **Kiến trúc mô-đun độc lập (`client-godot/world_map/`)**: Triển khai trọn bộ 5 Milestone từ bản thảo `expe_thaoluan` trên Godot 4.7 Forward Plus, không phá vỡ API `/api/world/rts/snapshot` hiện có:
+  - **Milestone 1 (Core & Data)**: `planet_coordinates.gd` (hệ tọa độ chung `Grid (X,Y) ↔ Lat/Lon ↔ Equirectangular UV ↔ Flat/Sphere/Morphed XYZ` tiếp tuyến tại `(0, +R, 0)` không nhảy khung hình, `surface_basis` an toàn ở hai cực), `planet_data.gd`, `fantasy_planet.tres`, `fantasy_world_regions.json` (5 lục địa + 121 khu vực nằm trên đất liền), và `generate_planet_textures.gd` sinh 7 lớp PNG chuẩn equirectangular 3D Spherical Domain Warping (0 đường nối kinh tuyến `±180°`, 0 lỗi cực: `albedo`, `height`, `normal` `2048×1024`; `biome`, `ocean`, `magic`, `clouds` `1024×512`).
+  - **Milestone 2 (Shaders & Renderer)**: `planet_surface_morph.gdshader` (morph 2D↔3D bằng `smoothstep`, bọc kinh độ vô hạn `center_lon_rad`, relief nhẹ, phát sáng `magic_mask`, tách nhám đất/biển), `planet_atmosphere.gdshader` (hào quang khí quyển Fresnel), `planet_clouds.gdshader` (tầng mây trôi đồng bộ morph), `planet_mesh_builder.gd` (`192×96` GridMesh + `custom_aabb`), `planet_renderer.gd`, và `planet_preview.tscn`.
+  - **Milestone 3 & 4 (Camera, Orbit 360° & 4-Tier LOD)**: `planet_camera_controller.gd` (pan 2D vô hạn, zoom hàm mũ, morph 2D↔3D không nhảy tâm, xoay hành tinh 360° có quán tính, chọn điểm & chiếu màn hình giải tích + ẩn bán cầu sau, `fly_to_lat_lon`), `planet_lod_controller.gd` (4 cấp LOD: Địa phương / Khu vực / Toàn bản đồ / Hành tinh 3D), `starfield_sky.gdshader`, và `world_map_3d.tscn`.
+  - **Milestone 5 (Markers, Minimap ngang 2:1 & Tích hợp `WorldRtsMap`)**: `planet_marker_system.gd` (Chấm sáng vị trí người chơi + vòng radar, Thánh Địa Kỳ Quan, pool 16 beacon hạm đội), `world_map_manager.gd`, `horizontal_minimap.gd` (Minimap ngang 2:1 không xoay theo cầu 3D, click nhảy vị trí), và nâng cấp `world_rts_map.gd` nhúng `SubViewport` hành tinh 3D làm nền chiến thuật xuyên suốt (giữ nguyên toàn bộ luồng Sương mù 1h, Hầm Ngục Nổi, Hạm đội, Tập kết, Cứu hộ SOS, `WorldDispatchModal`, `WorldReportsModal`, `AirshipPortModal` và thêm nút `🌐 3D / 🗺️ 2D`, click đúp hạ độ cao).
+- **Targeted Checks Passed**: `test_world_planet_milestone1.tscn` (119/119 PASS), `test_world_planet_milestone2.tscn` (32/32 PASS), `test_world_planet_milestone3.tscn` (29/29 PASS), `test_world_planet_milestone5.tscn` (16/16 PASS), hồi quy `test_airship_port_and_rts_map.tscn` (`GODOT_AIRSHIP_RTS_UI_PASS`), `node scripts/check-encoding.mjs` (382 files PASS).
+
+---
+### 2026-11-24 — Nâng Cấp Hành Tinh Viễn Chinh Quy Mô Solar-Scale & Hoàn Thiện Thị Giác (P1–P3)
+- **Solar-Scale & Ngân Sách Render (`≤ 3 Draw Calls`)**: Thu dấu chân chiến khu `12×12` xuống `0.66° × 0.66°` (`0.06°/ô`, bán kính ảo `696.000 km`) trên `render_radius = 10.0` (0 lỗi float 32-bit); tạo tầng `LocalTerrainPatch` (`64×64` Floating Origin + GPU multi-octave procedural micro-terrain trong `local_terrain_patch.gdshader`) chỉ dùng `1 Draw Call` ở Cấp 1–2 và tự ẩn khi chuyển sang `PlanetSurface` + `CloudLayer` + `AtmosphereShell` (`2–3 Draw Calls`) qua đường cong zoom logarit 600:1 (`planet_camera_controller.gd`).
+- **Sương Mù Mây Mềm 2 Độ Phân Giải & `magic_mask` Sắc Mảnh**: Tạo `planet_fog_manager.gd` (`local_fog_tex 128×128` + `global_fog_tex 360×180`) phủ sương mù mây cuộn toàn hành tinh (dày ở Cấp 1–2, dịu ~36% ở Hành tinh 3D), loại bỏ hoàn toàn các ô vuông sương mù đen cứng và tinh chỉnh `magic.png` sạch vệt loang trên Lục Địa Lục Bảo.
+- **Biểu Tượng Stylized, Chống Đè Chữ & UX**: Tạo `map_icon_drawer.gd` (Lâu Đài 3 tháp, Cổng Hầm Ngục D–S, họa tiết địa hình, Tháp Kỳ Quan Hoàng Kim), ẩn nhãn vùng ở LOD 0 + Spatial Window Culling + chống đè nhãn screen-space + ranh giới vùng, bổ sung Thanh Độ Cao Zoom dọc (`km`), Thẻ Thông Tin Vùng (`RegionInspectorCard`), tên lục địa trên Minimap ngang và xử lý viền 1px rìa trái (`clip_contents` + nền không gian).
+- **Targeted Checks Passed**: `test_world_planet_milestone1..5.tscn` (205/205 PASS), `test_airship_port_and_rts_map.tscn` (`GODOT_AIRSHIP_RTS_UI_PASS`), `node scripts/check-encoding.mjs` (382 files PASS).
+
+---
+### 2026-11-24 — Nâng Cấp Độ Nét Mặt Đất & Cảnh Quan 3D Tầm Gần (Expedition Ground Clarity)
+- **Nguyên nhân & Khắc phục**: Chuyển tần số chi tiết mặt đất & mây Fog trong `local_terrain_patch.gdshader` từ độ địa lý (`deg`) sang đơn vị ô (`tile_uv = deg / 0.06`), loại bỏ hoàn toàn tình trạng mờ đục do phóng đại noise ở quy mô Solar-Scale; thêm texture lặp seamless `512×512` (`generate_ground_detail_textures.gd` → `ground_detail_albedo.png` & `ground_detail_normal.png`) và phân hóa mặt đất từng ô server qua `tactical_terrain_splat.gd`.
+- **Cảnh quan 3D GPU-Instanced & Góc nghiêng 22°**: Tạo `tactical_ground_props.gd` (`MultiMeshInstance3D` cho Rừng, Núi chóp tuyết, Đồi, Phế tích + Lâu Đài 3D + Cổng Hầm Ngục 3D phát sáng `D–S`, dịch chuyển `O(1)` theo `focus_lon` và tự ẩn khi zoom ra Đại Lục / 3D Globe); thêm góc nghiêng chiến thuật mượt `22°` trong `planet_camera_controller.gd`, vẽ khung lưới siêu mảnh (`alpha 0.10`) đúng tứ giác phối cảnh 3D và pick chuột giải tích chính xác trong `world_rts_map.gd`; nâng tần số mây Fog sắc nét có bóng chân mây.
+- **Targeted Checks Passed**: `test_world_planet_milestone1..5.tscn` (211/211 PASS), `test_airship_port_and_rts_map.tscn` (`GODOT_AIRSHIP_RTS_UI_PASS`), `node scripts/check-encoding.mjs` (382 files PASS).
+
+
+## Update - 2026-11-24 15:58:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Work completed
+
+- Implemented **Whole-Planet World Seeding (`600 × 300 = 180,000` tiles including `OCEAN`), RTS Smart Random Spawn, and Viewport Chunk Streaming**:
+  - **DB Migration & Schema**: Added `packages/server/drizzle/0064_planet_world_tiles.sql` and updated `packages/server/src/database/drizzle-schema.ts` with `continent_id`, `region_id`, `zone_tier` on `world_tiles`, `continent_id` on `master_world_status`, and spatial spawn/chunk indexes (`idx_world_tiles_spawn`, `idx_master_world_base`).
+  - **Planet Grid Rules & Seeding**: Created `packages/server/src/modules/world/planet-grid-rules.ts` (`600×300`, `0.60°/tile`, longitude wrapping, `>= 10` tile spacing) and `scripts/seed-planet-world.mjs` (reads `ocean.png`, `height.png`, `biome.png`, and `fantasy_world_regions.json`; BFS coast tiering; batch `UNNEST` upsert of `180,000` tiles: `65,630` Land + `114,370` Ocean + Imperial Wonder; auto-relocates legacy bases safely off ocean).
+  - **Server RTS Spawn & Chunk Streaming**:
+    - `world.service.ts`: `pickRandomSpawnTile` balances new players across the 5 continents on Outer Rim land (`PLAINS/FOREST/HILLS`, `>= 10` tile spacing, never `OCEAN`/`WONDER`), seeds nearby land discoveries + starter dungeons via `worldDungeonService.ensureDungeonsNear`, adds chunked `map()`, and blocks claiming `OCEAN` (`ERR_OCEAN_UNCLAIMABLE`).
+    - `expedition.service.ts` & `server.ts`: bounding-box `applyPathVision`, chunked `GET /api/world/rts/snapshot?cx=&cy=&radius=12` returning `worldGrid`, `chunkCenter`, `nearbyPlayers`, and active expedition tiles.
+  - **Godot 3D Client Sync**:
+    - Updated `planet_coordinates.gd`, `planet_camera_controller.gd`, `tactical_terrain_splat.gd`, `local_terrain_patch.gdshader`, `planet_fog_manager.gd`, `tactical_ground_props.gd`, `world_map_manager.gd`, `horizontal_minimap.gd`, and `world_rts_map.gd` to support full-planet `600×300` mapping, glistening `OCEAN` water splatting, dynamic fog/splat sliding windows, debounced Viewport Chunk Streaming on pan, and crimson/gold Rival 3D Citadels + floating nameplates for visible `nearbyPlayers`.
+
+### Verification (Targeted Checks)
+
+- `npm --prefix packages/server run build`: PASS (0 errors).
+- `node scripts/test-planet-spawn-and-chunks.mjs`: PASS (`180,000` tiles verified, 6 new players spawned across 4 continents with `>= 10` spacing & starter dungeons, `OCEAN` chunk streaming & `ERR_OCEAN_UNCLAIMABLE`, `nearbyPlayers` detection).
+- `node scripts/test-airship-rts-api.mjs`: PASS (10/10 checks).
+- `node --test packages/server/tests/http.expedition.test.mjs`: PASS (5/5 checks).
+- Godot headless tests (`test_world_planet_milestone1..5.tscn` + `test_airship_port_and_rts_map.tscn`): **218/218 checks PASS** + `GODOT_AIRSHIP_RTS_UI_PASS`.
+- `node scripts/check-encoding.mjs`: PASS (386 files).
+
+
+## Update - 2026-11-24 16:14:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Work completed
+
+- Eliminated **Scout airship zoom-out/zoom-in pop-in delay & main-thread poll hitches**:
+  - **Zero Dead-Zone Fleet Visibility**: Split `fleet_overlay_alpha` (`0.24..0.36`) from `tactical_overlay_alpha` (`0.60..0.74`) in `planet_lod_controller.gd`, aligned 3D Fleet Beacon overlap (`zoom < 0.42`) in `planet_marker_system.gd`, and decoupled Active Fleet rendering from tile overlay alpha in `world_rts_map.gd`.
+  - **60 FPS Live Fleet Interpolation**: Added `totalDurationSeconds` to `expedition.service.ts` `rtsSnapshot()` and `WorldMapManager.compute_live_fleet_ratio()` driving smooth 60 FPS flight across 2D Canvas, 3D Beacons, and Horizontal Minimap.
+  - **Dirty-Hash Caching**: Added snapshot signature checks in `world_map_manager.gd` (`rebuild_fog`) so identical 3s polls skip redundant `128×128` TerrainSplat, `192×192` Fog, and `TacticalGroundProps3D` rebuilds.
+  - **0-Frame 2D/3D Camera Sync & Snappier Zoom**: Added `step_camera(delta)` driven before 2D HUD redraw (`world_map_3d.gd` + `world_map_manager.gd` + `world_rts_map.gd`), tuned `zoom_smooth_speed = 13.5` / `pan_smooth_speed = 14.0`, lowered chunk debounce to `0.16s`, and triggered immediate chunk fetch on focus/center.
+
+### Verification (Targeted Checks)
+
+- `npm --prefix packages/server run build` + `node scripts/test-planet-spawn-and-chunks.mjs` + `node scripts/test-airship-rts-api.mjs`: PASS.
+- Godot headless tests (`test_world_planet_milestone1..5.tscn` + `test_airship_port_and_rts_map.tscn`): **222/222 checks PASS** (verified 51-point `0..1` zoom sweep with `0` dead-zone gaps, live interpolation, and dirty-hash cache skip) + `GODOT_AIRSHIP_RTS_UI_PASS`.
+- `node scripts/check-encoding.mjs`: PASS (386 files).
+
+
+## Update - 2026-11-24 16:40:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Work completed
+
+- Implemented **Automatic PC vs Mobile Device Detection (`DeviceProfile`) & Unified Settings inside Avatar Master → Tab `⚙️ Cài Đặt`**:
+  - Added `client-godot/scripts/core/device_profile.gd` (`DeviceProfile.detect_hardware`, `classify_hardware`, `get_preset_settings`, `sanitize_settings`): auto-detects Mobile (`Android/iOS/Web`, locked safely to `HYBRID` with `R <= 12`, `MSAA <= 2x`, `FPS <= 60`) vs PC (`Windows/macOS/Linux`, unlocks `LOW → MEDIUM → HIGH → ULTRA → PLANET_WIDE`, `R = 8..32`, `props_density = 50%..150%`, `MSAA 4x`, `FPS 30..240`).
+  - Extended `GameState` (`game_state.gd`) & `EventBus` (`event_bus.gd`) to auto-detect hardware on startup, persist full graphics settings in `user://graphics_settings.json`, support `reset_graphics_to_device_default()`, and emit `world_graphics_settings_changed` while keeping 100% backward compatibility with `graphics_quality_changed`.
+  - Centralized **ALL** graphics, device auto-detection banner, and World Map Render Distance controls inside **Avatar Master → `PlayerProfileModal` → Tab 1 (`⚙️ Cài Đặt`)** (`player_profile_modal.gd`) and synced `docs/WORLD_MAP_GRAPHICS_PC_MOBILE.md`.
+  - Wired live graphics hot-reload into `world_rts_map.gd`, `world_map_manager.gd`, `world_map_3d.gd`, `planet_renderer.gd`, and `tactical_ground_props.gd`.
+
+### Verification (Targeted Checks)
+
+- Godot headless tests:
+  - `test_world_planet_milestone1..5.tscn`: **228/228 checks PASS** (including Android/iOS/PC RTX detection, Mobile Hybrid guardrails, PC `PLANET_WIDE` unlock, and live `PlayerProfileModal` Tab Settings propagation).
+  - `test_airship_port_and_rts_map.tscn`: **`GODOT_AIRSHIP_RTS_UI_PASS`**.
+  - `base_presentation_ui_test.tscn`: **82/82 checks PASS**.
+- `node scripts/check-encoding.mjs`: **PASS (387 files)**.
+
+
+## Update - 2026-11-24 17:16:00 ICT (UTC+7)
+
+Signed: Antigravity, project assistant
+
+### Work completed
+
+- Fixed `_draw_airship_icon()` polygon triangulation edge case when a flight endpoint falls behind the tilted 3D camera by projecting the live 3D/grid interpolated ship position `(cur_gx, cur_gy)` directly and guarding finite coordinates/angles.
+- Upgraded Minimap & Fleet Panel UX in `client-godot/scripts/ui/world_rts_map.gd`:
+  - Replaced static coordinate readout with editable `X` / `Y` `LineEdit` inputs + `➜` Go button (`FOCUS_NONE` + `_coord_input_dirty` guard so clicking Go never gets overwritten by `_process`, plus `Enter` submit and WASD pause while typing).
+  - Simplified the 3D toggle button to icon-only `🌐` / `🗺️`.
+  - Separated Fleet header collapse/expand from card/chip clicks so clicking anywhere inside a fleet card (expanded or collapsed) flies the camera directly to that ship's live mid-flight coordinate (`_focus_fleet_live`).
+- Standardized project documentation (`README.md`, `client-godot/README.md`, `GODOT_BACKLOG.md`, `API_Routes.md` via `npm run docs:routes` -> 265 routes, `docs/WORLD_MAP_GRAPHICS_PC_MOBILE.md`) and removed the completed `GOAL_QUEUE.md` (12/12) & `GOAL_QUEUE_PHASE2.md` (16/16).
+
+### Verification (Targeted Checks)
+
+- `test_world_planet_milestone5.tscn`: **50/50 checks PASS**; `test_airship_port_and_rts_map.tscn`: **`GODOT_AIRSHIP_RTS_UI_PASS`**.
+- `node scripts/check-encoding.mjs`: PASS.

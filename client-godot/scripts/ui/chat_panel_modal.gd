@@ -11,9 +11,11 @@ enum Channel { WORLD = 0, ALLIANCE = 1, PRIVATE = 2 }
 var _active_channel: int = Channel.WORLD
 var _busy: bool = false
 var _messages: Array = []
+var _initial_private_peer: String = ""
 
 var _tab_buttons: Array[Button] = []
 var _private_row: HBoxContainer
+var _friends_quick_row: HBoxContainer
 var _recipient_input: LineEdit
 var _messages_label: RichTextLabel
 var _msg_input: LineEdit
@@ -25,7 +27,21 @@ func _init() -> void:
 
 func _ready() -> void:
 	_build_ui()
+	if not _initial_private_peer.is_empty():
+		_active_channel = Channel.PRIVATE
+		if _recipient_input != null:
+			_recipient_input.text = _initial_private_peer
+	if not EventBus.chat_message_received.is_connected(_on_sse_message):
+		EventBus.chat_message_received.connect(_on_sse_message)
 	await refresh_messages()
+
+func open_private_with(peer_name: String) -> void:
+	_initial_private_peer = peer_name.strip_edges()
+	_active_channel = Channel.PRIVATE
+	if _recipient_input != null:
+		_recipient_input.text = _initial_private_peer
+	if is_inside_tree():
+		await refresh_messages()
 
 func _build_ui() -> void:
 	for c in get_children():
@@ -46,8 +62,11 @@ func _build_ui() -> void:
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 
+	var vp := get_viewport_rect().size
+	var pw := clampf(vp.x * 0.78, 600.0, 820.0) if vp.x > 0 else 780.0
+	var ph := clampf(vp.y * 0.80, 420.0, 560.0) if vp.y > 0 else 540.0
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(780, 540)
+	panel.custom_minimum_size = Vector2(pw, ph)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.06, 0.08, 0.14, 0.98)
@@ -115,6 +134,11 @@ func _build_ui() -> void:
 	_recipient_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_private_row.add_child(_recipient_input)
 
+	_friends_quick_row = HBoxContainer.new()
+	_friends_quick_row.add_theme_constant_override("separation", 6)
+	_friends_quick_row.visible = false
+	root.add_child(_friends_quick_row)
+
 	var msg_panel := PanelContainer.new()
 	msg_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var mps := StyleBoxFlat.new()
@@ -152,6 +176,24 @@ func _build_ui() -> void:
 	send_btn.pressed.connect(func(): await send_current_message())
 	send_row.add_child(send_btn)
 
+	var share_hero_btn := Button.new()
+	share_hero_btn.text = "🦸 Khoe Tướng"
+	share_hero_btn.custom_minimum_size = Vector2(116, 34)
+	share_hero_btn.tooltip_text = "Chia sẻ thẻ Anh Hùng mạnh nhất của bạn lên kênh hiện tại"
+	share_hero_btn.pressed.connect(func():
+		var alive_heroes := GameState.heroes.filter(func(h): return h is Dictionary and GameState.is_hero_alive(h))
+		if alive_heroes.is_empty():
+			_status_lbl.text = "ℹ️ Bạn chưa có Anh Hùng còn sống nào để khoe."
+			return
+		var best_h: Dictionary = alive_heroes[0]
+		for h in alive_heroes:
+			if int(h.get("rarity", 1)) > int(best_h.get("rarity", 1)):
+				best_h = h
+		_msg_input.text = format_hero_share(best_h)
+		await send_current_message()
+	)
+	send_row.add_child(share_hero_btn)
+
 	_status_lbl = Label.new()
 	_status_lbl.text = "Đang kết nối kênh chat..."
 	_status_lbl.add_theme_font_size_override("font_size", 12)
@@ -167,6 +209,10 @@ func refresh_messages() -> void:
 		_tab_buttons[i].modulate = Color(1.0, 0.90, 0.42) if i == _active_channel else Color(0.76, 0.84, 0.92)
 	if _private_row != null:
 		_private_row.visible = (_active_channel == Channel.PRIVATE)
+	if _friends_quick_row != null:
+		_friends_quick_row.visible = (_active_channel == Channel.PRIVATE)
+		if _active_channel == Channel.PRIVATE:
+			_refresh_friends_quick_row()
 
 	var res: Dictionary
 	match _active_channel:
@@ -236,5 +282,80 @@ func send_current_message() -> Dictionary:
 	return res
 
 func _close() -> void:
+	if EventBus.chat_message_received.is_connected(_on_sse_message):
+		EventBus.chat_message_received.disconnect(_on_sse_message)
 	closed.emit()
 	queue_free()
+
+static func format_hero_share(hero: Dictionary) -> String:
+	var hname := str(hero.get("name", "Anh Hùng"))
+	var stars := int(hero.get("rarity", 1))
+	var lvl := int(hero.get("level", 1))
+	var cls := str(hero.get("classCode", "WARRIOR"))
+	var cp := int(hero.get("combatPower", GameState.calculate_hero_cp(hero)))
+	return "[🦸 KHOE TƯỚNG] %s (%d★ Lv.%d • %s • LC: %d)" % [hname, stars, lvl, cls, cp]
+
+static func format_battle_share(battle: Dictionary, report: Dictionary) -> String:
+	var settlement: Dictionary = battle.get("settlement", {}) if battle.get("settlement") is Dictionary else {}
+	var fl := int(settlement.get("floor", 1))
+	var winner := str(report.get("winner", "DRAW"))
+	var outcome := "CHIẾN THẮNG" if winner == "HERO" else ("THẤT BẠI" if winner == "ENEMY" else "HÒA")
+	var rounds := int(report.get("rounds", 0))
+	var dmg := int(report.get("totalDamage", 0))
+	return "[⚔️ CHIẾN BÁO] Tầng %d • %s • %d Hiệp • Tổng ST: %d" % [fl, outcome, rounds, dmg]
+
+func share_to_channel(channel_idx: int, text: String) -> Dictionary:
+	_active_channel = clampi(channel_idx, 0, 1)
+	if _msg_input != null:
+		_msg_input.text = text
+	return await send_current_message()
+
+func _on_sse_message(payload: Dictionary) -> void:
+	var ch_str := str(payload.get("channel", "")).to_upper()
+	var msg: Variant = payload.get("message")
+	if not (msg is Dictionary):
+		return
+	var expected_ch := "WORLD" if _active_channel == Channel.WORLD else ("ALLIANCE" if _active_channel == Channel.ALLIANCE else "PRIVATE")
+	if ch_str != expected_ch:
+		return
+	var mid := str(msg.get("id", ""))
+	for existing in _messages:
+		if existing is Dictionary and str(existing.get("id", "")) == mid and not mid.is_empty():
+			return
+	_messages.append(msg)
+	_render_messages()
+	if _status_lbl != null:
+		_status_lbl.text = "⚡ Tin nhắn mới (%d tin)." % _messages.size()
+
+func _refresh_friends_quick_row() -> void:
+	if _friends_quick_row == null or not GameState.is_logged_in():
+		return
+	var f_res := await ApiClient.get_req("/api/friends")
+	if not is_instance_valid(self) or _friends_quick_row == null:
+		return
+	for c in _friends_quick_row.get_children():
+		c.queue_free()
+	if not f_res.get("ok", false) or not (f_res.get("data") is Dictionary):
+		return
+	var friends: Array = f_res["data"].get("friends", []) if f_res["data"].get("friends") is Array else []
+	if friends.is_empty():
+		return
+	var lbl := Label.new()
+	lbl.text = "Bạn bè:"
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.add_theme_color_override("font_color", Color(0.68, 0.85, 0.95))
+	_friends_quick_row.add_child(lbl)
+	for i in range(mini(6, friends.size())):
+		var f = friends[i]
+		if not (f is Dictionary): continue
+		var fname := str(f.get("masterName", ""))
+		if fname.is_empty(): continue
+		var btn := Button.new()
+		btn.text = fname
+		btn.custom_minimum_size = Vector2(0, 26)
+		btn.pressed.connect(func():
+			if _recipient_input != null:
+				_recipient_input.text = fname
+			await refresh_messages()
+		)
+		_friends_quick_row.add_child(btn)

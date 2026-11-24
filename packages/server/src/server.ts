@@ -49,8 +49,10 @@ import { AnalyticsService, analyticsService } from './modules/analytics/analytic
 import { SupportError, supportService } from './modules/support/support.service.js';
 import { WorldError, worldService } from './modules/world/world.service.js';
 import { ExpeditionError, expeditionService } from './modules/world/expedition.service.js';
+import { AirshipError, airshipService } from './modules/world/airship.service.js';
 import { AllianceError, allianceService } from './modules/world/alliance.service.js';
 import { ChatError, chatService } from './modules/world/chat.service.js';
+import { FriendError, friendService } from './modules/world/friend.service.js';
 import { ConquestError, conquestService } from './modules/world/conquest.service.js';
 import { getBattleRules } from './modules/admin/runtime-rules.js';
 import { PveRuleError } from '@infiniti-gacha/shared';
@@ -744,10 +746,20 @@ export function createApp() {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
-      const result = await expeditionService.dispatch(master.id, String(req.body?.tileId ?? ''), req.body?.mission, req.body?.heroIds);
+      const result = await expeditionService.dispatch(
+        master.id,
+        String(req.body?.tileId ?? ''),
+        req.body?.mission,
+        req.body?.heroIds,
+        {
+          airshipId: req.body?.airshipId ? String(req.body.airshipId) : null,
+          dungeonId: req.body?.dungeonId ? String(req.body.dungeonId) : null,
+          rescueTargetExpeditionId: req.body?.rescueTargetExpeditionId ? String(req.body.rescueTargetExpeditionId) : null,
+        },
+      );
       void auditService.record({
         actorId: master.id, actorType: 'MASTER', action: 'EXPEDITION_DISPATCHED', entityType: 'EXPEDITION',
-        entityId: result.expeditionId, diff: { mission: result.mission, tileId: result.tileId, heroes: result.heroes.length },
+        entityId: result.expeditionId, diff: { mission: result.mission, tileId: result.tileId, heroes: result.heroes.length, airshipId: result.airshipId },
       });
       return res.status(201).json(result);
     } catch (error) {
@@ -769,6 +781,120 @@ export function createApp() {
       return res.json(await expeditionService.recall(master.id, String(req.params.expeditionId)));
     } catch (error) {
       if (expeditionError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/world/expeditions/:expeditionId/redirect', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await expeditionService.redirect(master.id, String(req.params.expeditionId), String(req.body?.tileId ?? '')));
+    } catch (error) {
+      if (expeditionError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/world/rts/snapshot', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await expeditionService.rtsSnapshot(master.id, {
+      cx: req.query.cx,
+      cy: req.query.cy,
+      radius: req.query.radius,
+    }));
+  }));
+
+  // --- Airship Port (Bến Thiên Hành): Hangar Grid, Blueprints, Tech Tree ---
+  const airshipError = (res: Response, error: unknown): boolean => {
+    if (error instanceof AirshipError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/base/airships', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    return res.json(await airshipService.getPortState(master.id));
+  }));
+
+  app.post('/api/base/airships/tech/:techCode/unlock', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await airshipService.unlockTech(master.id, req.params.techCode));
+    } catch (error) {
+      if (airshipError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/airships/craft', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.status(201).json(await airshipService.craft(master.id, req.body?.blueprintCode, {
+        customName: typeof req.body?.name === 'string' ? req.body.name : undefined,
+        dockX: req.body?.dockX !== undefined ? Number(req.body.dockX) : undefined,
+        dockY: req.body?.dockY !== undefined ? Number(req.body.dockY) : undefined,
+        rotation: req.body?.rotation !== undefined ? Number(req.body.rotation) : undefined,
+        instant: Boolean(req.body?.instant),
+      }));
+    } catch (error) {
+      if (airshipError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/airships/:airshipId/move', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await airshipService.moveOnDock(
+        master.id,
+        String(req.params.airshipId),
+        req.body?.dockX,
+        req.body?.dockY,
+        req.body?.rotation,
+      ));
+    } catch (error) {
+      if (airshipError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/airships/:airshipId/upgrade', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await airshipService.upgrade(master.id, String(req.params.airshipId)));
+    } catch (error) {
+      if (airshipError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/base/airships/:airshipId/repair', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await airshipService.repair(master.id, String(req.params.airshipId), Boolean(req.body?.instant)));
+    } catch (error) {
+      if (airshipError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.delete('/api/base/airships/:airshipId', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    try {
+      return res.json(await airshipService.dismantle(master.id, String(req.params.airshipId)));
+    } catch (error) {
+      if (airshipError(res, error)) return undefined;
       throw error;
     }
   }));
@@ -799,7 +925,10 @@ export function createApp() {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
-      const result = await worldService.unlock(master.id);
+      const continentId = typeof req.body?.continentId === 'string' && req.body.continentId.trim()
+        ? req.body.continentId.trim()
+        : null;
+      const result = await worldService.unlock(master.id, { continentId });
       void auditService.record({
         actorId: master.id, actorType: 'MASTER', action: 'GLOBAL_WORLD_UNLOCKED', entityType: 'WORLD',
         entityId: master.id, diff: { base: result.base, shieldUntil: result.shieldUntil },
@@ -815,7 +944,10 @@ export function createApp() {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     try {
-      return res.json(await worldService.map(master.id));
+      const cx = req.query.cx !== undefined ? Number(req.query.cx) : undefined;
+      const cy = req.query.cy !== undefined ? Number(req.query.cy) : undefined;
+      const radius = req.query.radius !== undefined ? Number(req.query.radius) : undefined;
+      return res.json(await worldService.map(master.id, { cx, cy, radius }));
     } catch (error) {
       if (worldError(res, error)) return undefined;
       throw error;
@@ -1066,6 +1198,31 @@ export function createApp() {
     }
   }));
 
+  app.get('/api/chat/stream', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    res.write(`event: connected\ndata: ${JSON.stringify({ masterId: master.id })}\n\n`);
+
+    const unsubscribe = chatService.subscribe(master.id, payload => {
+      if (!res.writableEnded) {
+        res.write(`event: message\ndata: ${JSON.stringify(payload)}\n\n`);
+      }
+    });
+    const heartbeat = setInterval(() => {
+      if (!res.writableEnded) res.write(': ping\n\n');
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+    return undefined;
+  }));
+
   app.get('/api/chat/world', requireAccount, asyncRoute(async (_req, res) => {
     return res.json(await chatService.listWorld(50));
   }));
@@ -1095,6 +1252,140 @@ export function createApp() {
       return res.status(201).json(await chatService.sendPrivate(master.id, req.body ?? {}));
     } catch (error) {
       if (error instanceof ChatError) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+  }));
+
+  // --- Friends System (P2-02) ---
+
+  const friendError = (res: Response, error: unknown): boolean => {
+    if (error instanceof FriendError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return true;
+    }
+    return false;
+  };
+
+  app.get('/api/friends', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    return res.json(await friendService.listFriends(master.id));
+  }));
+
+  app.get('/api/friends/requests', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    return res.json(await friendService.listRequests(master.id));
+  }));
+
+  app.get('/api/friends/search', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    return res.json(await friendService.searchMasters(master.id, q));
+  }));
+
+  app.post('/api/friends/requests', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.status(201).json(await friendService.sendRequest(master.id, req.body ?? {}));
+    } catch (error) {
+      if (friendError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/friends/requests/:requestId/accept', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await friendService.acceptRequest(master.id, String(req.params.requestId)));
+    } catch (error) {
+      if (friendError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/friends/requests/:requestId/decline', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await friendService.declineRequest(master.id, String(req.params.requestId)));
+    } catch (error) {
+      if (friendError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.delete('/api/friends/:friendMasterId', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await friendService.removeFriend(master.id, String(req.params.friendMasterId)));
+    } catch (error) {
+      if (friendError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/friends/:friendMasterId/block', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await friendService.blockMaster(master.id, String(req.params.friendMasterId)));
+    } catch (error) {
+      if (friendError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.delete('/api/friends/:friendMasterId/block', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await friendService.unblockMaster(master.id, String(req.params.friendMasterId)));
+    } catch (error) {
+      if (friendError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.post('/api/friends/gifts/claim-all', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    return res.json(await friendService.claimAllGifts(master.id));
+  }));
+
+  app.post('/api/friends/:friendMasterId/gift', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.status(201).json(await friendService.sendGift(master.id, String(req.params.friendMasterId)));
+    } catch (error) {
+      if (friendError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/friends/:friendMasterId/profile', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await friendService.getPublicProfile(master.id, String(req.params.friendMasterId)));
+    } catch (error) {
+      if (friendError(res, error)) return undefined;
+      throw error;
+    }
+  }));
+
+  app.get('/api/friends/:friendMasterId/base', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMasterOrFail(req, res);
+    if (!master) return undefined;
+    try {
+      return res.json(await friendService.getFriendBase(master.id, String(req.params.friendMasterId)));
+    } catch (error) {
+      if (friendError(res, error)) return undefined;
       throw error;
     }
   }));
@@ -2535,7 +2826,12 @@ export function createApp() {
   app.get('/api/heroes', requireAccount, requireFeature('HERO_COLLECTION'), asyncRoute(async (req, res) => {
     const [master] = await db.select().from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
-    const collection = await db.select().from(heroes).where(eq(heroes.masterId, master.id)).orderBy(desc(heroes.rarity), heroes.name);
+    const aliveOnly = String(req.query.aliveOnly ?? '').toLowerCase() === 'true';
+    const collection = await db.select().from(heroes)
+      .where(aliveOnly
+        ? and(eq(heroes.masterId, master.id), gt(heroes.hp, 0), sql`${heroes.state} NOT IN ('DEAD', 'DISABLED')`)
+        : eq(heroes.masterId, master.id))
+      .orderBy(desc(heroes.rarity), heroes.name);
     const survivalRows = collection.length ? await db.select().from(heroSurvivalStates).where(inArray(heroSurvivalStates.heroId, collection.map(hero => hero.id))) : [];
     const survivalByHero = new Map(survivalRows.map(row => [row.heroId, row]));
     const [foodRow] = await db.select({ quantity: masterItems.quantity }).from(masterItems)

@@ -70,3 +70,20 @@ func run_flow() -> void:
 		hist_text += lbl.text + "\n"
 	expect(hist_text.contains("Anh Hùng") or hist_text.contains("Vật Phẩm"), "SummonBannerModal renders real gacha history from API")
 	modal.queue_free()
+
+	# 6. SummonResultModal (1★..5★ cap, UniversalHeroCard/UniversalItemCard, Skip & Summon Again)
+	var res_modal: Control = load("res://scripts/ui/summon_result_modal.gd").new()
+	res_modal.setup(10, [
+		{"rewardType": "HERO", "rewardName": "Võ Sĩ Vàng", "rarity": 7, "isDuplicate": false},
+		{"rewardType": "MATERIAL", "rewardName": "Gỗ Sồi", "rarity": 1, "quantity": 5},
+	], 7, str(normal_banner["id"]), "NORMAL")
+	add_child(res_modal)
+	await get_tree().process_frame
+	res_modal.skip_reveal()
+	await get_tree().process_frame
+	expect(res_modal._highest_rarity == 5 and res_modal._card_wrappers.size() == 2 and res_modal._revealed_all, "SummonResultModal caps max gacha rarity at 5★ and reveals all cards on Skip")
+	var again_calls: Array = []
+	res_modal.summon_again_requested.connect(func(rc: int, bid: String, btype: String): again_calls.append([rc, bid, btype]))
+	res_modal._again_btn.pressed.emit()
+	await get_tree().process_frame
+	expect(again_calls.size() == 1 and again_calls[0][0] == 10, "SummonResultModal emits summon_again_requested")

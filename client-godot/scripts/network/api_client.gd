@@ -10,6 +10,24 @@ signal connection_error(message: String)
 var base_url: String = "http://127.0.0.1:3000"
 var auth_token: String = ""
 
+func _ready() -> void:
+	load_runtime_config()
+
+func load_runtime_config() -> void:
+	var env_url := OS.get_environment("INFINITI_API_URL").strip_edges()
+	if not env_url.is_empty():
+		base_url = env_url
+		return
+	if FileAccess.file_exists("user://client_config.json"):
+		var f := FileAccess.open("user://client_config.json", FileAccess.READ)
+		if f != null:
+			var parsed: Variant = JSON.parse_string(f.get_as_text())
+			f.close()
+			if parsed is Dictionary:
+				var cfg_url := str(parsed.get("apiUrl", parsed.get("baseUrl", parsed.get("base_url", "")))).strip_edges()
+				if not cfg_url.is_empty():
+					base_url = cfg_url
+
 func set_auth_token(token: String) -> void:
 	auth_token = token
 

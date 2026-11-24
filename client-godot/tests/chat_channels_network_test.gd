@@ -43,4 +43,32 @@ func run_flow() -> void:
 		push_error("PRIVATE CHAT ERR: " + str(p_res))
 	expect(p_res.get("ok", false) and modal._messages_label.text.contains("Tin nhắn mật!"), "Private chat send & display works")
 
+	# 4. Simulate reload: new ChatPanelModal loads persisted Alliance & Private history
 	modal.queue_free()
+	await get_tree().process_frame
+	var modal2 = load("res://scripts/ui/chat_panel_modal.gd").new()
+	add_child(modal2)
+	await get_tree().process_frame
+	await modal2.switch_channel(1)
+	expect(modal2._messages_label.text.contains("Chào anh em Liên Minh!"), "Alliance chat persists after reload")
+	await modal2.switch_channel(2)
+	modal2._recipient_input.text = OS.get_environment("CHAT_PEER_NAME")
+	await modal2.refresh_messages()
+	expect(modal2._messages_label.text.contains("Tin nhắn mật!"), "Private chat persists after reload")
+
+	# 5. Real-time EventBus SSE delivery test
+	EventBus.chat_message_received.emit({
+		"channel": "PRIVATE",
+		"message": {"id": "sse-rt-1", "senderMasterId": "peer", "senderName": OS.get_environment("CHAT_PEER_NAME"), "recipientName": "Me", "body": "Tin nhắn SSE tức thì!"}
+	})
+	await get_tree().process_frame
+	expect(modal2._messages_label.text.contains("Tin nhắn SSE tức thì!"), "ChatPanelModal receives real-time SSE message immediately")
+
+	# 6. P3-31: Share Hero & Battle Report to Chat
+	var hero_txt: String = modal2.format_hero_share({"name": "Lucifer", "rarity": 5, "level": 40, "classCode": "MAGE", "combatPower": 3500})
+	var battle_txt: String = modal2.format_battle_share({"settlement": {"floor": 5}}, {"winner": "HERO", "rounds": 3, "totalDamage": 1200})
+	var s_hero: Dictionary = await modal2.share_to_channel(0, hero_txt)
+	var s_bat: Dictionary = await modal2.share_to_channel(1, battle_txt)
+	expect(s_hero.get("ok", false) and hero_txt.contains("KHOE TƯỚNG") and s_bat.get("ok", false) and battle_txt.contains("CHIẾN BÁO"), "P3-31 Hero & Battle share messages post cleanly to World/Alliance chat")
+
+	modal2.queue_free()

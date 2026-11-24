@@ -180,7 +180,7 @@ export class BuildingService {
         ...building,
         typeName: type?.name ?? building.buildingType,
         category: type?.category ?? 'PRODUCTION',
-        maxLevel: Math.min(3, type?.maxLevel ?? 3),
+        maxLevel: building.buildingType === 'AIRSHIP_PORT' ? 5 : Math.min(3, type?.maxLevel ?? 3),
         maxWorkers,
         ratePerHour: Math.round(rate * 100) / 100,
         capacity,
@@ -242,7 +242,7 @@ export class BuildingService {
             : 1;
         return {
           ...type,
-          maxLevel: Math.min(3, type.maxLevel ?? 3),
+          maxLevel: type.code === 'AIRSHIP_PORT' ? 5 : Math.min(3, type.maxLevel ?? 3),
           maxWorkers: maxWorkersForBuildingLevel(type.code, 1, type.maxWorkers ?? 0),
           production: buildingProductionForLevel(type.code, 1) ?? asProfile(type.production),
           requiredMasterLevel: reqMasterLvl,
@@ -250,6 +250,7 @@ export class BuildingService {
           currentBuiltCount: builtCount,
           unlocked: (worldLevel >= type.requiredWorldLevel || master.level >= reqMasterLvl)
             && (type.code !== 'PARTY_MANSION' || master.level >= PARTY_MANSION_REQUIRED_MASTER_LEVEL)
+            && (type.code !== 'AIRSHIP_PORT' || world.currentFloor >= 25)
             && (maxCount === null || builtCount < maxCount),
         };
       }),
@@ -276,6 +277,9 @@ export class BuildingService {
       if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
       if (type.code === 'PARTY_MANSION' && master.level < PARTY_MANSION_REQUIRED_MASTER_LEVEL) {
         throw new BaseError(`Party Mansion cần Master đạt cấp ${PARTY_MANSION_REQUIRED_MASTER_LEVEL}.`, 409);
+      }
+      if (type.code === 'AIRSHIP_PORT' && world.currentFloor < 25) {
+        throw new BaseError('Bến Thiên Hành (Cảng Tàu Bay) mở khóa khi vượt Tháp tầng 25.', 409);
       }
       const requiredMasterLevel = type.code === 'HALL_OF_MAGIC' ? 15 : requiredMasterLevelForFloor(type.requiredWorldLevel + 1);
       if (worldLevel < type.requiredWorldLevel && master.level < requiredMasterLevel) {
@@ -330,18 +334,20 @@ export class BuildingService {
       const [type] = await tx.select().from(buildingTypes).where(eq(buildingTypes.code, building.buildingType)).limit(1);
       if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
       const targetLevel = building.level + 1;
-      const maxLevel = Math.min(3, type.maxLevel ?? 3);
+      const maxLevel = type.code === 'AIRSHIP_PORT' ? 5 : Math.min(3, type.maxLevel ?? 3);
       if (targetLevel > maxLevel) throw new BaseError(`Công trình đã đạt cấp tối đa ${maxLevel}.`, 409);
 
       const silverCost = upgradeCostSilver(type.buildCostSilver, targetLevel);
       if (master.silverCoins < BigInt(silverCost)) throw new BaseError('Không đủ Xu Bạc để nâng cấp.', 409);
-      const materials = upgradeMaterials(targetLevel);
-      const owned = await tx.select().from(masterItems)
-        .where(and(eq(masterItems.masterId, masterId), inArray(masterItems.itemId, materials.map(row => row.itemId)))).for('update');
-      const ownedByItem = new Map(owned.map(row => [row.itemId, row.quantity]));
-      const missing = materials.filter(row => (ownedByItem.get(row.itemId) ?? 0) < row.quantity);
-      if (missing.length > 0) {
-        throw new BaseError(`Thiếu nguyên liệu: ${missing.map(row => `${row.itemId} ×${row.quantity}`).join(', ')}.`, 409);
+      const materials = type.code === 'AIRSHIP_PORT' ? [] : upgradeMaterials(targetLevel);
+      if (materials.length > 0) {
+        const owned = await tx.select().from(masterItems)
+          .where(and(eq(masterItems.masterId, masterId), inArray(masterItems.itemId, materials.map(row => row.itemId)))).for('update');
+        const ownedByItem = new Map(owned.map(row => [row.itemId, row.quantity]));
+        const missing = materials.filter(row => (ownedByItem.get(row.itemId) ?? 0) < row.quantity);
+        if (missing.length > 0) {
+          throw new BaseError(`Thiếu nguyên liệu: ${missing.map(row => `${row.itemId} ×${row.quantity}`).join(', ')}.`, 409);
+        }
       }
 
       await tx.update(masters).set({ silverCoins: sql`${masters.silverCoins} - ${silverCost}`, updatedAt: now })

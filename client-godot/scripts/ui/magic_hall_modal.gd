@@ -23,6 +23,7 @@ var _tabs: Array[Button] = []
 var _action_buttons: Array[Button] = []
 var _hours := 1
 var _alchemy: Dictionary = {}
+var _airship_port: Dictionary = {}
 var _craft_quantity := 1
 
 func _init() -> void:
@@ -315,7 +316,49 @@ func _render_research() -> void:
 		_label(tree, "%s • %d bạc + %d dược liệu" % [tech.get("name", code), int(tech.get("silver", 0)), int(tech.get("herbs", 0))])
 		_button(tree, "Đã nghiên cứu" if done else "Nghiên cứu " + str(tech.get("name", code)),
 			func(): _act("/api/alchemy/research", {"code": code}, "Nghiên cứu đã hoàn tất."), done or (prerequisite != null and not learned.has(prerequisite)))
-	_section("Bến Thiên Hành • Định hướng", "Sau khi hoàn thành tầng 25: hướng nghiên cứu phương tiện khám phá thế giới RTS. Nội dung này đang được thiết kế, chưa mở nghiên cứu.")
+	var airship_sec := _section("⚓ Cây công nghệ • Bến Thiên Hành", "Mở khóa bản thiết kế tàu bay (Trinh Sát 2×2, Cứu Hộ 2×3, Tấn Công 3×3, Vận Tải 4×5), mở rộng sàn bãi đậu và hỗ trợ viễn chinh RTS.")
+	if _airship_port.is_empty():
+		_label(airship_sec, "Đang tải dữ liệu công nghệ Bến Thiên Hành...")
+	elif not bool(_airship_port.get("unlockedByFloor", false)):
+		_label(airship_sec, "🔒 Yêu cầu vượt Tháp tầng %d để mở khóa nghiên cứu Bến Thiên Hành (hiện tại: Tầng %d)." % [
+			int(_airship_port.get("requiredFloor", 25)), int(_airship_port.get("clearedFloor", 1))
+		], 14, Color(1.0, 0.72, 0.35))
+	elif not bool(_airship_port.get("portBuilt", false)):
+		_label(airship_sec, "🏗️ Bạn đã vượt Tháp tầng 25! Hãy xây công trình [Bến Thiên Hành – Cảng Tàu Bay] ngoài Căn cứ 3D để bắt đầu nghiên cứu.", 14, Color(0.55, 0.88, 1.0))
+	else:
+		var dock_info: Dictionary = _airship_port.get("dock", {})
+		_label(airship_sec, "Cảng Tàu Bay Lv.%d • Sàn bãi đậu hiện tại: %d×%d ô • Thời lượng tầm nhìn Scout: %d phút" % [
+			int(_airship_port.get("portLevel", 1)),
+			int(dock_info.get("width", 4)),
+			int(dock_info.get("height", 4)),
+			int(int(_airship_port.get("visionDurationSeconds", 3600)) / 60),
+		], 13, Color(0.65, 0.9, 1.0))
+		var branch_labels := {
+			"SHIPYARD": "🛸 Nhánh Chế Tạo Tàu Bay",
+			"DOCK": "📐 Nhánh Mở Rộng Sàn Bãi Đậu",
+			"LOGISTICS": "📡 Nhánh Hỗ Trợ Viễn Chinh & Radar",
+		}
+		var tech_nodes: Array = _airship_port.get("techTree", [])
+		for branch_key in ["SHIPYARD", "DOCK", "LOGISTICS"]:
+			_label(airship_sec, str(branch_labels[branch_key]), 15, Color(0.95, 0.84, 0.45))
+			for node in tech_nodes:
+				if str(node.get("branch", "")) != branch_key:
+					continue
+				var tcode := str(node.get("code", ""))
+				var unlocked_t := bool(node.get("unlocked", false))
+				var can_unlock := bool(node.get("canUnlock", false))
+				var cost_silver := int(node.get("costSilver", 0))
+				var req_port := int(node.get("requiredPortLevel", 1))
+				_label(airship_sec, "• %s (Cảng Lv.%d+ • %d bạc)\n  %s" % [
+					str(node.get("name", tcode)), req_port, cost_silver, str(node.get("description", ""))
+				], 13, Color(0.55, 0.96, 0.68) if unlocked_t else Color(0.84, 0.88, 0.95))
+				var btn_txt := "✅ Đã nghiên cứu" if unlocked_t else ("🔬 Nghiên cứu %s (%d bạc)" % [str(node.get("name", tcode)), cost_silver])
+				_button(
+					airship_sec,
+					btn_txt,
+					func(): _act("/api/base/airships/tech/%s/unlock" % tcode, {}, "Đã mở khóa công nghệ Bến Thiên Hành!"),
+					unlocked_t or not can_unlock or GameState.silver_coins < cost_silver
+				)
 
 func _pick_hero() -> void:
 	if _busy: return
@@ -364,6 +407,9 @@ func _refresh() -> void:
 		if not is_inside_tree(): return
 		ok = bool(alchemy_result.get("ok", false))
 		_alchemy = alchemy_result.get("data", {}) if ok else {}
+		var airship_result: Dictionary = await ApiClient.get_req("/api/base/airships")
+		if not is_inside_tree(): return
+		_airship_port = airship_result.get("data", {}) if bool(airship_result.get("ok", false)) and airship_result.get("data", null) is Dictionary else {}
 	_data_ready = ok
 	if ok:
 		var found := false

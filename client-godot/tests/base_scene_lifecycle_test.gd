@@ -38,6 +38,10 @@ func make_base() -> Node3D:
 	return base
 
 func _ready() -> void:
+	var watchdog := get_tree().create_timer(20.0)
+	watchdog.timeout.connect(func(): push_error("BASE LIFECYCLE: Timed out"); get_tree().quit(1))
+	ApiClient.auth_token = "lifecycle-test-token"
+	GameState.master_id = "lifecycle-test-master"
 	var base = make_base()
 	base._sync_all_from_backend()
 	expect(base.requests == 1, "First refresh is waiting for a response")

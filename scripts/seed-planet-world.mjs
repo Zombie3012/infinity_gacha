@@ -1,0 +1,467 @@
+/**
+ * Full-Planet 600x300 RTS Seeder (180,000 tiles: 100% Land + Ocean + Imperial Wonder).
+ *
+ * Reads the exact Fantasy Planet equirectangular textures generated for Godot
+ * (`ocean.png`, `height.png`, `biome.png`) and `fantasy_world_regions.json`
+ * using a zero-dependency PNG decoder (Node `zlib`), ensuring 100% pixel-accurate
+ * alignment between PostgreSQL `world_tiles` and the Godot 3D Fantasy Planet!
+ *
+ * Usage:
+ *   node scripts/seed-planet-world.mjs
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import zlib from 'node:zlib';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+import pg from 'pg';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, '..');
+dotenv.config({ path: path.join(ROOT, '.env') });
+dotenv.config({ path: path.join(ROOT, 'packages/server/.env') });
+
+const GRID_W = 600;
+const GRID_H = 300;
+const BATCH_SIZE = 3000;
+
+const TEX_DIR = path.join(ROOT, 'client-godot/world_map/textures/fantasy_planet');
+const REGIONS_PATH = path.join(ROOT, 'client-godot/world_map/data/regions/fantasy_world_regions.json');
+const MIGRATION_PATH = path.join(ROOT, 'packages/server/drizzle/0064_planet_world_tiles.sql');
+
+/** Minimal RFC-2083 8-bit PNG decoder (RGB / RGBA / Grayscale, all 5 filter modes). */
+function decodePng(filePath) {
+  const buf = fs.readFileSync(filePath);
+  if (buf.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+    throw new Error(`Invalid PNG header: ${filePath}`);
+  }
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idatChunks = [];
+
+  while (offset < buf.length) {
+    const length = buf.readUInt32BE(offset);
+    const type = buf.subarray(offset + 4, offset + 8).toString('ascii');
+    const data = buf.subarray(offset + 8, offset + 8 + length);
+    offset += 12 + length;
+
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+    } else if (type === 'IDAT') {
+      idatChunks.push(data);
+    } else if (type === 'IEND') {
+      break;
+    }
+  }
+
+  if (bitDepth !== 8) {
+    throw new Error(`Unsupported PNG bitDepth=${bitDepth} in ${filePath}`);
+  }
+  const channels = colorType === 6 ? 4 : colorType === 2 ? 3 : colorType === 0 ? 1 : 0;
+  if (channels === 0) {
+    throw new Error(`Unsupported PNG colorType=${colorType} in ${filePath}`);
+  }
+
+  const raw = zlib.inflateSync(Buffer.concat(idatChunks));
+  const stride = width * channels;
+  const pixels = new Uint8Array(width * height * channels);
+
+  const paeth = (a, b, c) => {
+    const p = a + b - c;
+    const pa = Math.abs(p - a);
+    const pb = Math.abs(p - b);
+    const pc = Math.abs(p - c);
+    if (pa <= pb && pa <= pc) return a;
+    if (pb <= pc) return b;
+    return c;
+  };
+
+  let src = 0;
+  for (let y = 0; y < height; y++) {
+    const filter = raw[src++];
+    const rowOff = y * stride;
+    const prevOff = (y - 1) * stride;
+    for (let x = 0; x < stride; x++) {
+      const xVal = raw[src++];
+      const a = x >= channels ? pixels[rowOff + x - channels] : 0;
+      const b = y > 0 ? pixels[prevOff + x] : 0;
+      const c = (x >= channels && y > 0) ? pixels[prevOff + x - channels] : 0;
+      let val = xVal;
+      if (filter === 1) val = (xVal + a) & 0xff;
+      else if (filter === 2) val = (xVal + b) & 0xff;
+      else if (filter === 3) val = (xVal + ((a + b) >> 1)) & 0xff;
+      else if (filter === 4) val = (xVal + paeth(a, b, c)) & 0xff;
+      pixels[rowOff + x] = val;
+    }
+  }
+  return { width, height, channels, pixels };
+}
+
+function sampleRgb(img, u, v) {
+  const px = Math.max(0, Math.min(img.width - 1, Math.floor(u * img.width)));
+  const py = Math.max(0, Math.min(img.height - 1, Math.floor(v * img.height)));
+  const idx = (py * img.width + px) * img.channels;
+  return [
+    img.pixels[idx] / 255,
+    img.channels > 1 ? img.pixels[idx + 1] / 255 : img.pixels[idx] / 255,
+    img.channels > 2 ? img.pixels[idx + 2] / 255 : img.pixels[idx] / 255,
+  ];
+}
+
+function hashCoord(x, y) {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+function toUnitSphere(latDeg, lonDeg) {
+  const lat = (latDeg * Math.PI) / 180;
+  const lon = (lonDeg * Math.PI) / 180;
+  const cl = Math.cos(lat);
+  return [cl * Math.cos(lon), Math.sin(lat), cl * Math.sin(lon)];
+}
+
+function classifyContinent(r, g, b, latDeg, lonDeg) {
+  // Polar ice shelves belong to Frostspire Crown (North) or Frost/Ashen (South)
+  if (Math.abs(latDeg) > 74) return 'frostspire_crown';
+  // Imperial Wonder sanctuary island at (lat ~ 6, lon ~ 32)
+  if (Math.abs(latDeg - 6.0) < 10.0 && Math.abs(lonDeg - 32.0) < 10.0 && r > 0.85 && g > 0.72) {
+    return 'imperial_wonder';
+  }
+  // Classify directly from biome.png signature colors generated by generate_planet_textures.gd:
+  // Emerald Reach: (0.22, 0.82, 0.45)
+  // Crystal Wastes: (0.94, 0.72, 0.32)
+  // Frostspire Crown: (0.65, 0.88, 1.00) or polar (0.86, 0.94, 1.00)
+  // Skyshard Isles: (0.26, 0.88, 0.82)
+  // Ashen Rift: (0.78, 0.28, 0.86)
+  // Imperial Wonder: (1.00, 0.86, 0.38)
+  const palette = [
+    ['emerald_reach', 0.22, 0.82, 0.45],
+    ['crystal_wastes', 0.94, 0.72, 0.32],
+    ['frostspire_crown', 0.65, 0.88, 1.00],
+    ['skyshard_isles', 0.26, 0.88, 0.82],
+    ['ashen_rift', 0.78, 0.28, 0.86],
+    ['imperial_wonder', 1.00, 0.86, 0.38],
+  ];
+  let best = 'emerald_reach';
+  let bestDist = Infinity;
+  for (const [cid, pr, pg, pb] of palette) {
+    const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+    if (d < bestDist) {
+      bestDist = d;
+      best = cid;
+    }
+  }
+  // Guard Imperial Wonder strictly to its central island coordinates
+  if (best === 'imperial_wonder' && (Math.abs(latDeg - 6.0) > 12.0 || Math.abs(lonDeg - 32.0) > 12.0)) {
+    return 'crystal_wastes';
+  }
+  return best;
+}
+
+const RESOURCES_BY_TERRAIN = {
+  PLAINS: 'FOOD_RAW',
+  FOREST: 'WOOD',
+  HILLS: 'IRON',
+  MOUNTAIN: 'STONE',
+  MARSH: 'HERB',
+  RUINS: 'IRON',
+  WONDER: 'WONDER',
+  OCEAN: 'NONE',
+};
+
+async function main() {
+  const t0 = Date.now();
+  const connectionString = process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/infiniti_gacha';
+  const pool = new pg.Pool({ connectionString });
+
+  console.log('[PlanetSeed] Decoding equirectangular planet textures (ocean, height, biome)...');
+  const oceanImg = decodePng(path.join(TEX_DIR, 'ocean.png'));
+  const heightImg = decodePng(path.join(TEX_DIR, 'height.png'));
+  const biomeImg = decodePng(path.join(TEX_DIR, 'biome.png'));
+  const regionsJson = JSON.parse(fs.readFileSync(REGIONS_PATH, 'utf8'));
+  const regions = (regionsJson.regions ?? []).map(r => ({
+    id: r.id,
+    continentId: r.continent_id,
+    vec: toUnitSphere(Number(r.latitude), Number(r.longitude)),
+  }));
+
+  // Apply additive migration 0064 idempotently
+  const migrationSql = fs.readFileSync(MIGRATION_PATH, 'utf8');
+  await pool.query(migrationSql);
+
+  // Pass 1: Build land mask across all 600x300 cells
+  const isLand = new Uint8Array(GRID_W * GRID_H);
+  const elevArr = new Float32Array(GRID_W * GRID_H);
+  const contArr = new Array(GRID_W * GRID_H);
+
+  for (let y = 0; y < GRID_H; y++) {
+    const v = (y + 0.5) / GRID_H;
+    const latDeg = (0.5 - v) * 180;
+    for (let x = 0; x < GRID_W; x++) {
+      const u = (x + 0.5) / GRID_W;
+      const lonDeg = (u - 0.5) * 360;
+      const idx = y * GRID_W + x;
+      const [oc] = sampleRgb(oceanImg, u, v);
+      const [h] = sampleRgb(heightImg, u, v);
+      elevArr[idx] = h;
+      if (oc <= 0.50) {
+        isLand[idx] = 1;
+        const [br, bg, bb] = sampleRgb(biomeImg, u, v);
+        contArr[idx] = classifyContinent(br, bg, bb, latDeg, lonDeg);
+      } else {
+        isLand[idx] = 0;
+        contArr[idx] = 'great_ocean';
+      }
+    }
+  }
+
+  // Pass 2: Compute BFS distance from ocean (in tiles) to separate Outer Rim (zone_tier=1) vs Inland (2..3)
+  const coastDist = new Int16Array(GRID_W * GRID_H).fill(999);
+  const queue = new Int32Array(GRID_W * GRID_H);
+  let qHead = 0;
+  let qTail = 0;
+  for (let i = 0; i < GRID_W * GRID_H; i++) {
+    if (isLand[i] === 0) {
+      coastDist[i] = 0;
+      queue[qTail++] = i;
+    }
+  }
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  while (qHead < qTail) {
+    const cur = queue[qHead++];
+    const cx = cur % GRID_W;
+    const cy = (cur - cx) / GRID_W;
+    const nextD = coastDist[cur] + 1;
+    if (nextD > 30) continue;
+    for (const [dx, dy] of dirs) {
+      const nx = (cx + dx + GRID_W) % GRID_W;
+      const ny = cy + dy;
+      if (ny < 0 || ny >= GRID_H) continue;
+      const nIdx = ny * GRID_W + nx;
+      if (coastDist[nIdx] > nextD) {
+        coastDist[nIdx] = nextD;
+        queue[qTail++] = nIdx;
+      }
+    }
+  }
+
+  // Pass 3: Prepare all 180,000 rows (Land + Ocean)
+  const wonderX = Math.floor(((32.0 / 360.0) + 0.5) * GRID_W);
+  const wonderY = Math.floor((0.5 - (6.0 / 180.0)) * GRID_H);
+  const continentCounts = {};
+  let landCount = 0;
+  let oceanCount = 0;
+  let outerRimCount = 0;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Keep legacy tile-wonder-500-500 intact for Conquest Season rules; upsert all 600x300 cells cleanly
+    const ids = [];
+    const xs = [];
+    const ys = [];
+    const terrains = [];
+    const resources = [];
+    const yields = [];
+    const powers = [];
+    const outerRims = [];
+    const continents = [];
+    const regionIds = [];
+    const zoneTiers = [];
+
+    const flushBatch = async () => {
+      if (ids.length === 0) return;
+      await client.query(
+        `INSERT INTO world_tiles (id, x, y, terrain, resource_type, base_yield_per_hour, required_power, is_outer_rim, continent_id, region_id, zone_tier)
+         SELECT * FROM UNNEST($1::varchar[], $2::int[], $3::int[], $4::varchar[], $5::varchar[], $6::float8[], $7::int[], $8::boolean[], $9::varchar[], $10::varchar[], $11::int[])
+         ON CONFLICT (x, y) DO UPDATE SET
+           terrain = EXCLUDED.terrain,
+           resource_type = EXCLUDED.resource_type,
+           base_yield_per_hour = EXCLUDED.base_yield_per_hour,
+           required_power = EXCLUDED.required_power,
+           is_outer_rim = EXCLUDED.is_outer_rim,
+           continent_id = EXCLUDED.continent_id,
+           region_id = EXCLUDED.region_id,
+           zone_tier = EXCLUDED.zone_tier`,
+        [ids, xs, ys, terrains, resources, yields, powers, outerRims, continents, regionIds, zoneTiers],
+      );
+      ids.length = 0; xs.length = 0; ys.length = 0; terrains.length = 0;
+      resources.length = 0; yields.length = 0; powers.length = 0;
+      outerRims.length = 0; continents.length = 0; regionIds.length = 0; zoneTiers.length = 0;
+    };
+
+    for (let y = 0; y < GRID_H; y++) {
+      const v = (y + 0.5) / GRID_H;
+      const latDeg = (0.5 - v) * 180;
+      for (let x = 0; x < GRID_W; x++) {
+        const u = (x + 0.5) / GRID_W;
+        const lonDeg = (u - 0.5) * 360;
+        const idx = y * GRID_W + x;
+        const land = isLand[idx] === 1;
+        const cid = contArr[idx];
+        continentCounts[cid] = (continentCounts[cid] ?? 0) + 1;
+
+        let terrain = 'OCEAN';
+        let zoneTier = 0;
+        let isOuterRim = false;
+        let requiredPower = 0;
+        let baseYield = 0;
+        let regionId = null;
+
+        if (!land) {
+          oceanCount++;
+        } else {
+          landCount++;
+          const elev = elevArr[idx];
+          const cd = coastDist[idx];
+          const rnd = hashCoord(x, y);
+
+          if (x === wonderX && y === wonderY) {
+            terrain = 'WONDER';
+            zoneTier = 3;
+            isOuterRim = false;
+            requiredPower = 25000;
+            baseYield = 0;
+            regionId = 'region_wonder_imperial';
+          } else {
+            // Classify land terrain from elevation + deterministic biome flavor
+            if (elev > 0.76) {
+              terrain = 'MOUNTAIN';
+            } else if (elev > 0.65) {
+              terrain = rnd < 0.65 ? 'HILLS' : 'MOUNTAIN';
+            } else if (cd <= 2 && rnd < 0.14) {
+              terrain = 'MARSH';
+            } else if (rnd < 0.08) {
+              terrain = 'RUINS';
+            } else if (cid === 'emerald_reach' || cid === 'skyshard_isles') {
+              terrain = rnd < 0.48 ? 'FOREST' : (rnd < 0.82 ? 'PLAINS' : 'HILLS');
+            } else if (cid === 'crystal_wastes') {
+              terrain = rnd < 0.55 ? 'PLAINS' : (rnd < 0.85 ? 'HILLS' : 'RUINS');
+            } else if (cid === 'frostspire_crown') {
+              terrain = rnd < 0.42 ? 'FOREST' : (rnd < 0.78 ? 'HILLS' : 'PLAINS');
+            } else if (cid === 'ashen_rift') {
+              terrain = rnd < 0.45 ? 'HILLS' : (rnd < 0.72 ? 'RUINS' : 'PLAINS');
+            } else {
+              terrain = 'PLAINS';
+            }
+
+            // Exclude extreme polar ice caps (|lat| > 72 deg) from starter Outer Rim spawns
+            const isPolar = Math.abs(latDeg) > 72;
+            if (cid === 'imperial_wonder') {
+              zoneTier = 3;
+              isOuterRim = false;
+            } else if (!isPolar && cd <= 12) {
+              zoneTier = 1;
+              isOuterRim = true;
+              outerRimCount++;
+            } else if (cd <= 22) {
+              zoneTier = 2;
+              isOuterRim = false;
+            } else {
+              zoneTier = 3;
+              isOuterRim = false;
+            }
+
+            requiredPower = zoneTier * 1200 + Math.round(rnd * 1600) + (terrain === 'RUINS' ? 800 : 0);
+            baseYield = 20 + zoneTier * 15 + Math.round(rnd * 25);
+
+            // Nearest region on same continent (fast dot product over ~24 candidates)
+            const pt = toUnitSphere(latDeg, lonDeg);
+            let bestDot = -2;
+            for (const reg of regions) {
+              if (reg.continentId !== cid && cid !== 'imperial_wonder') continue;
+              const d = pt[0] * reg.vec[0] + pt[1] * reg.vec[1] + pt[2] * reg.vec[2];
+              if (d > bestDot) {
+                bestDot = d;
+                regionId = reg.id;
+              }
+            }
+          }
+        }
+
+        ids.push(`pt-${x}-${y}`);
+        xs.push(x);
+        ys.push(y);
+        terrains.push(terrain);
+        resources.push(RESOURCES_BY_TERRAIN[terrain] ?? 'STONE');
+        yields.push(baseYield);
+        powers.push(requiredPower);
+        outerRims.push(isOuterRim);
+        continents.push(cid);
+        regionIds.push(regionId);
+        zoneTiers.push(zoneTier);
+
+        if (ids.length >= BATCH_SIZE) {
+          await flushBatch();
+        }
+      }
+    }
+    await flushBatch();
+
+    // Ensure legacy Conquest Wonder tile at (500, 500) stays intact
+    await client.query(
+      `INSERT INTO world_tiles (id, x, y, terrain, resource_type, base_yield_per_hour, required_power, is_outer_rim, continent_id, region_id, zone_tier)
+       VALUES ('tile-wonder-500-500', 500, 500, 'WONDER', 'WONDER', 0, 25000, false, 'imperial_wonder', 'region_wonder_imperial', 3)
+       ON CONFLICT (x, y) DO UPDATE SET
+         terrain = 'WONDER', resource_type = 'WONDER', required_power = 25000, is_outer_rim = false, continent_id = 'imperial_wonder', zone_tier = 3`,
+    );
+
+    // Auto-relocate any existing master_world_status whose old base landed on OCEAN / non-spawnable tile
+    const existingBases = await client.query(
+      `SELECT mws.master_id, mws.base_x, mws.base_y, wt.terrain, wt.continent_id
+       FROM master_world_status mws
+       LEFT JOIN world_tiles wt ON wt.x = mws.base_x AND wt.y = mws.base_y`,
+    );
+    let relocated = 0;
+    for (const row of existingBases.rows) {
+      if (row.terrain && row.terrain !== 'OCEAN' && row.terrain !== 'WONDER') {
+        await client.query(
+          `UPDATE master_world_status SET continent_id = $1 WHERE master_id = $2`,
+          [row.continent_id ?? 'emerald_reach', row.master_id],
+        );
+        continue;
+      }
+      const pick = await client.query(
+        `SELECT x, y, continent_id FROM world_tiles
+         WHERE is_outer_rim = true AND continent_id = 'emerald_reach' AND terrain IN ('PLAINS', 'FOREST', 'HILLS')
+           AND NOT EXISTS (SELECT 1 FROM master_world_status m WHERE m.base_x = world_tiles.x AND m.base_y = world_tiles.y)
+         ORDER BY random() LIMIT 1`,
+      );
+      if (pick.rows[0]) {
+        const dest = pick.rows[0];
+        await client.query(
+          `UPDATE master_world_status SET base_x = $1, base_y = $2, continent_id = $3 WHERE master_id = $4`,
+          [dest.x, dest.y, dest.continent_id, row.master_id],
+        );
+        relocated++;
+      }
+    }
+
+    await client.query('COMMIT');
+    console.log(`[PlanetSeed] DONE in ${Date.now() - t0} ms!`);
+    console.log(`[PlanetSeed] Total=${landCount + oceanCount} (Land=${landCount}, Ocean=${oceanCount}, OuterRimSpawnable=${outerRimCount})`);
+    console.log('[PlanetSeed] Continents breakdown:', continentCounts);
+    if (relocated > 0) {
+      console.log(`[PlanetSeed] Safely relocated ${relocated} existing base(s) onto Emerald Reach Outer Rim.`);
+    }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+main().catch(err => {
+  console.error('[PlanetSeed] FAILED:', err);
+  process.exit(1);
+});

@@ -61,6 +61,7 @@ func _process(delta: float) -> void:
 		if _clock_bar != null:
 			_clock_bar.visible = is_live
 			_clock_bar.value = clampf(remaining, 0.0, 10.0)
+			_clock_bar.modulate = Color(1.0, 0.35, 0.35) if remaining <= 3.5 else Color(0.42, 0.85, 1.0)
 	_elapsed += delta
 	if _elapsed >= 1.0 and not _busy:
 		_elapsed = 0.0
@@ -110,7 +111,7 @@ func _render() -> void:
 			var is_actor := (id == actor_id and not id.is_empty())
 			var is_target := (id == _target and not id.is_empty())
 			var tone := "gold" if is_target else ("accent" if is_actor else ("default" if not unit.is_empty() else "ghost"))
-			var cell_txt := "—" if unit.is_empty() else "%s%s\nHP %d/%d\nMP %d/%d" % ["▶ " if is_actor else "", unit.get("name", ""), hp, max_hp, mp, max_mp]
+			var cell_txt := "—" if unit.is_empty() else "%s%s%s\nHP %d/%d\nMP %d/%d" % ["🎯 " if is_target else "", "▶ " if is_actor else "", unit.get("name", ""), hp, max_hp, mp, max_mp]
 			if not unit.is_empty() and unit.get("effects", []).has("STRENGTH_POTION"):
 				cell_txt += " · ATK+20%"
 			var slot_col := VBoxContainer.new()
@@ -120,6 +121,12 @@ func _render() -> void:
 			button.custom_minimum_size = Vector2(154, 68)
 			button.clip_text = true
 			button.disabled = unit.is_empty() or not bool(unit.get("alive", false))
+			if not unit.is_empty():
+				var effs: Array = unit.get("effects", []) if unit.get("effects") is Array else []
+				button.tooltip_text = "%s (%s)\nHP: %d/%d | MP: %d/%d%s" % [
+					str(unit.get("name", "")), side, hp, max_hp, mp, max_mp,
+					("\nHiệu ứng: " + ", ".join(effs)) if not effs.is_empty() else ""
+				]
 			if not unit.is_empty():
 				Ui.progress_bar(slot_col, float(hp), float(max_hp), Ui.SUCCESS if side == "HERO" else Ui.DANGER, 4)
 
@@ -155,6 +162,7 @@ func _render() -> void:
 			var code := str(skill.get("code", ""))
 			var button := Ui.button(row, str(skill.get("name", code)), func(): _send({"action": "SKILL", "skillCode": code, "targetId": _target}), true, "accent")
 			button.disabled = not pending.get("skills", []).any(func(ready_skill): return ready_skill.get("code") == code)
+			button.tooltip_text = "%s: %s" % [str(skill.get("name", code)), str(skill.get("description", "Kỹ năng chiến đấu."))]
 
 	var items: Dictionary = report.get("consumables", {}).get(actor_id, {})
 	var items_row := HBoxContainer.new()

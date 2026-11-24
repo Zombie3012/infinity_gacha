@@ -12,8 +12,8 @@
  * - territory yield grows 50% per level
  */
 
-export const UNLOCK_MASTER_LEVEL = 15;
-export const UNLOCK_CLEARED_FLOOR = 10;
+export const UNLOCK_MASTER_LEVEL = 1;
+export const UNLOCK_CLEARED_FLOOR = 25;
 export const NOVICE_SHIELD_HOURS = 48;
 export const DISCOVERY_RADIUS = 5;
 export const MAX_TERRITORIES = 10;

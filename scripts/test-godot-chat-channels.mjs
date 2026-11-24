@@ -44,9 +44,49 @@ try {
     child.once('error', (e) => { clearTimeout(timer); reject(e); });
     child.once('exit', (code) => {
       clearTimeout(timer);
-      done(code === 0 && output.includes('CHAT_CHANNELS_NETWORK:') && !/SCRIPT ERROR:|^ERROR:/m.test(errors) ? 0 : 1);
+      done(code === 0 && output.includes('CHAT_CHANNELS_NETWORK:') && output.includes('PASS') && !/SCRIPT ERROR:|^ERROR:/m.test(errors) ? 0 : 1);
     });
   });
+
+  if (process.exitCode === 0) {
+    // Verify WORLD channel was NOT persisted to PostgreSQL, while PRIVATE was persisted
+    const worldDb = await sql("select count(*)::int as cnt from chat_messages where channel = 'WORLD' and sender_master_id = $1", [mA.masterId]);
+    if ((worldDb.rows[0]?.cnt ?? 0) !== 0) {
+      throw new Error('WORLD chat must not persist to PostgreSQL');
+    }
+    const privDb = await sql("select count(*)::int as cnt from chat_messages where channel = 'PRIVATE' and sender_master_id = $1", [mA.masterId]);
+    if ((privDb.rows[0]?.cnt ?? 0) < 1) {
+      throw new Error('PRIVATE chat must persist to PostgreSQL');
+    }
+    // Verify GET /api/chat/stream SSE endpoint delivers real-time event
+    const ac = new AbortController();
+    const sseRes = await fetch(`${harness.base}/api/chat/stream`, {
+      headers: { Authorization: `Bearer ${mB.token}` },
+      signal: ac.signal,
+    });
+    if (!sseRes.ok || !sseRes.headers.get('content-type')?.includes('text/event-stream')) {
+      throw new Error('SSE stream endpoint failed');
+    }
+    const reader = sseRes.body.getReader();
+    const dec = new TextDecoder();
+    await harness.request('/api/chat/private', {
+      token: mA.token,
+      method: 'POST',
+      body: { recipientMasterId: mB.masterId, body: 'SSE Live Ping' },
+    });
+    let sseText = '';
+    for (let i = 0; i < 6; i++) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      sseText += dec.decode(value, { stream: true });
+      if (sseText.includes('SSE Live Ping')) break;
+    }
+    ac.abort();
+    if (!sseText.includes('SSE Live Ping')) {
+      throw new Error('SSE stream did not receive real-time message');
+    }
+    console.log('CHAT_SSE_AND_STORAGE_POLICY: PASS');
+  }
 } catch (e) {
   console.error(e);
   process.exitCode = 1;

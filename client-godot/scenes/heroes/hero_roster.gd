@@ -41,9 +41,14 @@ var _equipment_rarity_filter: int = 0 # 0: All, 5: 5★, 4: 4★, 3: 1-3★
 # Dynamic UI & 3D Pedestal references
 var _tab_content_scroll: ScrollContainer = null
 var _tab_content_vbox: VBoxContainer = null
+var _pedestal_card: PanelContainer = null
+var _right_card: PanelContainer = null
 var _tab_buttons: Array[Button] = []
 var _filter_buttons: Array[Button] = []
 var _sort_buttons: Array[Button] = []
+var _filter_option_btn: OptionButton = null
+var _sort_option_btn: OptionButton = null
+var _sort_dir_btn: Button = null
 var _party_toggle_btn: Button = null
 var _lock_toggle_btn: Button = null
 var _quick_level_for_promote_btn: Button = null
@@ -153,6 +158,8 @@ func _ready() -> void:
 	back_btn.pressed.connect(_on_back_pressed)
 
 	promote_panel.visible = false
+	if status_label != null:
+		status_label.visible = false
 	_setup_enhanced_layout()
 	EventBus.heroes_updated.connect(func(_heroes: Array): _refresh_hero_list(str(_selected_hero.get("id", ""))))
 	await _sync_all_roster_data()
@@ -172,6 +179,7 @@ func _sync_all_roster_data(preserve_hero_id: String = "") -> void:
 	await GameState.refresh_crafting()
 	await GameState.refresh_equipment()
 	await GameState.refresh_inventory()
+	await GameState.refresh_personality()
 	_refresh_hero_list(preserve_hero_id)
 	status_label.text = "🛡️ Doanh Trại sẵn sàng — Chọn Tướng để xem Mô hình 3D, Chỉ số, Kỹ năng, Ấn ký Imprint, Trang bị & Thăng Sao."
 
@@ -199,26 +207,23 @@ func _setup_enhanced_layout() -> void:
 		root_vbox.add_child(_grid_view_container)
 		root_vbox.move_child(_grid_view_container, _main_layout.get_index())
 
-		# Row 1: Index Banner, Counter Badge & Quick Summon
-		var grid_banner_row := HBoxContainer.new()
-		grid_banner_row.add_theme_constant_override("separation", 10)
-		_grid_view_container.add_child(grid_banner_row)
+		# Clean TopBar title & move Quick Summon next to BackBtn
+		var top_bar_node := get_node_or_null("MarginContainer/VBoxContainer/TopBar") as HBoxContainer
+		var top_title := get_node_or_null("MarginContainer/VBoxContainer/TopBar/Title") as Label
+		if top_title != null:
+			top_title.text = "🛡️ DOANH TRẠI ANH HÙNG"
+		if top_bar_node != null:
+			var quick_summon_btn := Button.new()
+			quick_summon_btn.text = "✨ Triệu Hồi Nhanh ×10"
+			quick_summon_btn.custom_minimum_size = Vector2(164, 30)
+			quick_summon_btn.pressed.connect(_on_quick_summon_in_barracks)
+			top_bar_node.add_child(quick_summon_btn)
+			top_bar_node.move_child(quick_summon_btn, maxi(0, back_btn.get_index()))
 
-		var index_title := Label.new()
-		index_title.text = "🏛️ DANH SÁCH ANH HÙNG (HERO ROSTER)"
-		index_title.add_theme_font_size_override("font_size", 16)
-		index_title.add_theme_color_override("font_color", Color(0.9, 0.94, 1.0))
-		grid_banner_row.add_child(index_title)
-
-		var index_sub := Label.new()
-		index_sub.text = "• Nhấn vào thẻ Tướng để xem Hồ Sơ Chi Tiết"
-		index_sub.add_theme_font_size_override("font_size", 12)
-		index_sub.add_theme_color_override("font_color", Color(0.65, 0.75, 0.85))
-		grid_banner_row.add_child(index_sub)
-
-		var banner_spacer := Control.new()
-		banner_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		grid_banner_row.add_child(banner_spacer)
+		# Single Compact Row: Total Hero Count (Left) + Filter & Sort Dropdowns (Right)
+		var grid_ctrl_row := HBoxContainer.new()
+		grid_ctrl_row.add_theme_constant_override("separation", 8)
+		_grid_view_container.add_child(grid_ctrl_row)
 
 		var total_badge := PanelContainer.new()
 		var tb_style := StyleBoxFlat.new()
@@ -244,63 +249,59 @@ func _setup_enhanced_layout() -> void:
 		_grid_total_label.add_theme_font_size_override("font_size", 12)
 		_grid_total_label.add_theme_color_override("font_color", Color(0.4, 0.85, 1.0))
 		tb_margin.add_child(_grid_total_label)
-		grid_banner_row.add_child(total_badge)
-
-		var quick_summon_btn := Button.new()
-		quick_summon_btn.text = "✨ Triệu Hồi Nhanh ×10"
-		quick_summon_btn.custom_minimum_size = Vector2(170, 32)
-		quick_summon_btn.pressed.connect(_on_quick_summon_in_barracks)
-		grid_banner_row.add_child(quick_summon_btn)
-
-		# Row 2: Filters & Sort Controls
-		var grid_ctrl_row := HBoxContainer.new()
-		grid_ctrl_row.add_theme_constant_override("separation", 8)
-		_grid_view_container.add_child(grid_ctrl_row)
-
-		var filter_names := ["Tất cả", "⚔️ Đội PvE", "🌟 4-7★", "⭐ 1-3★", "Tử trận"]
-		_filter_buttons.clear()
-		for i in range(filter_names.size()):
-			var fbtn := Button.new()
-			fbtn.text = filter_names[i]
-			fbtn.custom_minimum_size = Vector2(90, 30)
-			fbtn.add_theme_font_size_override("font_size", 12)
-			var f_idx := i
-			fbtn.pressed.connect(func():
-				_roster_filter_mode = f_idx
-				_refresh_hero_list(str(_selected_hero.get("id", "")))
-			)
-			grid_ctrl_row.add_child(fbtn)
-			_filter_buttons.append(fbtn)
+		grid_ctrl_row.add_child(total_badge)
 
 		var ctrl_spacer := Control.new()
 		ctrl_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid_ctrl_row.add_child(ctrl_spacer)
 
+		var filter_lbl := Label.new()
+		filter_lbl.text = "Lọc:"
+		filter_lbl.add_theme_font_size_override("font_size", 12)
+		filter_lbl.add_theme_color_override("font_color", Color(0.7, 0.78, 0.88))
+		grid_ctrl_row.add_child(filter_lbl)
+
+		_filter_buttons.clear()
+		_filter_option_btn = OptionButton.new()
+		_filter_option_btn.custom_minimum_size = Vector2(126, 30)
+		_filter_option_btn.add_theme_font_size_override("font_size", 12)
+		for fname in ["Tất cả", "⚔️ Đội PvE", "🌟 4-7★", "⭐ 1-3★"]:
+			_filter_option_btn.add_item(fname)
+		_filter_option_btn.item_selected.connect(func(f_idx: int):
+			_roster_filter_mode = f_idx
+			_refresh_hero_list(str(_selected_hero.get("id", "")))
+		)
+		grid_ctrl_row.add_child(_filter_option_btn)
+
 		var sort_lbl := Label.new()
-		sort_lbl.text = "Sắp xếp theo:"
+		sort_lbl.text = "Sắp xếp:"
 		sort_lbl.add_theme_font_size_override("font_size", 12)
 		sort_lbl.add_theme_color_override("font_color", Color(0.7, 0.78, 0.88))
 		grid_ctrl_row.add_child(sort_lbl)
 
-		var sort_names := ["🔥 Lực Chiến ▼", "📈 Cấp Độ ▼", "⭐ Sao ▼", "🔤 Tên A-Z ▲"]
 		_sort_buttons.clear()
-		for s_idx in range(sort_names.size()):
-			var sbtn := Button.new()
-			sbtn.text = sort_names[s_idx]
-			sbtn.custom_minimum_size = Vector2(0, 30)
-			sbtn.add_theme_font_size_override("font_size", 12)
-			var cur_s := s_idx
-			sbtn.pressed.connect(func():
-				if _grid_sort_mode == cur_s:
-					_grid_sort_ascending = not _grid_sort_ascending
-				else:
-					_grid_sort_mode = cur_s
-					_grid_sort_ascending = false
-				_update_sort_button_labels()
-				_refresh_hero_list(str(_selected_hero.get("id", "")))
-			)
-			grid_ctrl_row.add_child(sbtn)
-			_sort_buttons.append(sbtn)
+		_sort_option_btn = OptionButton.new()
+		_sort_option_btn.custom_minimum_size = Vector2(130, 30)
+		_sort_option_btn.add_theme_font_size_override("font_size", 12)
+		for sname in ["🔥 Lực Chiến", "📈 Cấp Độ", "⭐ Sao", "🔤 Tên A-Z"]:
+			_sort_option_btn.add_item(sname)
+		_sort_option_btn.item_selected.connect(func(s_idx: int):
+			_grid_sort_mode = s_idx
+			_update_sort_button_labels()
+			_refresh_hero_list(str(_selected_hero.get("id", "")))
+		)
+		grid_ctrl_row.add_child(_sort_option_btn)
+
+		_sort_dir_btn = Button.new()
+		_sort_dir_btn.text = "▼"
+		_sort_dir_btn.custom_minimum_size = Vector2(32, 30)
+		_sort_dir_btn.tooltip_text = "Đổi chiều sắp xếp tăng/giảm"
+		_sort_dir_btn.pressed.connect(func():
+			_grid_sort_ascending = not _grid_sort_ascending
+			_update_sort_button_labels()
+			_refresh_hero_list(str(_selected_hero.get("id", "")))
+		)
+		grid_ctrl_row.add_child(_sort_dir_btn)
 
 		# Row 3: Grid Scroll Container
 		var grid_scroll := ScrollContainer.new()
@@ -357,7 +358,7 @@ func _setup_enhanced_layout() -> void:
 	# COLUMN 1: LEFT NAVIGATION & TABS (Honkai Star Rail Style)
 	# ==============================================================================
 	var left_col := VBoxContainer.new()
-	left_col.custom_minimum_size = Vector2(175, 0)
+	left_col.custom_minimum_size = Vector2(168, 0)
 	left_col.size_flags_horizontal = 0
 	left_col.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left_col.add_theme_constant_override("separation", 8)
@@ -458,12 +459,21 @@ func _setup_enhanced_layout() -> void:
 	_lock_toggle_btn.pressed.connect(_on_toggle_lock_pressed)
 	left_col.add_child(_lock_toggle_btn)
 
+	var share_chat_btn := Button.new()
+	share_chat_btn.text = "📢 Khoe Tướng"
+	share_chat_btn.custom_minimum_size = Vector2(0, 32)
+	share_chat_btn.add_theme_font_size_override("font_size", 11)
+	share_chat_btn.pressed.connect(_on_share_hero_to_chat_pressed)
+	left_col.add_child(share_chat_btn)
+
 	# ==============================================================================
 	# COLUMN 2: CENTER STAGE 3D PEDESTAL
 	# ==============================================================================
-	var pedestal_card := PanelContainer.new()
-	pedestal_card.custom_minimum_size = Vector2(490, 0)
-	pedestal_card.size_flags_horizontal = 0
+	_pedestal_card = PanelContainer.new()
+	var pedestal_card := _pedestal_card
+	pedestal_card.custom_minimum_size = Vector2(360, 0)
+	pedestal_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pedestal_card.size_flags_stretch_ratio = 0.95
 	pedestal_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	pedestal_card.clip_contents = true
 	var pstyle := StyleBoxFlat.new()
@@ -487,7 +497,7 @@ func _setup_enhanced_layout() -> void:
 	pedestal_card.add_child(ped_vbox)
 
 	var stage_stack := Control.new()
-	stage_stack.custom_minimum_size = Vector2(470, 480)
+	stage_stack.custom_minimum_size = Vector2(0, 440)
 	stage_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	stage_stack.clip_contents = true
@@ -569,9 +579,11 @@ func _setup_enhanced_layout() -> void:
 	# ==============================================================================
 	# COLUMN 3: RIGHT PANEL (Header, Active Tab Scroll, and Ascend Button)
 	# ==============================================================================
-	var right_card := PanelContainer.new()
-	right_card.custom_minimum_size = Vector2(520, 0)
+	_right_card = PanelContainer.new()
+	var right_card := _right_card
+	right_card.custom_minimum_size = Vector2(440, 0)
 	right_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_card.size_flags_stretch_ratio = 1.25
 	right_card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right_card.clip_contents = true
 	var rstyle := StyleBoxFlat.new()
@@ -606,15 +618,9 @@ func _setup_enhanced_layout() -> void:
 	right_vbox.add_child(r_head_row)
 
 	hero_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hero_name_label.add_theme_font_size_override("font_size", 22)
+	hero_name_label.clip_text = true
+	hero_name_label.add_theme_font_size_override("font_size", 21)
 	r_head_row.add_child(hero_name_label)
-
-	_detail_close_btn = Button.new()
-	_detail_close_btn.text = "✕"
-	_detail_close_btn.custom_minimum_size = Vector2(34, 30)
-	_detail_close_btn.add_theme_font_size_override("font_size", 14)
-	_detail_close_btn.pressed.connect(_close_hero_detail)
-	r_head_row.add_child(_detail_close_btn)
 
 	if header_stats_row != null:
 		right_vbox.add_child(header_stats_row)
@@ -630,13 +636,14 @@ func _setup_enhanced_layout() -> void:
 
 	_tab_content_vbox = VBoxContainer.new()
 	_tab_content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_tab_content_vbox.add_theme_constant_override("separation", 8)
+	_tab_content_vbox.add_theme_constant_override("separation", 10)
 	_tab_content_scroll.add_child(_tab_content_vbox)
 
 	right_vbox.add_child(HSeparator.new())
 
-	open_promote_btn.custom_minimum_size = Vector2(0, 44)
-	open_promote_btn.add_theme_font_size_override("font_size", 15)
+	open_promote_btn.custom_minimum_size = Vector2(0, 42)
+	open_promote_btn.clip_text = true
+	open_promote_btn.add_theme_font_size_override("font_size", 14)
 	right_vbox.add_child(open_promote_btn)
 
 	_build_stats_detail_modal()
@@ -1589,16 +1596,12 @@ func _play_3d_star_promotion_burst() -> void:
 # ==============================================================================
 
 func _update_sort_button_labels() -> void:
-	var labels := [
-		"🔥 Lực Chiến " + ("▲" if _grid_sort_ascending and _grid_sort_mode == 0 else "▼"),
-		"📈 Cấp Độ " + ("▲" if _grid_sort_ascending and _grid_sort_mode == 1 else "▼"),
-		"⭐ Sao " + ("▲" if _grid_sort_ascending and _grid_sort_mode == 2 else "▼"),
-		"🔤 Tên " + ("Z-A ▼" if _grid_sort_ascending and _grid_sort_mode == 3 else "A-Z ▲")
-	]
-	for i in range(_sort_buttons.size()):
-		if i < labels.size():
-			_sort_buttons[i].text = labels[i]
-			_sort_buttons[i].modulate = Color(1.0, 0.92, 0.42) if i == _grid_sort_mode else Color(0.82, 0.88, 0.96)
+	if _sort_option_btn != null and _grid_sort_mode >= 0 and _grid_sort_mode < _sort_option_btn.item_count:
+		_sort_option_btn.selected = _grid_sort_mode
+	if _sort_dir_btn != null:
+		_sort_dir_btn.text = "▲" if _grid_sort_ascending else "▼"
+	if _filter_option_btn != null and _roster_filter_mode >= 0 and _roster_filter_mode < _filter_option_btn.item_count:
+		_filter_option_btn.selected = _roster_filter_mode
 
 func _sort_filtered_heroes() -> void:
 	match _grid_sort_mode:
@@ -1641,16 +1644,7 @@ func _refresh_hero_list(preserve_hero_id: String = "") -> void:
 	_filtered_heroes.clear()
 
 	for h in GameState.heroes:
-		if not (h is Dictionary):
-			continue
-		var life_state := str(h.get("state", ""))
-		if _roster_filter_mode == 4:
-			if life_state not in ["DEAD", "DISABLED"]:
-				continue
-		elif _roster_filter_mode == 5:
-			if life_state != "DEAD":
-				continue
-		elif not GameState.is_hero_alive(h):
+		if not (h is Dictionary) or not GameState.is_hero_alive(h):
 			continue
 		var hid := str(h.get("id", ""))
 		var star := int(h.get("rarity", 1))
@@ -1729,6 +1723,11 @@ func _on_hero_selected(index: int) -> void:
 		if _awaken_modal_backdrop != null and _awaken_modal_backdrop.visible:
 			await _load_awaken_preview()
 
+func _unhandled_input(event: InputEvent) -> void:
+	if _in_detail_view and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		_close_hero_detail()
+		get_viewport().set_input_as_handled()
+
 func _open_hero_detail(h: Dictionary) -> void:
 	_in_detail_view = true
 	_selected_hero = h
@@ -1736,10 +1735,9 @@ func _open_hero_detail(h: Dictionary) -> void:
 		_grid_view_container.visible = false
 	if _main_layout != null:
 		_main_layout.visible = true
-	back_btn.text = "⬅ Quay lại Danh Sách Tướng"
-	var title_lbl: Label = get_node_or_null("MarginContainer/VBoxContainer/TopBar/Title") as Label
-	if title_lbl != null:
-		title_lbl.text = "🛡️ CHI TIẾT ANH HÙNG: %s" % str(h.get("name", "Hero"))
+	var top_bar := get_node_or_null("MarginContainer/VBoxContainer/TopBar") as Control
+	if top_bar != null:
+		top_bar.visible = false
 	_display_hero_details(_selected_hero)
 	status_label.text = "🛡️ Đang xem hồ sơ chi tiết [%s] — 3D Pedestal, Chỉ số, Kỹ năng, Ấn ký & Trang bị." % str(h.get("name", "Hero"))
 
@@ -1754,10 +1752,13 @@ func _close_hero_detail() -> void:
 		_main_layout.visible = false
 	if _grid_view_container != null:
 		_grid_view_container.visible = true
+	var top_bar := get_node_or_null("MarginContainer/VBoxContainer/TopBar") as Control
+	if top_bar != null:
+		top_bar.visible = true
 	back_btn.text = "⬅ Về Căn Cứ 3D"
 	var title_lbl: Label = get_node_or_null("MarginContainer/VBoxContainer/TopBar/Title") as Label
 	if title_lbl != null:
-		title_lbl.text = "🛡️ DOANH TRẠI TƯỚNG & THĂNG SAO (PICK ME UP STYLE)"
+		title_lbl.text = "🛡️ DOANH TRẠI ANH HÙNG"
 	_render_hero_grid()
 	status_label.text = "🛡️ Doanh Trại sẵn sàng — Chọn Tướng để xem Mô hình 3D, Chỉ số, Kỹ năng, Ấn ký Imprint, Trang bị & Thăng Sao."
 
@@ -1927,19 +1928,41 @@ func _render_active_profile_tab() -> void:
 		return
 	_update_selected_hero_from_gamestate()
 	for i in range(_tab_buttons.size()):
+		var btn: Button = _tab_buttons[i]
 		var is_cur := (i == _active_profile_tab)
-		_tab_buttons[i].modulate = Color(1.0, 0.92, 0.42) if is_cur else Color(0.80, 0.88, 0.96)
+		var st := StyleBoxFlat.new()
+		if is_cur:
+			st.bg_color = Color(0.15, 0.25, 0.42, 0.95)
+			st.border_width_left = 3
+			st.border_color = Color(0.45, 0.85, 1.0)
+			btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.55))
+		else:
+			st.bg_color = Color(0.08, 0.11, 0.17, 0.72)
+			st.border_width_left = 0
+			btn.add_theme_color_override("font_color", Color(0.75, 0.84, 0.94))
+		st.corner_radius_top_left = 6
+		st.corner_radius_top_right = 6
+		st.corner_radius_bottom_left = 6
+		st.corner_radius_bottom_right = 6
+		st.content_margin_left = 10
+		btn.add_theme_stylebox_override("normal", st)
+		btn.add_theme_stylebox_override("hover", st)
+		btn.add_theme_stylebox_override("pressed", st)
 
 	for child in _tab_content_vbox.get_children():
+		_tab_content_vbox.remove_child(child)
 		child.queue_free()
+	if _tab_content_scroll != null:
+		_tab_content_scroll.scroll_vertical = 0
 
 	if _selected_hero.is_empty():
 		return
 	if not GameState.is_hero_alive(_selected_hero):
+		var life_box := _create_section_card("⚠️ TRẠNG THÁI SINH MỆNH", Color(1.0, 0.45, 0.45))
 		var life_note := Label.new()
 		life_note.text = "Hero đã tử trận. Đến Sử Điện Anh Hùng dùng 1 Ngọc hồi sinh 7★ để hồi sinh về 100% HP. Điều trị thường không thể hồi sinh."
 		life_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_tab_content_vbox.add_child(life_note)
+		life_box.add_child(life_note)
 		return
 
 	match _active_profile_tab:
@@ -1955,6 +1978,45 @@ func _render_active_profile_tab() -> void:
 		3:
 			_update_pedestal_equipment_overlay(true)
 			_render_tab_equipment(_selected_hero)
+
+func _create_section_card(title: String, accent_color: Color = Color(0.55, 0.90, 1.0)) -> VBoxContainer:
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.clip_contents = true
+	var cs := StyleBoxFlat.new()
+	cs.bg_color = Color(0.08, 0.11, 0.18, 0.92)
+	cs.border_width_left = 1
+	cs.border_width_top = 1
+	cs.border_width_right = 1
+	cs.border_width_bottom = 1
+	cs.border_color = Color(accent_color.r, accent_color.g, accent_color.b, 0.45)
+	cs.corner_radius_top_left = 8
+	cs.corner_radius_top_right = 8
+	cs.corner_radius_bottom_left = 8
+	cs.corner_radius_bottom_right = 8
+	card.add_theme_stylebox_override("panel", cs)
+	_tab_content_vbox.add_child(card)
+
+	var m := MarginContainer.new()
+	m.add_theme_constant_override("margin_left", 12)
+	m.add_theme_constant_override("margin_top", 10)
+	m.add_theme_constant_override("margin_right", 12)
+	m.add_theme_constant_override("margin_bottom", 10)
+	card.add_child(m)
+
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 8)
+	m.add_child(vbox)
+
+	if not title.is_empty():
+		var hdr := Label.new()
+		hdr.text = title
+		hdr.clip_text = true
+		hdr.add_theme_font_size_override("font_size", 13)
+		hdr.add_theme_color_override("font_color", accent_color)
+		vbox.add_child(hdr)
+	return vbox
 
 func _add_tab_header(title: String, color: Color = Color(1.0, 0.88, 0.38)) -> void:
 	var lbl := Label.new()
@@ -1974,8 +2036,6 @@ func _add_tab_info(text: String, color: Color = Color(0.88, 0.92, 0.98)) -> void
 func _render_tab_stats_and_training(h: Dictionary) -> void:
 	if _tab_content_vbox == null:
 		return
-	for c in _tab_content_vbox.get_children():
-		c.queue_free()
 
 	var _hid := str(h.get("id", ""))
 	var star := int(h.get("rarity", 1))
@@ -1995,36 +2055,8 @@ func _render_tab_stats_and_training(h: Dictionary) -> void:
 	var crit_dmg := crit_dmg_raw * 100.0 if (crit_dmg_raw <= 3.0 and crit_dmg_raw > 0.0) else crit_dmg_raw
 	var cp := int(h.get("combatPower", max_hp + atk * 4 + def_val * 3 + spd * 2))
 
-	# Sub-header: Stats (Honkai Star Rail style)
-	_add_tab_header("⚔️ THÔNG SỐ CHIẾN ĐẤU (STATS)", Color(0.9, 0.94, 1.0))
-
-	# Essential Stats Panel (Clean key-value rows matching HSR screenshot)
-	var stats_card := PanelContainer.new()
-	stats_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sc_style := StyleBoxFlat.new()
-	sc_style.bg_color = Color(0.08, 0.11, 0.18, 0.92)
-	sc_style.border_width_left = 1
-	sc_style.border_width_top = 1
-	sc_style.border_width_right = 1
-	sc_style.border_width_bottom = 1
-	sc_style.border_color = Color(0.25, 0.38, 0.55, 0.5)
-	sc_style.corner_radius_top_left = 8
-	sc_style.corner_radius_top_right = 8
-	sc_style.corner_radius_bottom_left = 8
-	sc_style.corner_radius_bottom_right = 8
-	stats_card.add_theme_stylebox_override("panel", sc_style)
-	_tab_content_vbox.add_child(stats_card)
-
-	var sc_margin := MarginContainer.new()
-	sc_margin.add_theme_constant_override("margin_left", 14)
-	sc_margin.add_theme_constant_override("margin_top", 10)
-	sc_margin.add_theme_constant_override("margin_right", 14)
-	sc_margin.add_theme_constant_override("margin_bottom", 10)
-	stats_card.add_child(sc_margin)
-
-	var sc_vbox := VBoxContainer.new()
-	sc_vbox.add_theme_constant_override("separation", 7)
-	sc_margin.add_child(sc_vbox)
+	# Card 1: Combat Stats
+	var sc_vbox := _create_section_card("⚔️ THÔNG SỐ CHIẾN ĐẤU (STATS)", Color(0.55, 0.88, 1.0))
 
 	var stat_items := [
 		{"icon": "❤️", "name": "Sinh Lực (HP)", "val": _format_num(max_hp), "col": Color(1.0, 0.45, 0.45)},
@@ -2043,47 +2075,58 @@ func _render_tab_stats_and_training(h: Dictionary) -> void:
 
 		var ilbl := Label.new()
 		ilbl.text = "%s  %s" % [item["icon"], item["name"]]
-		ilbl.add_theme_font_size_override("font_size", 13)
+		ilbl.add_theme_font_size_override("font_size", 12)
 		ilbl.add_theme_color_override("font_color", Color(0.85, 0.9, 0.98))
 		ilbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(ilbl)
 
 		var vlbl := Label.new()
 		vlbl.text = item["val"]
-		vlbl.add_theme_font_size_override("font_size", 13)
+		vlbl.add_theme_font_size_override("font_size", 12)
 		vlbl.add_theme_color_override("font_color", item["col"])
 		row.add_child(vlbl)
 
-	# Stats Details Button (Honkai Star Rail pill button)
-	var detail_btn_row := HBoxContainer.new()
-	_tab_content_vbox.add_child(detail_btn_row)
-
-	var detail_btn_spacer := Control.new()
-	detail_btn_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail_btn_row.add_child(detail_btn_spacer)
-
 	var stats_detail_btn := Button.new()
-	stats_detail_btn.text = "🔍 Chi Tiết Chỉ Số (Toàn Bộ)"
-	stats_detail_btn.custom_minimum_size = Vector2(200, 32)
+	stats_detail_btn.text = "🔍 Xem Toàn Bộ Chỉ Số Chi Tiết"
+	stats_detail_btn.custom_minimum_size = Vector2(0, 30)
+	stats_detail_btn.clip_text = true
 	stats_detail_btn.add_theme_font_size_override("font_size", 12)
-	var sdb_style := StyleBoxFlat.new()
-	sdb_style.bg_color = Color(0.12, 0.18, 0.28, 0.9)
-	sdb_style.border_width_left = 1
-	sdb_style.border_width_top = 1
-	sdb_style.border_width_right = 1
-	sdb_style.border_width_bottom = 1
-	sdb_style.border_color = Color(0.35, 0.65, 0.95, 0.8)
-	sdb_style.corner_radius_top_left = 16
-	sdb_style.corner_radius_top_right = 16
-	sdb_style.corner_radius_bottom_left = 16
-	sdb_style.corner_radius_bottom_right = 16
-	stats_detail_btn.add_theme_stylebox_override("normal", sdb_style)
 	stats_detail_btn.pressed.connect(_open_stats_detail_modal)
-	detail_btn_row.add_child(stats_detail_btn)
+	sc_vbox.add_child(stats_detail_btn)
 
-	_tab_content_vbox.add_child(HSeparator.new())
+	# Card 2: Personality, Mood & Loyalty
+	var p_data: Dictionary = GameState.get_hero_personality(_hid)
+	if p_data.is_empty():
+		p_data = h
+	var core_t := str(p_data.get("coreTrait", "Dũng cảm"))
+	var social_t := str(p_data.get("socialTrait", "Hòa đồng"))
+	var fav_food := str(p_data.get("favoriteFood", "Bánh Mì Nướng"))
+	var loy_score := int(p_data.get("loyaltyScore", p_data.get("loyalty", 50)))
+	var loy_state := str(p_data.get("loyaltyState", p_data.get("mood", "Bình thường")))
+	var p_vbox := _create_section_card("🧠 TÂM TRẠNG & TÍNH CÁCH", Color(0.68, 0.92, 1.0))
+	var p_lbl := Label.new()
+	p_lbl.text = "• Tính cách: %s • %s\n• Món ăn yêu thích: %s\n• Trung thành: %d/100 (%s)" % [
+		core_t, social_t, fav_food, loy_score, loy_state
+	]
+	p_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	p_lbl.add_theme_font_size_override("font_size", 12)
+	p_lbl.add_theme_color_override("font_color", Color(0.86, 0.92, 0.98))
+	p_vbox.add_child(p_lbl)
 
-	# Smooth EXP progress bar
+	var fav_meal_btn := Button.new()
+	fav_meal_btn.text = "🍰 Tặng món yêu thích (%s)" % fav_food
+	fav_meal_btn.custom_minimum_size = Vector2(0, 32)
+	fav_meal_btn.clip_text = true
+	fav_meal_btn.pressed.connect(func():
+		var res := await GameState.serve_favorite_meal(_hid)
+		if is_instance_valid(self) and res.get("ok", false):
+			_sync_all_roster_data(_hid)
+	)
+	p_vbox.add_child(fav_meal_btn)
+
+	# Card 3: EXP & Level-Up Training
+	var lvl_box := _create_section_card("📘 HUẤN LUYỆN & TĂNG CẤP", Color(0.45, 0.90, 1.0))
+
 	var cur_exp_val := int(h.get("exp", "0"))
 	var next_exp_raw: Variant = h.get("nextLevelExp")
 	var cur_lvl_exp_val := int(h.get("currentLevelExp", "0"))
@@ -2095,7 +2138,7 @@ func _render_tab_stats_and_training(h: Dictionary) -> void:
 		var earned := clampi(cur_exp_val - cur_lvl_exp_val, 0, span)
 		exp_pct = clampf(float(earned) / float(span) * 100.0, 0.0, 100.0)
 		var remaining := maxi(0, next_exp_val - cur_exp_val)
-		exp_detail_text = "📈 EXP: %s / %s (%.1f%%) — Cần thêm: %s EXP để lên Lv.%d" % [
+		exp_detail_text = "📈 EXP: %s / %s (%.1f%%) — Cần thêm %s EXP để lên Lv.%d" % [
 			_format_num(cur_exp_val), _format_num(next_exp_val), exp_pct, _format_num(remaining), lvl + 1
 		]
 	else:
@@ -2103,9 +2146,10 @@ func _render_tab_stats_and_training(h: Dictionary) -> void:
 
 	var exp_lbl := Label.new()
 	exp_lbl.text = exp_detail_text
+	exp_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	exp_lbl.add_theme_font_size_override("font_size", 11)
-	exp_lbl.add_theme_color_override("font_color", Color(0.7, 0.85, 0.98))
-	_tab_content_vbox.add_child(exp_lbl)
+	exp_lbl.add_theme_color_override("font_color", Color(0.75, 0.88, 0.98))
+	lvl_box.add_child(exp_lbl)
 
 	var exp_pbar := ProgressBar.new()
 	exp_pbar.min_value = 0.0
@@ -2114,39 +2158,16 @@ func _render_tab_stats_and_training(h: Dictionary) -> void:
 	exp_pbar.custom_minimum_size = Vector2(0, 10)
 	exp_pbar.show_percentage = false
 	exp_pbar.modulate = Color(0.35, 0.85, 1.0)
-	_tab_content_vbox.add_child(exp_pbar)
+	lvl_box.add_child(exp_pbar)
 
-	# Level-Up Section: 3 Book Types (x1, x10, x100) & Quantity Selector
 	var book_defs := [
-		{
-			"id": "SAMPLE_HERO_EXP_100",
-			"name": "Sơ Cấp (+1k)",
-			"icon": "📘"
-		},
-		{
-			"id": "SAMPLE_HERO_EXP_1000",
-			"name": "Trung Cấp (+100k)",
-			"icon": "📗"
-		},
-		{
-			"id": "SAMPLE_HERO_EXP_10000",
-			"name": "Cao Cấp (+10M)",
-			"icon": "📙"
-		}
+		{"id": "SAMPLE_HERO_EXP_100", "name": "Sơ (+1k)", "icon": "📘"},
+		{"id": "SAMPLE_HERO_EXP_1000", "name": "Trung (+100k)", "icon": "📗"},
+		{"id": "SAMPLE_HERO_EXP_10000", "name": "Cao (+10M)", "icon": "📙"}
 	]
-
 	var cur_book_id := _selected_exp_book_id
 	var cur_book_count := int(GameState.materials.get(cur_book_id, 0))
 	var is_max_reach := lvl >= max_lvl
-	
-	var lvl_box := VBoxContainer.new()
-	lvl_box.add_theme_constant_override("separation", 6)
-
-	var lvl_header := Label.new()
-	lvl_header.text = "📘 NÂNG CẤP HERO BẰNG SÁCH EXP (CHỌN LOẠI SÁCH):"
-	lvl_header.add_theme_font_size_override("font_size", 13)
-	lvl_header.add_theme_color_override("font_color", Color(0.55, 0.9, 1.0))
-	lvl_box.add_child(lvl_header)
 
 	var book_sel_row := HBoxContainer.new()
 	book_sel_row.add_theme_constant_override("separation", 6)
@@ -2158,11 +2179,9 @@ func _render_tab_stats_and_training(h: Dictionary) -> void:
 		bbtn.text = "%s %s: %s" % [str(binfo["icon"]), str(binfo["name"]), _format_num(bcnt)]
 		bbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		bbtn.custom_minimum_size = Vector2(0, 30)
+		bbtn.clip_text = true
 		bbtn.add_theme_font_size_override("font_size", 11)
-		if is_cur:
-			bbtn.modulate = Color(1.25, 1.25, 1.0)
-		else:
-			bbtn.modulate = Color(0.7, 0.75, 0.8)
+		bbtn.modulate = Color(1.25, 1.25, 1.0) if is_cur else Color(0.75, 0.82, 0.90)
 		bbtn.pressed.connect(func():
 			_selected_exp_book_id = bid
 			_render_active_profile_tab()
@@ -2173,60 +2192,43 @@ func _render_tab_stats_and_training(h: Dictionary) -> void:
 	var lvl_row := HBoxContainer.new()
 	lvl_row.add_theme_constant_override("separation", 6)
 
-	# 1. Nút tăng cấp tối đa
 	var max_btn := Button.new()
-	max_btn.text = "⚡ Đạt Cấp Trần (Lv.%d)" % max_lvl
+	max_btn.text = "⚡ Lên Lv.%d" % max_lvl
 	max_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	max_btn.custom_minimum_size = Vector2(0, 34)
+	max_btn.custom_minimum_size = Vector2(0, 32)
+	max_btn.clip_text = true
 	max_btn.disabled = (cur_book_count <= 0 or is_max_reach)
 	max_btn.pressed.connect(func(): _on_level_up_hero(1, true, cur_book_id))
 	lvl_row.add_child(max_btn)
 
-	# 2. Chọn số lượng bằng SpinBox + Nút đọc
 	var spin_box := SpinBox.new()
 	spin_box.min_value = 1
 	spin_box.max_value = maxi(1, cur_book_count)
 	spin_box.value = clampi(10, 1, maxi(1, cur_book_count))
-	spin_box.custom_minimum_size = Vector2(80, 34)
+	spin_box.custom_minimum_size = Vector2(72, 32)
 	lvl_row.add_child(spin_box)
 
 	var use_qty_btn := Button.new()
-	use_qty_btn.text = "📖 Đọc Sách"
-	use_qty_btn.custom_minimum_size = Vector2(100, 34)
+	use_qty_btn.text = "📖 Đọc"
+	use_qty_btn.custom_minimum_size = Vector2(72, 32)
 	use_qty_btn.disabled = (cur_book_count <= 0 or is_max_reach)
 	use_qty_btn.pressed.connect(func(): _on_level_up_hero(int(spin_box.value), false, cur_book_id))
 	lvl_row.add_child(use_qty_btn)
 
-	# 3. Phím tắt nhanh +1, +10, +50
-	var plus1_btn := Button.new()
-	plus1_btn.text = "+1"
-	plus1_btn.custom_minimum_size = Vector2(36, 34)
-	plus1_btn.disabled = (cur_book_count <= 0 or is_max_reach)
-	plus1_btn.pressed.connect(func(): _on_level_up_hero(1, false, cur_book_id))
-	lvl_row.add_child(plus1_btn)
-
-	var plus10_btn := Button.new()
-	plus10_btn.text = "+10"
-	plus10_btn.custom_minimum_size = Vector2(42, 34)
-	plus10_btn.disabled = (cur_book_count < 10 or is_max_reach)
-	plus10_btn.pressed.connect(func(): _on_level_up_hero(10, false, cur_book_id))
-	lvl_row.add_child(plus10_btn)
-
-	var plus50_btn := Button.new()
-	plus50_btn.text = "+50"
-	plus50_btn.custom_minimum_size = Vector2(42, 34)
-	plus50_btn.disabled = (cur_book_count < 50 or is_max_reach)
-	plus50_btn.pressed.connect(func(): _on_level_up_hero(50, false, cur_book_id))
-	lvl_row.add_child(plus50_btn)
+	for q_val in [1, 10, 50]:
+		var q_num: int = int(q_val)
+		var qbtn := Button.new()
+		qbtn.text = "+%d" % q_num
+		qbtn.custom_minimum_size = Vector2(36, 32)
+		qbtn.disabled = (cur_book_count < q_num or is_max_reach)
+		qbtn.pressed.connect(func(): _on_level_up_hero(q_num, false, cur_book_id))
+		lvl_row.add_child(qbtn)
 
 	lvl_box.add_child(lvl_row)
-	_tab_content_vbox.add_child(lvl_box)
 
 func _render_tab_skills_and_awakening(h: Dictionary) -> void:
 	if _tab_content_vbox == null:
 		return
-	for c in _tab_content_vbox.get_children():
-		c.queue_free()
 
 	var hid := str(h.get("id", ""))
 	var star := int(h.get("rarity", 1))
@@ -2235,11 +2237,16 @@ func _render_tab_skills_and_awakening(h: Dictionary) -> void:
 	var max_awk := _get_hero_max_imprint_slots(star)
 	var skill_books := int(GameState.materials.get("SAMPLE_HERO_SKILL_BOOK", 0))
 
-	_add_tab_header("⚔️ KỸ NĂNG HỆ PHÁI & CƠ CHẾ AUTO/MANUAL (Sách Kỹ Năng: %d)" % skill_books, Color(0.58, 0.94, 1.0))
+	var skills_box := _create_section_card("⚔️ KỸ NĂNG HỆ PHÁI (Sách Kỹ Năng: %d)" % skill_books, Color(0.58, 0.94, 1.0))
 
 	var skills: Array = h.get("skills", []) if h.get("skills") is Array else []
 	if skills.is_empty():
-		_add_tab_info("ℹ️ Tướng này hiện chưa có kỹ năng hệ phái chuyên biệt.", Color(0.8, 0.85, 0.92))
+		var empty_sk := Label.new()
+		empty_sk.text = "ℹ️ Tướng này hiện chưa có kỹ năng hệ phái chuyên biệt."
+		empty_sk.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty_sk.add_theme_font_size_override("font_size", 12)
+		empty_sk.add_theme_color_override("font_color", Color(0.8, 0.85, 0.92))
+		skills_box.add_child(empty_sk)
 	else:
 		for sk in skills:
 			if not (sk is Dictionary):
@@ -2255,14 +2262,17 @@ func _render_tab_skills_and_awakening(h: Dictionary) -> void:
 			var eff_val := float(sk.get("skillEffectValue", sk.get("effectValue", 100)))
 
 			var sk_card := PanelContainer.new()
+			sk_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			var cstyle := StyleBoxFlat.new()
-			cstyle.bg_color = Color(0.09, 0.13, 0.20, 0.92)
-			cstyle.border_width_left = 2
+			cstyle.bg_color = Color(0.06, 0.09, 0.15, 0.94)
+			cstyle.border_width_left = 3
 			cstyle.border_color = Color(0.35, 0.88, 0.65) if is_unlocked else Color(0.45, 0.50, 0.60)
 			cstyle.corner_radius_top_left = 6
+			cstyle.corner_radius_top_right = 6
 			cstyle.corner_radius_bottom_left = 6
+			cstyle.corner_radius_bottom_right = 6
 			sk_card.add_theme_stylebox_override("panel", cstyle)
-			_tab_content_vbox.add_child(sk_card)
+			skills_box.add_child(sk_card)
 
 			var sm := MarginContainer.new()
 			sm.add_theme_constant_override("margin_left", 10)
@@ -2276,12 +2286,12 @@ func _render_tab_skills_and_awakening(h: Dictionary) -> void:
 			sm.add_child(sv)
 
 			var slbl := Label.new()
-			slbl.text = "%s %s (Lv.%d/%d) — Hiệu lực: %d%% [Chế độ: %s]\n   %s (Mở khóa ở Lv.%d)" % [
+			slbl.text = "%s %s (Lv.%d/%d) — Hiệu lực: %d%% [%s]\n%s (Mở ở Lv.%d)" % [
 				"✅" if is_unlocked else "🔒",
 				sk_name, sk_lvl, sk_max, int(eff_val), mode, sk_desc, req_lvl
 			]
 			slbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			slbl.add_theme_font_size_override("font_size", 13)
+			slbl.add_theme_font_size_override("font_size", 12)
 			sv.add_child(slbl)
 
 			var sbtn_row := HBoxContainer.new()
@@ -2290,57 +2300,71 @@ func _render_tab_skills_and_awakening(h: Dictionary) -> void:
 
 			if not is_unlocked:
 				var ubtn := Button.new()
-				ubtn.text = "🔓 Mở Khóa Kỹ Năng (Yêu cầu Lv.%d)" % req_lvl
+				ubtn.text = "🔓 Mở Khóa (Lv.%d)" % req_lvl
+				ubtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				ubtn.clip_text = true
 				ubtn.disabled = hlvl < req_lvl
 				ubtn.pressed.connect(func(): _on_unlock_skill_pressed(hid, sk_code, sk_name))
 				sbtn_row.add_child(ubtn)
 			else:
 				var upg_btn := Button.new()
-				upg_btn.text = "📕 Nâng Cấp Kỹ Năng (Lv.%d ➔ %d)" % [sk_lvl, sk_lvl + 1]
+				upg_btn.text = "📕 Nâng Cấp (Lv.%d ➔ %d)" % [sk_lvl, sk_lvl + 1]
+				upg_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				upg_btn.clip_text = true
 				upg_btn.disabled = (sk_lvl >= sk_max or skill_books <= 0)
 				upg_btn.pressed.connect(func(): _on_upgrade_skill_pressed(hid, sk_code, sk_name))
 				sbtn_row.add_child(upg_btn)
 
 				var next_mode := "MANUAL" if mode == "AUTO" else "AUTO"
 				var mbtn := Button.new()
-				mbtn.text = "🤖 Đổi sang %s" % next_mode
+				mbtn.text = "🤖 %s" % next_mode
+				mbtn.custom_minimum_size = Vector2(96, 30)
 				mbtn.pressed.connect(func(): _on_toggle_skill_behavior(hid, sk_code, next_mode))
 				sbtn_row.add_child(mbtn)
 
-	_tab_content_vbox.add_child(HSeparator.new())
-	_add_tab_header("🌟 THỨC TỈNH HUYẾT MẠCH (BẬC HIỆN TẠI: +%d / +%d)" % [awaken_rank, max_awk], Color(1.0, 0.86, 0.35))
-	_add_tab_info("• Mỗi bậc Thức Tỉnh tăng +10 toàn bộ STR/INT/STA/AGI, nâng +1 cấp kỹ năng và mở khóa 1 Ô Ấn Ký Huyết Mạch (Imprint)!", Color(0.95, 0.88, 0.72))
+	var awk_box := _create_section_card("🌟 THỨC TỈNH HUYẾT MẠCH (BẬC +%d / +%d)" % [awaken_rank, max_awk], Color(1.0, 0.86, 0.35))
+	var awk_info := Label.new()
+	awk_info.text = "• Mỗi bậc Thức Tỉnh tăng +10 toàn bộ STR/INT/STA/AGI, nâng +1 cấp kỹ năng và mở khóa 1 Ô Ấn Ký Huyết Mạch (Imprint)."
+	awk_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	awk_info.add_theme_font_size_override("font_size", 12)
+	awk_info.add_theme_color_override("font_color", Color(0.92, 0.88, 0.76))
+	awk_box.add_child(awk_info)
+
 	var awk_btn := Button.new()
 	if awaken_rank >= max_awk:
-		awk_btn.text = "🌟 Đã Đạt Bậc Thức Tỉnh Tối Đa (Bậc +%d)" % max_awk
+		awk_btn.text = "🌟 Đã Đạt Bậc Thức Tỉnh Tối Đa (+%d)" % max_awk
 		awk_btn.disabled = true
 	else:
-		awk_btn.text = "🩸 Xem Nghi Thức Thức Tỉnh Huyết Mạch (Bậc +%d ➔ +%d)" % [awaken_rank, awaken_rank + 1]
+		awk_btn.text = "🩸 Nghi Thức Thức Tỉnh (+%d ➔ +%d)" % [awaken_rank, awaken_rank + 1]
 		awk_btn.disabled = false
-	awk_btn.custom_minimum_size = Vector2(0, 36)
+	awk_btn.custom_minimum_size = Vector2(0, 34)
+	awk_btn.clip_text = true
 	awk_btn.pressed.connect(_on_open_awaken_pressed)
-	_tab_content_vbox.add_child(awk_btn)
+	awk_box.add_child(awk_btn)
 
 func _render_tab_imprints(h: Dictionary) -> void:
 	if _tab_content_vbox == null:
 		return
-	for c in _tab_content_vbox.get_children():
-		c.queue_free()
 
 	var star := int(h.get("rarity", 1))
 	var awaken_rank := int(h.get("awakeningRank", 0))
 	var max_slots := _get_hero_max_imprint_slots(star)
 	var unlocked_slots := clampi(awaken_rank, 0, max_slots)
 
-	_add_tab_header("💠 Ô ẤN KÝ HUYẾT MẠCH (%d MỞ KHÓA / %d TỐI ĐA • %d ĐÃ KHẢM)" % [unlocked_slots, max_slots, _hero_imprints.size()], Color(0.84, 0.65, 1.0))
-	_add_tab_info("• Mặc định tất cả các Ô Ấn Ký đều KHÓA 🔒.\n• Mỗi bậc Thức Tỉnh Huyết Mạch mở khóa 1 Ô (ở trạng thái Trống ⭕).\n• Ấn Ký Huyết Mạch rơi từ Dungeon / Tháp Chinh Phạt với tỉ lệ cực thấp (tính năng khảm sẽ sớm ra mắt).", Color(0.86, 0.82, 0.98))
+	var imp_box := _create_section_card("💠 Ô ẤN KÝ HUYẾT MẠCH (%d/%d MỞ KHÓA • %d ĐÃ KHẢM)" % [unlocked_slots, max_slots, _hero_imprints.size()], Color(0.84, 0.65, 1.0))
+	var imp_info := Label.new()
+	imp_info.text = "• Mặc định tất cả các Ô Ấn Ký đều KHÓA 🔒.\n• Mỗi bậc Thức Tỉnh Huyết Mạch mở khóa 1 Ô.\n• Ấn Ký rơi từ Dungeon / Tháp Chinh Phạt."
+	imp_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	imp_info.add_theme_font_size_override("font_size", 12)
+	imp_info.add_theme_color_override("font_color", Color(0.86, 0.82, 0.98))
+	imp_box.add_child(imp_info)
 
 	var imp_grid := GridContainer.new()
 	imp_grid.columns = 2
 	imp_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	imp_grid.add_theme_constant_override("h_separation", 8)
 	imp_grid.add_theme_constant_override("v_separation", 8)
-	_tab_content_vbox.add_child(imp_grid)
+	imp_box.add_child(imp_grid)
 
 	for slot_i in range(max_slots):
 		var slot_card := PanelContainer.new()
@@ -2654,7 +2678,7 @@ func _build_pedestal_slot_card(slot_info: Dictionary, item_data: Variant, _hid: 
 		_equipment_selected_slot = slot_id
 		_equipment_inspected_item_id = ""
 		_update_pedestal_equipment_overlay(true)
-		_render_tab_equipment(_selected_hero)
+		_render_active_profile_tab()
 	)
 	card.add_child(click_btn)
 
@@ -2663,8 +2687,6 @@ func _build_pedestal_slot_card(slot_info: Dictionary, item_data: Variant, _hid: 
 func _render_tab_equipment(h: Dictionary) -> void:
 	if _tab_content_vbox == null:
 		return
-	for c in _tab_content_vbox.get_children():
-		c.queue_free()
 
 	var hid: String = str(h.get("id", ""))
 	var hname: String = str(h.get("name", "Hero"))
@@ -2697,56 +2719,20 @@ func _render_tab_equipment(h: Dictionary) -> void:
 			current_slot_icon = str(s_entry["icon"])
 			break
 
-	# Top Header & Fast Actions Row
-	var header_hbox := HBoxContainer.new()
-	header_hbox.add_theme_constant_override("separation", 8)
-
-	var title_lbl := Label.new()
-	title_lbl.text = "%s Ô TRANG BỊ: %s" % [current_slot_icon, current_slot_name.to_upper()]
-	title_lbl.add_theme_font_size_override("font_size", 13)
-	title_lbl.add_theme_color_override("font_color", Color(0.45, 0.92, 1.0))
-	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_hbox.add_child(title_lbl)
-
-	var quick_eq_btn := Button.new()
-	quick_eq_btn.text = "⚡ Trang Bị Nhanh"
-	quick_eq_btn.custom_minimum_size = Vector2(120, 28)
-	quick_eq_btn.add_theme_font_size_override("font_size", 11)
-	quick_eq_btn.modulate = Color(1.0, 0.92, 0.45)
-	quick_eq_btn.pressed.connect(func(): _on_quick_equip_pressed(hid, hname))
-	header_hbox.add_child(quick_eq_btn)
-
-	var quick_uneq_btn := Button.new()
-	quick_uneq_btn.text = "🔄 Tháo Đồ Nhanh"
-	quick_uneq_btn.custom_minimum_size = Vector2(115, 28)
-	quick_uneq_btn.add_theme_font_size_override("font_size", 11)
-	quick_uneq_btn.modulate = Color(1.0, 0.65, 0.65)
-	quick_uneq_btn.pressed.connect(func(): _on_quick_unequip_pressed(hid, hname))
-	header_hbox.add_child(quick_uneq_btn)
-
-	_tab_content_vbox.add_child(header_hbox)
-
 	# Collect matching items for _equipment_selected_slot
 	var matching_items: Array = []
 	var equipped_in_slot: Dictionary = equips.get(_equipment_selected_slot, {})
-
 	if not equipped_in_slot.is_empty():
 		matching_items.append(equipped_in_slot)
-
 	for it in all_equipment:
 		if not (it is Dictionary):
 			continue
 		var item_id: String = _extract_item_id(it)
-		if not equipped_in_slot.is_empty():
-			var eq_id: String = _extract_item_id(equipped_in_slot)
-			if item_id == eq_id:
-				continue
-
-		var item_slot: String = _extract_item_slot_type(it)
-		if _is_item_matching_slot(item_slot, _equipment_selected_slot):
+		if not equipped_in_slot.is_empty() and item_id == _extract_item_id(equipped_in_slot):
+			continue
+		if _is_item_matching_slot(_extract_item_slot_type(it), _equipment_selected_slot):
 			matching_items.append(it)
 
-	# Apply rarity filter if set
 	var filtered_items: Array = []
 	for it in matching_items:
 		var tmpl: Dictionary = it.get("template", {}) if it.get("template") is Dictionary else it
@@ -2761,241 +2747,51 @@ func _render_tab_equipment(h: Dictionary) -> void:
 			continue
 		filtered_items.append(it)
 
-	# Determine inspected item:
 	var inspected_item: Dictionary = {}
 	if not _equipment_inspected_item_id.is_empty():
 		for it in filtered_items:
 			var eq: Dictionary = it.get("equipment", {}) if it.get("equipment") is Dictionary else it
-			var item_id: String = str(eq.get("id", it.get("id", "")))
-			if item_id == _equipment_inspected_item_id:
+			if str(eq.get("id", it.get("id", ""))) == _equipment_inspected_item_id:
 				inspected_item = it
 				break
-
 	if inspected_item.is_empty() and not filtered_items.is_empty():
 		inspected_item = filtered_items[0]
 		var eq_0: Dictionary = inspected_item.get("equipment", {}) if inspected_item.get("equipment") is Dictionary else inspected_item
 		_equipment_inspected_item_id = str(eq_0.get("id", inspected_item.get("id", "")))
 
-	# =========================================================================
-	# GENSHIN ARTIFACT 2-COLUMN SPLIT
-	# =========================================================================
-	var genshin_split := HBoxContainer.new()
-	genshin_split.add_theme_constant_override("separation", 10)
-	genshin_split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	genshin_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_tab_content_vbox.add_child(genshin_split)
+	# Card 1: Active Slot & Quick Actions + Inspected Item Detail (Single-column, unified style)
+	var rdvbox := _create_section_card("%s Ô TRANG BỊ: %s" % [current_slot_icon, current_slot_name.to_upper()], Color(0.45, 0.92, 1.0))
 
-	# --- COLUMN 1: ARTIFACT GRID (Kho Thánh Di Vật / Trang Bị) ---
-	var left_col := VBoxContainer.new()
-	left_col.custom_minimum_size = Vector2(210, 0)
-	left_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left_col.size_flags_stretch_ratio = 1.0
-	left_col.add_theme_constant_override("separation", 6)
-	genshin_split.add_child(left_col)
+	var fast_row := HBoxContainer.new()
+	fast_row.add_theme_constant_override("separation", 8)
+	rdvbox.add_child(fast_row)
 
-	var filter_row := HBoxContainer.new()
-	filter_row.add_theme_constant_override("separation", 4)
-	left_col.add_child(filter_row)
+	var quick_eq_btn := Button.new()
+	quick_eq_btn.text = "⚡ Trang Bị Nhanh"
+	quick_eq_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quick_eq_btn.custom_minimum_size = Vector2(0, 30)
+	quick_eq_btn.clip_text = true
+	quick_eq_btn.add_theme_font_size_override("font_size", 11)
+	quick_eq_btn.modulate = Color(1.0, 0.92, 0.45)
+	quick_eq_btn.pressed.connect(func(): _on_quick_equip_pressed(hid, hname))
+	fast_row.add_child(quick_eq_btn)
 
-	var filter_lbl := Label.new()
-	filter_lbl.text = "%s (%d)" % [current_slot_name, filtered_items.size()]
-	filter_lbl.add_theme_font_size_override("font_size", 11)
-	filter_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45))
-	filter_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	filter_row.add_child(filter_lbl)
-
-	for f_opt in [
-		{"label": "Tất Cả", "val": 0},
-		{"label": "6-7★", "val": 6},
-		{"label": "5★", "val": 5},
-		{"label": "4★", "val": 4},
-		{"label": "1-3★", "val": 3}
-	]:
-		var f_btn := Button.new()
-		f_btn.text = str(f_opt["label"])
-		f_btn.custom_minimum_size = Vector2(38, 22)
-		f_btn.add_theme_font_size_override("font_size", 9)
-		if _equipment_rarity_filter == int(f_opt["val"]):
-			f_btn.modulate = Color(1.0, 0.88, 0.35)
-		else:
-			f_btn.modulate = Color(0.75, 0.85, 0.95)
-		f_btn.pressed.connect(func():
-			_equipment_rarity_filter = int(f_opt["val"])
-			_render_tab_equipment(_selected_hero)
-		)
-		filter_row.add_child(f_btn)
-
-	var grid_scroll := ScrollContainer.new()
-	grid_scroll.custom_minimum_size = Vector2(0, 300)
-	grid_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	grid_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	left_col.add_child(grid_scroll)
-
-	if filtered_items.is_empty():
-		var empty_box := CenterContainer.new()
-		empty_box.custom_minimum_size = Vector2(0, 180)
-		empty_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var empty_lbl := Label.new()
-		empty_lbl.text = "📦 Không có trang bị nào cho ô [%s]\ntrong Túi Đồ hoặc trên Tướng." % current_slot_name
-		empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty_lbl.add_theme_font_size_override("font_size", 11)
-		empty_lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.85))
-		empty_box.add_child(empty_lbl)
-		grid_scroll.add_child(empty_box)
-	else:
-		var art_grid := GridContainer.new()
-		art_grid.columns = 2
-		art_grid.add_theme_constant_override("h_separation", 6)
-		art_grid.add_theme_constant_override("v_separation", 6)
-		art_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		grid_scroll.add_child(art_grid)
-
-		for it in filtered_items:
-			var eq: Dictionary = it.get("equipment", {}) if it.get("equipment") is Dictionary else it
-			var tmpl: Dictionary = it.get("template", {}) if it.get("template") is Dictionary else it
-			var item_id: String = str(eq.get("id", it.get("id", "")))
-			var item_name: String = str(tmpl.get("name", it.get("name", "Trang bị")))
-			var estar: int = int(tmpl.get("rarity", eq.get("starLevel", 1)))
-			var eenh: int = int(eq.get("enhanceLevel", it.get("enhanceLevel", 0)))
-			var eq_hero_id: String = str(eq.get("equippedHeroId", it.get("equippedHeroId", "")))
-			var is_curr_hero: bool = (eq_hero_id == hid and not hid.is_empty())
-			var is_inspected: bool = (item_id == _equipment_inspected_item_id)
-			var r_col: Color = _get_rarity_border_color(estar)
-
-			var art_card := PanelContainer.new()
-			art_card.custom_minimum_size = Vector2(96, 68)
-			art_card.clip_contents = true
-
-			var astyle := StyleBoxFlat.new()
-			astyle.corner_radius_top_left = 6
-			astyle.corner_radius_top_right = 6
-			astyle.corner_radius_bottom_left = 6
-			astyle.corner_radius_bottom_right = 6
-
-			if is_inspected:
-				astyle.bg_color = Color(0.12, 0.18, 0.28, 0.96)
-				astyle.border_width_left = 2
-				astyle.border_width_top = 2
-				astyle.border_width_right = 2
-				astyle.border_width_bottom = 2
-				astyle.border_color = Color(0.35, 0.95, 1.0)
-			else:
-				astyle.bg_color = Color(0.06, 0.08, 0.13, 0.90)
-				astyle.border_width_left = 1
-				astyle.border_width_top = 1
-				astyle.border_width_right = 1
-				astyle.border_width_bottom = 1
-				astyle.border_color = r_col
-
-			art_card.add_theme_stylebox_override("panel", astyle)
-
-			var am := MarginContainer.new()
-			am.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			am.add_theme_constant_override("margin_left", 4)
-			am.add_theme_constant_override("margin_top", 4)
-			am.add_theme_constant_override("margin_right", 4)
-			am.add_theme_constant_override("margin_bottom", 4)
-			art_card.add_child(am)
-
-			var avbox := VBoxContainer.new()
-			avbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			avbox.add_theme_constant_override("separation", 2)
-			am.add_child(avbox)
-
-			var atop := HBoxContainer.new()
-			atop.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var aicon := Label.new()
-			aicon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			aicon.text = current_slot_icon
-			aicon.add_theme_font_size_override("font_size", 9)
-			atop.add_child(aicon)
-
-			var astar_lbl := Label.new()
-			astar_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			astar_lbl.text = "★".repeat(estar)
-			astar_lbl.add_theme_font_size_override("font_size", 8)
-			astar_lbl.add_theme_color_override("font_color", r_col)
-			astar_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			atop.add_child(astar_lbl)
-
-			if eenh > 0:
-				var aenh_lbl := Label.new()
-				aenh_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				aenh_lbl.text = "+%d" % eenh
-				aenh_lbl.add_theme_font_size_override("font_size", 8)
-				aenh_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.25))
-				atop.add_child(aenh_lbl)
-			avbox.add_child(atop)
-
-			var aname_lbl := Label.new()
-			aname_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			aname_lbl.text = item_name
-			aname_lbl.clip_text = true
-			aname_lbl.add_theme_font_size_override("font_size", 9)
-			aname_lbl.add_theme_color_override("font_color", r_col)
-			avbox.add_child(aname_lbl)
-
-			var astatus_lbl := Label.new()
-			astatus_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			if is_curr_hero:
-				astatus_lbl.text = "✅ Đang mặc"
-				astatus_lbl.add_theme_color_override("font_color", Color(0.45, 0.95, 0.55))
-			elif not eq_hero_id.is_empty():
-				astatus_lbl.text = "👤 Đang dùng"
-				astatus_lbl.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35))
-			else:
-				astatus_lbl.text = "📦 Trong Túi"
-				astatus_lbl.add_theme_color_override("font_color", Color(0.65, 0.80, 0.95))
-			astatus_lbl.add_theme_font_size_override("font_size", 8)
-			avbox.add_child(astatus_lbl)
-
-			var abtn := Button.new()
-			abtn.flat = true
-			abtn.set_anchors_preset(Control.PRESET_FULL_RECT)
-			abtn.pressed.connect(func():
-				_equipment_inspected_item_id = item_id
-				_render_tab_equipment(_selected_hero)
-			)
-			art_card.add_child(abtn)
-			art_grid.add_child(art_card)
-
-	# --- COLUMN 2: GENSHIN ARTIFACT DETAILS & ACTIONS ---
-	var right_detail_card := PanelContainer.new()
-	right_detail_card.custom_minimum_size = Vector2(240, 0)
-	right_detail_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_detail_card.size_flags_stretch_ratio = 1.15
-	var rd_style := StyleBoxFlat.new()
-	rd_style.bg_color = Color(0.06, 0.08, 0.14, 0.95)
-	rd_style.border_width_left = 1
-	rd_style.border_width_top = 1
-	rd_style.border_width_right = 1
-	rd_style.border_width_bottom = 1
-	rd_style.border_color = Color(0.25, 0.38, 0.55, 0.6)
-	rd_style.corner_radius_top_left = 8
-	rd_style.corner_radius_top_right = 8
-	rd_style.corner_radius_bottom_left = 8
-	rd_style.corner_radius_bottom_right = 8
-	right_detail_card.add_theme_stylebox_override("panel", rd_style)
-	genshin_split.add_child(right_detail_card)
-
-	var rdm := MarginContainer.new()
-	rdm.add_theme_constant_override("margin_left", 12)
-	rdm.add_theme_constant_override("margin_top", 10)
-	rdm.add_theme_constant_override("margin_right", 12)
-	rdm.add_theme_constant_override("margin_bottom", 10)
-	right_detail_card.add_child(rdm)
-
-	var rdvbox := VBoxContainer.new()
-	rdvbox.add_theme_constant_override("separation", 6)
-	rdm.add_child(rdvbox)
+	var quick_uneq_btn := Button.new()
+	quick_uneq_btn.text = "🔄 Tháo Đồ Nhanh"
+	quick_uneq_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	quick_uneq_btn.custom_minimum_size = Vector2(0, 30)
+	quick_uneq_btn.clip_text = true
+	quick_uneq_btn.add_theme_font_size_override("font_size", 11)
+	quick_uneq_btn.modulate = Color(1.0, 0.65, 0.65)
+	quick_uneq_btn.pressed.connect(func(): _on_quick_unequip_pressed(hid, hname))
+	fast_row.add_child(quick_uneq_btn)
 
 	if inspected_item.is_empty():
 		var empty_lbl := Label.new()
-		empty_lbl.text = "👈 Hãy chọn một trang bị ở danh sách bên trái để kiểm tra chi tiết và trang bị!"
+		empty_lbl.text = "📦 Chưa có trang bị nào cho ô [%s]. Chọn ô khác quanh mô hình 3D hoặc rèn thêm tại Lò Rèn." % current_slot_name
 		empty_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty_lbl.add_theme_font_size_override("font_size", 12)
-		empty_lbl.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9))
+		empty_lbl.add_theme_color_override("font_color", Color(0.72, 0.82, 0.92))
 		rdvbox.add_child(empty_lbl)
 	else:
 		var insp_eq: Dictionary = inspected_item.get("equipment", {}) if inspected_item.get("equipment") is Dictionary else inspected_item
@@ -3015,19 +2811,9 @@ func _render_tab_equipment(h: Dictionary) -> void:
 		var i_spd: int = int(insp_tmpl.get("bonusSpeed", insp_tmpl.get("spdBonus", 0)))
 		var i_matk: int = int(float(insp_tmpl.get("bonusMatk", 0)) * enh_bonus)
 
-		var v2: Dictionary = insp_tmpl.get("v2Stats", {}) if insp_tmpl.get("v2Stats") is Dictionary else {}
-		var i_crit: float = float(v2.get("critRate", 0.0))
-		var i_cdmg: float = float(v2.get("critDamage", 0.0))
-		var i_eva: float = float(v2.get("evasion", 0.0))
-		var i_ls: int = int(v2.get("lifesteal", 0))
-		var i_dr: int = int(v2.get("damageReduction", 0))
-		var i_pen: int = int(v2.get("armorPen", v2.get("magicPen", 0)))
-		var i_acc: int = int(v2.get("accuracy", 0))
-
-		# Header: Name, Stars, Type
 		var d_head := HBoxContainer.new()
 		var d_name := Label.new()
-		d_name.text = insp_name
+		d_name.text = "%s (+%d)" % [insp_name, insp_enh]
 		d_name.clip_text = true
 		d_name.add_theme_font_size_override("font_size", 14)
 		d_name.add_theme_color_override("font_color", insp_r_col)
@@ -3035,161 +2821,41 @@ func _render_tab_equipment(h: Dictionary) -> void:
 		d_head.add_child(d_name)
 
 		var d_star := Label.new()
-		d_star.text = "★".repeat(insp_star)
+		d_star.text = "★".repeat(clampi(insp_star, 1, 7))
 		d_star.add_theme_font_size_override("font_size", 12)
 		d_star.add_theme_color_override("font_color", insp_r_col)
 		d_head.add_child(d_star)
 		rdvbox.add_child(d_head)
 
-		var d_subhead := Label.new()
-		d_subhead.text = "%s %s • Cấp Cường Hóa +%d / 20" % [current_slot_icon, current_slot_name, insp_enh]
-		d_subhead.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		d_subhead.add_theme_font_size_override("font_size", 10)
-		d_subhead.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9))
-		rdvbox.add_child(d_subhead)
+		var stat_parts: Array[String] = []
+		if i_atk > 0: stat_parts.append("⚔️ ATK +%d" % i_atk)
+		if i_def > 0: stat_parts.append("🛡️ DEF +%d" % i_def)
+		if i_hp > 0: stat_parts.append("❤️ HP +%d" % i_hp)
+		if i_matk > 0: stat_parts.append("🔮 MATK +%d" % i_matk)
+		if i_spd > 0: stat_parts.append("💨 SPD +%d" % i_spd)
+		if stat_parts.is_empty(): stat_parts.append("✨ Toàn diện +15")
 
-		rdvbox.add_child(HSeparator.new())
+		var stat_sum := Label.new()
+		stat_sum.text = " • ".join(stat_parts)
+		stat_sum.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		stat_sum.add_theme_font_size_override("font_size", 12)
+		stat_sum.add_theme_color_override("font_color", Color(0.95, 0.98, 1.0))
+		rdvbox.add_child(stat_sum)
 
-		# Main Stat Banner (Genshin Style)
-		var main_stat_box := PanelContainer.new()
-		var ms_style := StyleBoxFlat.new()
-		ms_style.bg_color = Color(0.10, 0.14, 0.22, 0.95)
-		ms_style.corner_radius_top_left = 6
-		ms_style.corner_radius_top_right = 6
-		ms_style.corner_radius_bottom_left = 6
-		ms_style.corner_radius_bottom_right = 6
-		ms_style.border_width_left = 3
-		ms_style.border_color = insp_r_col
-		main_stat_box.add_theme_stylebox_override("panel", ms_style)
-
-		var ms_m := MarginContainer.new()
-		ms_m.add_theme_constant_override("margin_left", 8)
-		ms_m.add_theme_constant_override("margin_top", 6)
-		ms_m.add_theme_constant_override("margin_right", 8)
-		ms_m.add_theme_constant_override("margin_bottom", 6)
-		main_stat_box.add_child(ms_m)
-
-		var ms_vbox := VBoxContainer.new()
-		ms_vbox.add_theme_constant_override("separation", 2)
-		ms_m.add_child(ms_vbox)
-
-		var ms_title := Label.new()
-		ms_title.text = "THUỘC TÍNH CHÍNH"
-		ms_title.add_theme_font_size_override("font_size", 9)
-		ms_title.add_theme_color_override("font_color", Color(0.75, 0.85, 0.95))
-		ms_vbox.add_child(ms_title)
-
-		var ms_val_str := ""
-		if i_atk > 0:
-			ms_val_str = "⚔️ Tấn Công: +%d" % i_atk
-		elif i_def > 0:
-			ms_val_str = "🛡️ Phòng Ngự: +%d" % i_def
-		elif i_hp > 0:
-			ms_val_str = "❤️ Sinh Lực: +%d" % i_hp
-		elif i_matk > 0:
-			ms_val_str = "🔮 Công Phép: +%d" % i_matk
-		elif i_spd > 0:
-			ms_val_str = "💨 Tốc Độ: +%d" % i_spd
-		else:
-			ms_val_str = "✨ Toàn Diện: +15"
-
-		var ms_val_lbl := Label.new()
-		ms_val_lbl.text = ms_val_str
-		ms_val_lbl.add_theme_font_size_override("font_size", 16)
-		ms_val_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
-		ms_vbox.add_child(ms_val_lbl)
-
-		# Comparison with currently equipped item in this slot (if any)
-		if not equipped_in_slot.is_empty():
-			var cur_eq_dict: Dictionary = equipped_in_slot.get("equipment", {}) if equipped_in_slot.get("equipment") is Dictionary else equipped_in_slot
-			var cur_id: String = str(cur_eq_dict.get("id", equipped_in_slot.get("id", "")))
-			if cur_id != insp_id:
-				var cur_tmpl: Dictionary = equipped_in_slot.get("template", {}) if equipped_in_slot.get("template") is Dictionary else equipped_in_slot
-				var c_enh: int = int(cur_eq_dict.get("enhanceLevel", equipped_in_slot.get("enhanceLevel", 0)))
-				var c_enh_b: float = 1.0 + float(c_enh) * 0.05
-				var c_atk: int = int(float(cur_tmpl.get("bonusAttack", cur_tmpl.get("atkBonus", 0))) * c_enh_b)
-				var c_def: int = int(float(cur_tmpl.get("bonusDefense", cur_tmpl.get("defBonus", 0))) * c_enh_b)
-				var c_hp: int = int(float(cur_tmpl.get("bonusHp", 0)) * c_enh_b)
-				var d_atk: int = i_atk - c_atk
-				var d_def: int = i_def - c_def
-				var d_hp: int = i_hp - c_hp
-				var cmp_parts: Array[String] = []
-				if d_atk != 0: cmp_parts.append("%s%d ATK" % [("▲ +" if d_atk > 0 else "▼ "), d_atk])
-				if d_def != 0: cmp_parts.append("%s%d DEF" % [("▲ +" if d_def > 0 else "▼ "), d_def])
-				if d_hp != 0: cmp_parts.append("%s%d HP" % [("▲ +" if d_hp > 0 else "▼ "), d_hp])
-				if not cmp_parts.is_empty():
-					var cmp_lbl := Label.new()
-					cmp_lbl.text = "So với đang mặc: %s" % ", ".join(cmp_parts)
-					cmp_lbl.add_theme_font_size_override("font_size", 9)
-					cmp_lbl.add_theme_color_override("font_color", Color(0.45, 0.95, 0.65) if (d_atk >= 0 and d_def >= 0 and d_hp >= 0) else Color(1.0, 0.8, 0.4))
-					ms_vbox.add_child(cmp_lbl)
-
-		rdvbox.add_child(main_stat_box)
-
-		# Substats List
-		var sub_header := Label.new()
-		sub_header.text = "THUỘC TÍNH PHỤ"
-		sub_header.add_theme_font_size_override("font_size", 10)
-		sub_header.add_theme_color_override("font_color", Color(1.0, 0.88, 0.45))
-		rdvbox.add_child(sub_header)
-
-		var sub_list_vbox := VBoxContainer.new()
-		sub_list_vbox.add_theme_constant_override("separation", 2)
-		rdvbox.add_child(sub_list_vbox)
-
-		var sub_lines: Array[String] = []
-		if i_crit > 0.0: sub_lines.append("• 💥 Tỷ lệ bạo kích: +%.1f%%" % i_crit)
-		if i_cdmg > 0.0: sub_lines.append("• ⚡ Sát thương bạo kích: +%.1f%%" % i_cdmg)
-		if i_eva > 0.0: sub_lines.append("• 🌀 Né tránh: +%.1f%%" % i_eva)
-		if i_ls > 0: sub_lines.append("• 🩸 Hút máu: +%d%%" % i_ls)
-		if i_dr > 0: sub_lines.append("• 🛡️ Giảm sát thương: +%d%%" % i_dr)
-		if i_pen > 0: sub_lines.append("• 🗡️ Xuyên giáp/phép: +%d" % i_pen)
-		if i_acc > 0: sub_lines.append("• 🎯 Chính xác: +%d" % i_acc)
-		if i_spd > 0 and ms_val_str.find("Tốc Độ") == -1: sub_lines.append("• 💨 Tốc độ: +%d" % i_spd)
-		if i_hp > 0 and ms_val_str.find("Sinh Lực") == -1: sub_lines.append("• ❤️ Sinh lực: +%d" % i_hp)
-		if i_def > 0 and ms_val_str.find("Phòng Ngự") == -1: sub_lines.append("• 🛡️ Phòng ngự: +%d" % i_def)
-
-		if sub_lines.is_empty():
-			sub_lines.append("• ✨ Không có thuộc tính phụ kích hoạt.")
-
-		for line_txt in sub_lines:
-			var s_lbl := Label.new()
-			s_lbl.text = line_txt
-			s_lbl.add_theme_font_size_override("font_size", 10)
-			s_lbl.add_theme_color_override("font_color", Color(0.88, 0.92, 0.98))
-			sub_list_vbox.add_child(s_lbl)
-
-		# Set Bonus Block
-		rdvbox.add_child(HSeparator.new())
-		var set_header := Label.new()
-		set_header.text = "KÍCH HOẠT THUỘC TÍNH BỘ SET"
-		set_header.add_theme_font_size_override("font_size", 10)
-		set_header.add_theme_color_override("font_color", Color(0.45, 0.90, 1.0))
-		rdvbox.add_child(set_header)
-
-		var set_desc := Label.new()
-		set_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		set_desc.text = "● Bộ 2 món: Tăng 15% Sát thương tổng thể\n● Bộ 4 món: Kích hoạt hiệu ứng Chữ Ký / Lấp Lánh khi vào trận"
-		set_desc.add_theme_font_size_override("font_size", 9)
-		set_desc.add_theme_color_override("font_color", Color(0.75, 0.85, 0.95))
-		rdvbox.add_child(set_desc)
-
-		# Status Banner
 		var stat_lbl := Label.new()
 		if is_on_curr_hero:
 			stat_lbl.text = "✅ Đang trang bị trên [%s]" % hname
 			stat_lbl.add_theme_color_override("font_color", Color(0.45, 0.95, 0.65))
 		elif not insp_hero_id.is_empty():
-			stat_lbl.text = "⚠️ Đang mặc trên tướng khác (Trang bị sẽ chuyển sang %s)" % hname
+			stat_lbl.text = "⚠️ Đang mặc trên tướng khác (sẽ chuyển sang %s)" % hname
 			stat_lbl.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35))
 		else:
-			stat_lbl.text = "📦 Đang nằm trong Túi Đồ (Chưa ai mặc)"
+			stat_lbl.text = "📦 Trong Túi Đồ (Chưa ai mặc)"
 			stat_lbl.add_theme_color_override("font_color", Color(0.65, 0.85, 1.0))
 		stat_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		stat_lbl.add_theme_font_size_override("font_size", 10)
+		stat_lbl.add_theme_font_size_override("font_size", 11)
 		rdvbox.add_child(stat_lbl)
 
-		# Action Buttons Row
 		var btn_row := HBoxContainer.new()
 		btn_row.add_theme_constant_override("separation", 8)
 		rdvbox.add_child(btn_row)
@@ -3197,27 +2863,142 @@ func _render_tab_equipment(h: Dictionary) -> void:
 		if is_on_curr_hero:
 			var unequip_btn := Button.new()
 			unequip_btn.text = "🔄 Gỡ Trang Bị"
-			unequip_btn.custom_minimum_size = Vector2(110, 32)
-			unequip_btn.add_theme_font_size_override("font_size", 11)
+			unequip_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			unequip_btn.custom_minimum_size = Vector2(0, 32)
 			unequip_btn.modulate = Color(1.0, 0.65, 0.65)
 			unequip_btn.pressed.connect(func(): _on_unequip_pressed(insp_id, insp_name))
 			btn_row.add_child(unequip_btn)
 		else:
 			var equip_btn := Button.new()
 			equip_btn.text = "🔄 Thay Thế" if not equipped_in_slot.is_empty() else "🛡️ Trang Bị"
-			equip_btn.custom_minimum_size = Vector2(110, 32)
-			equip_btn.add_theme_font_size_override("font_size", 11)
+			equip_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			equip_btn.custom_minimum_size = Vector2(0, 32)
 			equip_btn.modulate = Color(0.45, 0.95, 0.65)
 			equip_btn.pressed.connect(func(): _on_equip_pressed(insp_id, insp_name, hid, hname))
 			btn_row.add_child(equip_btn)
 
 		var enh_btn := Button.new()
 		enh_btn.text = "⬆️ Cường Hóa"
-		enh_btn.custom_minimum_size = Vector2(100, 32)
-		enh_btn.add_theme_font_size_override("font_size", 11)
+		enh_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		enh_btn.custom_minimum_size = Vector2(0, 32)
 		enh_btn.modulate = Color(1.0, 0.85, 0.35)
 		enh_btn.pressed.connect(func(): _on_enhance_eq_pressed(insp_id, insp_name))
 		btn_row.add_child(enh_btn)
+
+	# Card 2: Matching Equipment Grid (Flat inside main _tab_content_scroll, NO nested ScrollContainer)
+	var list_vbox := _create_section_card("🎒 KHO TRANG BỊ: %s (%d)" % [current_slot_name.to_upper(), filtered_items.size()], Color(1.0, 0.88, 0.45))
+
+	var filter_row := HBoxContainer.new()
+	filter_row.add_theme_constant_override("separation", 6)
+	list_vbox.add_child(filter_row)
+	for f_opt in [
+		{"label": "Tất Cả", "val": 0},
+		{"label": "6-7★", "val": 6},
+		{"label": "5★", "val": 5},
+		{"label": "4★", "val": 4},
+		{"label": "1-3★", "val": 3}
+	]:
+		var f_btn := Button.new()
+		f_btn.text = str(f_opt["label"])
+		f_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		f_btn.custom_minimum_size = Vector2(0, 26)
+		f_btn.add_theme_font_size_override("font_size", 10)
+		f_btn.modulate = Color(1.0, 0.88, 0.35) if _equipment_rarity_filter == int(f_opt["val"]) else Color(0.75, 0.85, 0.95)
+		var f_val := int(f_opt["val"])
+		f_btn.pressed.connect(func():
+			_equipment_rarity_filter = f_val
+			_render_active_profile_tab()
+		)
+		filter_row.add_child(f_btn)
+
+	if filtered_items.is_empty():
+		var empty_g := Label.new()
+		empty_g.text = "Không có món phù hợp bộ lọc hiện tại."
+		empty_g.add_theme_font_size_override("font_size", 11)
+		empty_g.add_theme_color_override("font_color", Color(0.65, 0.75, 0.85))
+		list_vbox.add_child(empty_g)
+	else:
+		var art_grid := GridContainer.new()
+		art_grid.columns = 3
+		art_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		art_grid.add_theme_constant_override("h_separation", 8)
+		art_grid.add_theme_constant_override("v_separation", 8)
+		list_vbox.add_child(art_grid)
+
+		for it in filtered_items:
+			var eq: Dictionary = it.get("equipment", {}) if it.get("equipment") is Dictionary else it
+			var tmpl: Dictionary = it.get("template", {}) if it.get("template") is Dictionary else it
+			var item_id: String = str(eq.get("id", it.get("id", "")))
+			var item_name: String = str(tmpl.get("name", it.get("name", "Trang bị")))
+			var estar: int = int(tmpl.get("rarity", eq.get("starLevel", 1)))
+			var eenh: int = int(eq.get("enhanceLevel", it.get("enhanceLevel", 0)))
+			var eq_hero_id: String = str(eq.get("equippedHeroId", it.get("equippedHeroId", "")))
+			var is_curr_hero: bool = (eq_hero_id == hid and not hid.is_empty())
+			var is_inspected: bool = (item_id == _equipment_inspected_item_id)
+			var r_col: Color = _get_rarity_border_color(estar)
+
+			var art_card := PanelContainer.new()
+			art_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			art_card.custom_minimum_size = Vector2(0, 66)
+			art_card.clip_contents = true
+			var astyle := StyleBoxFlat.new()
+			astyle.corner_radius_top_left = 6
+			astyle.corner_radius_top_right = 6
+			astyle.corner_radius_bottom_left = 6
+			astyle.corner_radius_bottom_right = 6
+			astyle.bg_color = Color(0.12, 0.18, 0.28, 0.96) if is_inspected else Color(0.06, 0.08, 0.13, 0.90)
+			astyle.border_width_left = 2 if is_inspected else 1
+			astyle.border_width_top = 2 if is_inspected else 1
+			astyle.border_width_right = 2 if is_inspected else 1
+			astyle.border_width_bottom = 2 if is_inspected else 1
+			astyle.border_color = Color(0.35, 0.95, 1.0) if is_inspected else r_col
+			art_card.add_theme_stylebox_override("panel", astyle)
+
+			var am := MarginContainer.new()
+			am.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			am.add_theme_constant_override("margin_left", 6)
+			am.add_theme_constant_override("margin_top", 4)
+			am.add_theme_constant_override("margin_right", 6)
+			am.add_theme_constant_override("margin_bottom", 4)
+			art_card.add_child(am)
+
+			var avbox := VBoxContainer.new()
+			avbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			avbox.add_theme_constant_override("separation", 2)
+			am.add_child(avbox)
+
+			var atop := Label.new()
+			atop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			atop.text = "%s %s%s" % [current_slot_icon, "★".repeat(clampi(estar, 1, 7)), (" +%d" % eenh) if eenh > 0 else ""]
+			atop.clip_text = true
+			atop.add_theme_font_size_override("font_size", 9)
+			atop.add_theme_color_override("font_color", r_col)
+			avbox.add_child(atop)
+
+			var aname_lbl := Label.new()
+			aname_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			aname_lbl.text = item_name
+			aname_lbl.clip_text = true
+			aname_lbl.add_theme_font_size_override("font_size", 10)
+			aname_lbl.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
+			avbox.add_child(aname_lbl)
+
+			var astatus_lbl := Label.new()
+			astatus_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			astatus_lbl.text = "✅ Đang mặc" if is_curr_hero else ("👤 Tướng khác" if not eq_hero_id.is_empty() else "📦 Trong Túi")
+			astatus_lbl.add_theme_font_size_override("font_size", 9)
+			astatus_lbl.add_theme_color_override("font_color", Color(0.45, 0.95, 0.55) if is_curr_hero else Color(0.68, 0.82, 0.95))
+			avbox.add_child(astatus_lbl)
+
+			var abtn := Button.new()
+			abtn.flat = true
+			abtn.set_anchors_preset(Control.PRESET_FULL_RECT)
+			abtn.pressed.connect(func():
+				_equipment_inspected_item_id = item_id
+				_render_active_profile_tab()
+			)
+			art_card.add_child(abtn)
+			art_grid.add_child(art_card)
 
 # ==============================================================================
 # PICK ME UP STAR PROMOTION RITUAL (FIXED & UPGRADED SCHEMA)
@@ -3942,6 +3723,17 @@ func _on_quick_summon_in_barracks() -> void:
 	else:
 		status_label.text = "❌ Không thể triệu hồi: " + str(res["error"])
 
+func _on_share_hero_to_chat_pressed() -> void:
+	if _selected_hero.is_empty():
+		return
+	var chat_script = load("res://scripts/ui/chat_panel_modal.gd")
+	var msg: String = chat_script.format_hero_share(_selected_hero)
+	var res := await ApiClient.post_req("/api/chat/world", {"body": msg})
+	if res.get("ok", false):
+		EventBus.notification_requested.emit("📢 Đã chia sẻ [%s] lên kênh Thế Giới!" % str(_selected_hero.get("name", "Tướng")), false)
+	else:
+		EventBus.notification_requested.emit("❌ Không thể chia sẻ lên Chat: " + str(res.get("error", "")), true)
+
 func _on_back_pressed() -> void:
 	if _stats_detail_modal_backdrop != null and _stats_detail_modal_backdrop.visible:
 		_stats_detail_modal_backdrop.visible = false
@@ -3949,4 +3741,4 @@ func _on_back_pressed() -> void:
 	if _in_detail_view:
 		_close_hero_detail()
 	else:
-		get_tree().change_scene_to_file("res://scenes/base/isometric_base_3d.tscn")
+		SceneTransition.change_scene("res://scenes/base/isometric_base_3d.tscn", "🏰 Đang quay về Căn Cứ 3D...")

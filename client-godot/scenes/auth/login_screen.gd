@@ -12,16 +12,19 @@ extends Control
 func _ready() -> void:
 	login_button.pressed.connect(_on_login_pressed)
 	register_button.pressed.connect(_on_register_pressed)
-	username_input.text = GameState.DEFAULT_DEMO_USERNAME
-	password_input.text = GameState.DEFAULT_DEMO_PASSWORD
-	status_label.text = "Đang tự động đăng nhập tài khoản mặc định (demo)..."
-	_set_loading(true)
-	var ok := await GameState.ensure_demo_session()
-	_set_loading(false)
-	if ok:
-		_go_to_hub()
-		return
-	status_label.text = "Chế độ mặc định (demo): Nhấn Đăng nhập hoặc kiểm tra kết nối máy chủ."
+	if OS.is_debug_build():
+		username_input.text = GameState.DEFAULT_DEMO_USERNAME
+		password_input.text = GameState.DEFAULT_DEMO_PASSWORD
+		status_label.text = "Đang tự động đăng nhập tài khoản mặc định (demo)..."
+		_set_loading(true)
+		var ok := await GameState.ensure_demo_session()
+		_set_loading(false)
+		if ok:
+			_go_to_hub()
+			return
+		status_label.text = "Chế độ mặc định (demo): Nhấn Đăng nhập hoặc kiểm tra kết nối máy chủ."
+	else:
+		status_label.text = "Vui lòng đăng nhập hoặc tạo tài khoản Master mới."
 
 func _set_loading(is_loading: bool) -> void:
 	login_button.disabled = is_loading
@@ -116,4 +119,4 @@ func _on_register_pressed() -> void:
 		status_label.text = "Đăng ký thành công! Hãy bấm Đăng nhập."
 
 func _go_to_hub() -> void:
-	get_tree().change_scene_to_file("res://scenes/base/isometric_base_3d.tscn")
+	SceneTransition.change_scene("res://scenes/base/isometric_base_3d.tscn", "🏰 Đang tiến vào Lâu Đài 3D...")

@@ -4,6 +4,7 @@ import { db } from '../../database/db.js';
 import {
   allianceCooldowns, allianceJoinRequests, allianceMembers, allianceMessages, alliances, heroes, masters,
 } from '../../database/drizzle-schema.js';
+import { chatService } from './chat.service.js';
 import { topCombatPower } from '../liveops/liveops-rules.js';
 import { fetchMasterTopCombatPower } from '../hero/hero-combat-power.js';
 import {
@@ -458,7 +459,11 @@ export class AllianceService {
       id: uuidv4(), allianceId: membership.alliance.id, masterId, messageType: value.coordinates ? 'PING' : 'TEXT',
       body: value.body, coordinates: value.coordinates, createdAt: now,
     }).returning();
-    return { ...row };
+    const [sender] = await db.select({ masterName: masters.masterName }).from(masters).where(eq(masters.id, masterId)).limit(1);
+    const msg = { ...row, senderName: sender?.masterName ?? 'Thành viên' };
+    const mIds = await this.memberIds(membership.alliance.id);
+    chatService.broadcastAlliance(mIds, membership.alliance.id, msg);
+    return msg;
   }
 
   /** Helper used by the conquest service to broadcast war events to members. */

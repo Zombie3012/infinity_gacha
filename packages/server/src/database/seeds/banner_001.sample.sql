@@ -16,8 +16,8 @@ ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO banners (id, name, banner_type, is_active, start_date, end_date)
 VALUES
-    ('banner-001', 'Triệu Hồi Thường – Khế Ước Phàm Trần', 'NORMAL', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '30 days'),
-    ('banner-002', 'Triệu Hồi Đặc Biệt – Khế Ước Tinh Tú', 'SPECIAL', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '30 days')
+    ('banner-001', 'Triệu Hồi Thường – Khế Ước Phàm Trần', 'NORMAL', TRUE, CURRENT_TIMESTAMP - INTERVAL '1 day', NULL),
+    ('banner-002', 'Triệu Hồi Đặc Biệt – Khế Ước Tinh Tú', 'SPECIAL', TRUE, CURRENT_TIMESTAMP - INTERVAL '1 day', NULL)
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     banner_type = EXCLUDED.banner_type,

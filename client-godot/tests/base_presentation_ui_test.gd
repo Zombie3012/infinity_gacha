@@ -29,6 +29,8 @@ func mouse(point: Vector2, pressed: bool) -> void:
 	get_viewport().push_input(event, true)
 
 func _ready() -> void:
+	var watchdog := get_tree().create_timer(20.0)
+	watchdog.timeout.connect(func(): push_error("BASE PRESENTATION: Timed out"); get_tree().quit(1))
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 38
@@ -239,7 +241,137 @@ func _ready() -> void:
 	expect(base_scene.event_buttons_box != null and base_scene.event_buttons_box.visible, "Event strip below top-right resources is visible by default")
 	base_scene.event_strip_toggle_btn.pressed.emit()
 	expect(not base_scene.event_buttons_box.visible, "Event strip toggle collapses event buttons")
+
+	# P2-01: Red-Dot Badges & StatusToastPanel Queue
+	GameState.set_badge_count("mailbox", 3)
+	GameState.set_badge_count("events", 2)
+	GameState.set_badge_count("friends", 5)
+	GameState.set_badge_count("chat", 120)
+	await get_tree().process_frame
+	expect(base_scene.mailbox_event_btn.get_node("RedDotBadge").visible and base_scene.mailbox_event_btn.get_node("RedDotBadge/CountLabel").text == "3", "Mailbox button displays red-dot badge count 3")
+	expect(base_scene.quest_event_btn.get_node("RedDotBadge").visible and base_scene.quest_event_btn.get_node("RedDotBadge/CountLabel").text == "2", "Events button displays red-dot badge count 2")
+	expect(base_scene.friends_btn != null and base_scene.friends_btn.get_node("RedDotBadge").visible and base_scene.friends_btn.get_node("RedDotBadge/CountLabel").text == "5", "Friends button displays red-dot badge count 5")
+	expect(base_scene.chat_btn.get_node("RedDotBadge").visible and base_scene.chat_btn.get_node("RedDotBadge/CountLabel").text == "99+", "Chat button caps red-dot badge at 99+")
+	GameState.set_badge_count("mailbox", 0)
+	await get_tree().process_frame
+	expect(not base_scene.mailbox_event_btn.get_node("RedDotBadge").visible, "Mailbox red-dot badge hides when count is 0")
+
+	base_scene.show_status_toast("Toast 1", "success", 0.4)
+	base_scene.show_status_toast("Toast 2", "error", 0.4)
+	await get_tree().process_frame
+	expect(base_scene.status_banner_label.text == "Toast 1" and base_scene._toast_queue.size() == 1, "StatusToastPanel shows first toast and queues second toast")
+
+	# P2-13: Layout Presets (3 slots) & Smart Collect All Button
+	GameState.base_overview = {"buildings": [{"id": "b1", "stored": 0}]}
+	base_scene._refresh_hud()
+	expect(not base_scene.collect_all_btn.visible, "Collect All button hides when no building has stored >= 1")
+	GameState.base_overview = {"buildings": [{"id": "b1", "stored": 5}]}
+	base_scene._refresh_hud()
+	expect(base_scene.collect_all_btn.visible and base_scene.collect_all_btn.text.contains("(1)"), "Collect All button shows count when building has stored >= 1")
+	base_scene._grid_roads["99,99"] = true
+	expect(base_scene.save_layout_preset(1), "Layout Preset 1 saves cleanly")
+	base_scene._grid_roads.erase("99,99")
+	expect(base_scene.load_layout_preset(1) and base_scene._grid_roads.has("99,99"), "Layout Preset 1 restores saved roads")
+
+	# Regression fixes: CollectAllBtn does not overlap BottomLeftDock, Floor hero assignment excludes unselected heroes, Codex in Avatar
+	await get_tree().process_frame
+	var left_dock_rect: Rect2 = base_scene.get_node("HUD/BottomLeftDock").get_global_rect()
+	var collect_rect: Rect2 = base_scene.collect_all_btn.get_global_rect()
+	expect(not left_dock_rect.intersects(collect_rect), "CollectAllBtn floats above BottomBar without overlapping BottomLeftDock")
+
+	GameState.heroes = [
+		{"id": "h-sel-1", "name": "Selected", "rarity": 3, "hp": 100, "maxHp": 100, "state": "HEALTHY"},
+		{"id": "h-unsel-2", "name": "Unselected", "rarity": 3, "hp": 100, "maxHp": 100, "state": "HEALTHY"},
+	]
+	GameState.floor_assigned_hero_ids = {1: ["h-sel-1"], 2: []}
+	base_scene._spawn_resident_heroes()
+	expect(base_scene._hero_actors.has("h-sel-1") and not base_scene._hero_actors.has("h-unsel-2"), "Unselected hero does not spawn in castle when floor is customized")
+	GameState.floor_assigned_hero_ids.clear()
+	GameState.heroes.clear()
+
+	var prof_modal: Control = load("res://scripts/ui/player_profile_modal.gd").new()
+	add_child(prof_modal)
+	await get_tree().process_frame
+	expect(texts(prof_modal).contains("Bách Khoa"), "PlayerProfileModal (Avatar) includes Codex tab")
+	prof_modal.queue_free()
+
+	# P3-05, P3-06, P3-08: SceneTransition, HUD Tooltips, Graphics Quality
+	expect(SceneTransition != null and SceneTransition.has_method("change_scene"), "P3-05 SceneTransition autoload is ready")
+	expect(not base_scene.gems_pill.tooltip_text.is_empty() and not base_scene.enter_pve_btn.tooltip_text.is_empty(), "P3-06 HUD pills and CTA have Vietnamese tooltips")
+	GameState.set_graphics_quality("LOW")
+	expect(GameState.graphics_quality == "LOW" and not base_scene.dir_light.shadow_enabled, "P3-08 Graphics quality LOW disables directional shadows")
+	GameState.set_graphics_quality("HIGH")
+	expect(GameState.graphics_quality == "HIGH" and base_scene.dir_light.shadow_enabled, "P3-08 Graphics quality HIGH enables directional shadows")
+
 	base_scene.queue_free()
+
+	# P2-05: GameState removes fake hardcoded defaults and uses is_synced
+	GameState.clear()
+	expect(not GameState.is_synced and GameState.silver_coins == 0 and GameState.gem_stones == 0 and GameState.master_level == 0, "GameState defaults to 0 and is_synced=false when cleared")
+
+	# P2-07: Hero Daily Routine AI goal selection
+	var unit_script = load("res://scripts/actors/unit_actor_3d.gd")
+	expect(unit_script.compute_routine_goal({"hp": 100, "maxHp": 100}, true) == "WORK", "Worker hero gets WORK routine goal")
+	expect(unit_script.compute_routine_goal({"hp": 70, "maxHp": 100}, false) == "INJURED", "Hero below 80% HP gets INJURED routine goal")
+	expect(unit_script.compute_routine_goal({"hp": 100, "maxHp": 100, "hunger": 60}, false) == "HUNGRY", "Hero with hunger >= 55% gets HUNGRY routine goal")
+	expect(unit_script.compute_routine_goal({"hp": 100, "maxHp": 100, "hunger": 20, "fatigue": 65}, false) == "TIRED", "Hero with fatigue >= 55% gets TIRED routine goal")
+	expect(unit_script.compute_routine_goal({"hp": 100, "maxHp": 100, "hunger": 10, "fatigue": 10}, false) == "IDLE", "Healthy rested hero gets IDLE routine goal")
+
+	# P2-08: HeroDialogueBank & Status Icon Zoom Visibility
+	var bank_script = load("res://scripts/actors/hero_dialogue_bank.gd")
+	expect(bank_script.status_icon_for("HUNGRY") == "🍖" and bank_script.status_icon_for("TIRED") == "💤" and bank_script.status_icon_for("INJURED") == "🩹", "HeroDialogueBank maps need goals to status icons")
+	var pair_lines: Array = bank_script.pick_social_pair("Aaron", "Jenna")
+	expect(pair_lines.size() == 2 and not str(pair_lines[0]).is_empty() and not str(pair_lines[1]).is_empty(), "HeroDialogueBank generates 2-turn social dialogue")
+	var actor_a: Node3D = load("res://scenes/common/unit_actor_3d.tscn").instantiate()
+	add_child(actor_a)
+	actor_a.setup_base_resident({"id": "h-soc-1", "name": "Aaron", "rarity": 4, "hunger": 70, "hp": 100, "maxHp": 100}, Vector3.ZERO)
+	actor_a.set_floor_focus_state(true, false)
+	camera.size = 38.0
+	actor_a.update_status_icon_visibility(camera)
+	expect(actor_a._status_icon_label != null and actor_a._status_icon_label.visible and actor_a._status_icon_label.text == "🍖", "Status icon is visible at normal zoom")
+	camera.size = 90.0
+	actor_a.update_status_icon_visibility(camera)
+	expect(not actor_a._status_icon_label.visible, "Status icon hides when zoomed out far")
+	actor_a.queue_free()
+
+	# P2-09: HeroQuickInteractPopup
+	var qpop: Control = load("res://scripts/ui/hero_quick_interact_popup.gd").new()
+	qpop.setup({"id": "h-q1", "name": "Aaron", "rarity": 4, "hp": 90, "maxHp": 100, "hunger": 40, "fatigue": 20, "mood": "Vui vẻ", "loyalty": 85, "favoriteFood": "Thịt Nướng"}, Vector2(300, 300))
+	add_child(qpop)
+	await get_tree().process_frame
+	expect(texts(qpop).contains("Cho ăn nhanh") and texts(qpop).contains("Tặng món yêu thích") and texts(qpop).contains("Cho đi nghỉ") and texts(qpop).contains("Mở Hồ Sơ Chi Tiết"), "HeroQuickInteractPopup renders all 4 quick actions")
+	var feed_emitted := []
+	qpop.feed_requested.connect(func(hid: String, _hn: String): feed_emitted.append(hid))
+	var feed_btn: Button = qpop.find_children("*", "Button", true, false).filter(func(b): return b.text.contains("Cho ăn nhanh"))[0]
+	feed_btn.pressed.emit()
+	await get_tree().process_frame
+	expect(feed_emitted == ["h-q1"], "HeroQuickInteractPopup emits feed_requested on tap")
+
+	# P2-11: Day/Night Hero routine & 3D floating resource text
+	var actor_n: Node3D = load("res://scenes/common/unit_actor_3d.tscn").instantiate()
+	add_child(actor_n)
+	actor_n.setup_base_resident({"id": "h-night", "name": "NightHero", "rarity": 3, "hp": 100, "maxHp": 100}, Vector3.ZERO)
+	actor_n.set_time_of_day(2, Vector3(12, 0, 12), Vector3(-5, 0, -5))
+	expect(actor_n.time_of_day_mode == 2 and actor_n.home_position.distance_to(Vector3(12, 0, 12)) <= 4.0, "At night, idle hero gathers around Central Bonfire")
+	actor_n.queue_free()
+
+	# P2-15: BaseCardBrowser 200-item pagination & 0.15s search debounce
+	var perf_browser: Control = load("res://scripts/ui/item_grid_browser.gd").new()
+	add_child(perf_browser)
+	var many_items: Array = []
+	for idx in range(200):
+		many_items.append({"id": "perf-%d" % idx, "name": "Vật Phẩm #%d" % idx, "starLevel": (idx % 5) + 1, "quantity": idx + 1})
+	perf_browser.set_items(many_items)
+	await get_tree().process_frame
+	expect(perf_browser.grid_container.get_child_count() == 80 and perf_browser._load_more_btn.visible, "BaseCardBrowser paginates 200 items to 80 cards initially with Load More button")
+	perf_browser._load_more_btn.pressed.emit()
+	await get_tree().process_frame
+	expect(perf_browser.grid_container.get_child_count() == 160, "Clicking Load More renders next 80 cards (160 total)")
+	perf_browser.search_input.text = "#199"
+	perf_browser.search_input.text_changed.emit("#199")
+	await get_tree().create_timer(0.22).timeout
+	expect(perf_browser.filtered_items.size() == 1 and perf_browser.grid_container.get_child_count() == 1, "Search debounce 0.15s filters 200 items cleanly")
+	perf_browser.queue_free()
 
 	# M01: RarityStyle & UniversalItemCard consistency in hero_roster, pve_field_items, magic_hall
 	var roster_script = load("res://scenes/heroes/hero_roster.gd")

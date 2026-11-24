@@ -16,7 +16,7 @@ test('HTTP hero expeditions: scouting, attacks and recall', { skip: skipReason }
   const warrior = await createHero(master.masterId, { templateIndex: 1, name: 'Warrior Hero', attack: 6000, defense: 4000, speed: 300, hp: 80_000 });
   await setSilver(master.masterId, 100_000);
   await sql('update masters set level = 15 where id = $1', [master.masterId]);
-  await sql('update worlds set current_floor = 10 where master_id = $1', [master.masterId]);
+  await sql('update worlds set current_floor = 25 where master_id = $1', [master.masterId]);
 
   let base = { x: 0, y: 0 };
   let targetTileId = '';

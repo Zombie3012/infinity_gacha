@@ -43,8 +43,11 @@ func _build_ui() -> void:
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 
+	var vp := get_viewport_rect().size
+	var pw := clampf(vp.x * 0.84, 680.0, 920.0) if vp.x > 0 else 920.0
+	var ph := clampf(vp.y * 0.85, 460.0, 620.0) if vp.y > 0 else 620.0
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(920, 620)
+	panel.custom_minimum_size = Vector2(pw, ph)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.07, 0.09, 0.14, 0.98)

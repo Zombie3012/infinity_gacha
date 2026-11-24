@@ -262,11 +262,11 @@ func _resume_active_floor() -> void:
 
 func _go_to_map() -> void:
 	PveState.polling_enabled = false
-	get_tree().change_scene_to_file("res://scenes/pve/pve_map.tscn")
+	SceneTransition.change_scene("res://scenes/pve/pve_map.tscn", "🗺️ Đang vào Bản Đồ Tầng...")
 
 func _back_to_base() -> void:
 	PveState.polling_enabled = false
-	get_tree().change_scene_to_file("res://scenes/base/isometric_base_3d.tscn")
+	SceneTransition.change_scene("res://scenes/base/isometric_base_3d.tscn", "🏰 Đang quay về Lâu Đài 3D...")
 
 func _set_message(message: String, is_error: bool) -> void:
 	if _status_lbl != null:

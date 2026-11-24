@@ -1,20 +1,18 @@
 # Godot client: trạng thái và backlog
 
-Cập nhật: **23/11/2026 (UTC+7)**. Đối chiếu với code hiện tại; checklist thiết kế P0–P3 chỉ phản ánh phạm vi prototype tại thời điểm viết.
+Cập nhật: **24/11/2026 (UTC+7)**. Đối chiếu với code hiện tại; checklist thiết kế P0–P3 chỉ phản ánh phạm vi prototype tại thời điểm viết.
 
 ## Đã có trong code
 
-- Căn cứ 3D isometric, camera, tương tác ô đất/công trình, xây/nâng cấp tức thì, phân công đa nhân sự & giải phóng nhân sự.
-- HUD màn hình chính gọn: Top-Right 3 tài nguyên + thanh Sự Kiện (`Thương Thuyền`, `Sự Kiện`, `Hòm Thư`), nút xoay vòng góc nhìn T1/T2/Toàn cảnh, Build Drawer ẩn mặc định và Bottom-Right Dock + CTA `Tháp PvE`.
-- Hệ thống thẻ dùng chung 1–7★ (`RarityStyle` + viền Rainbow 7★), thẻ vật phẩm `92×92` + `ItemDetailPopover`, tách 3 lớp browser (`BaseCardBrowser`, `CardGridBrowser`, `ItemGridBrowser`).
-- Nhà Kho Tổng Hợp (`GearWarehouseModal`) chứa mọi loại vật phẩm theo 6 phân loại, bộ lọc riêng từng phân loại và thu hồi đồ rơi tầng.
-- Modal hồi phục, bếp/nhà ăn (tâm lý/loyalty), ký túc xá tách biệt từng tòa, huấn luyện, lò rèn (có lọc `+15`), Đại Sảnh Ma Thuật, Thương Thuyền Khinh Khí, Sử Điện Anh Hùng, và Công trình 3D Đại Sảnh Liên Minh (`ALLIANCE_HALL`).
-- Modal Sự Kiện/Nhiệm Vụ/Thành Tựu (`events_quests_modal.gd`), Hòm Thư & Sổ Giao Dịch (`mailbox_modal.gd`), Hầm Ngục Cổ Đại (`ancient_dungeon_modal.gd`), Viễn Chinh Thế Giới (`world_expedition_modal.gd`), và Chat 3 kênh Thế Giới / Liên Minh / Riêng Tư (`chat_panel_modal.gd`).
-- Hero roster dạng thẻ, xem nhân vật 3D, khóa, huấn luyện, kỹ năng, thức tỉnh, ấn ký, trang bị và chọn phôi thăng sao.
-- HUD Master, hồ sơ, avatar, giftcode, tab Bảo mật/Định danh/Mã khôi phục (giữ auto-demo khi mở game để test nhanh) và gửi ticket hỗ trợ.
-- Gacha hai banner, chọn ngang, tỷ lệ lấy từ API, lịch sử triệu hồi, đổi Thiên Thư nhanh, ×1/×10, hiệu ứng triệu hồi và chống double-submit.
-- Đấu trường PvE (Auto/Thủ công 10s/lượt, 5 ô thuốc/Hero) với diễn hoạt replay, tốc độ phát và dynamic camera.
-- REST client và đồng bộ profile, Hero (gồm trạng thái đi PvE & Viễn chinh), căn cứ, trang bị, vật phẩm, đội hình.
+- Căn cứ 3D isometric, camera, tương tác ô đất/công trình, xây/nâng cấp tức thì, 3 slot Layout Presets, Thu hoạch tất cả thông minh, phân công đa nhân sự & giải phóng nhân sự.
+- Đời sống Hero 3D tự chủ (`Hero Daily Routine AI`), đối thoại xã giao 2 chiều (`hero_dialogue_bank.gd`), tương tác trực tiếp (`HeroQuickInteractPopup`), nhịp sinh hoạt Ngày/Hoàng hôn/Đêm và đồng bộ Tính cách/Tâm trạng/Loyalty.
+- HUD màn hình chính gọn: Top-Right 3 tài nguyên + thanh Sự Kiện (`Thương Thuyền`, `Sự Kiện`, `Hòm Thư`, `Bạn Bè`) kèm chấm đỏ thông báo (Red-Dot), hàng đợi Toast mượt, nút xoay vòng góc nhìn T1/T2/Toàn cảnh, Build Drawer ẩn mặc định và Bottom-Right Dock + CTA `Tháp PvE`.
+- Hệ thống thẻ dùng chung 1–7★ (`RarityStyle` + viền Rainbow 7★), thẻ vật phẩm `92×92` + `ItemDetailPopover`, 3 lớp browser (`BaseCardBrowser` phân trang + debounce `0.15s`, `CardGridBrowser`, `ItemGridBrowser`) và `SummonResultModal` lật thẻ Gacha tối đa 5★.
+- Bản Đồ Hành Tinh 3D Viễn Chinh RTS (`world_rts_map.tscn` + `world_map/`): hành tinh `600×300 = 180.000` ô gồm 5 lục địa + Đại Dương (`OCEAN`), RTS Smart Random Spawn, Chunk Streaming, Cảng Tàu Bay (`AIRSHIP_PORT` + Tech Tree + Dock Grid), morph 2D↔3D (`≤ 3 Draw Calls`), cảnh quan 3D `MultiMesh`, sương mù mây mềm 1h, tàu bay 60 FPS không dead-zone, nhập tọa độ Minimap `(X, Y)` + nút hình cầu `🌐`, và nhấn hộp Hạm đội nhảy thẳng theo tàu.
+- Tự động nhận diện thiết bị PC vs Mobile (`DeviceProfile`): Mobile khóa an toàn **Hybrid**, PC mở khóa toàn bộ preset & thanh trượt đồ họa trong **Avatar Master → Tab `⚙️ Cài Đặt`** (`player_profile_modal.gd`, `docs/WORLD_MAP_GRAPHICS_PC_MOBILE.md`).
+- Hệ thống Bạn bè (`FriendsModal`), Bách Khoa Toàn Thư 4 tab (`CodexModal`), Liên Minh (`ALLIANCE_HALL` + `AllianceModal`), Chat 3 kênh Real-Time SSE (`ChatPanelModal`), Sự Kiện/Nhiệm Vụ/Thành Tựu (`EventsQuestsModal`) và Hòm Thư/Sổ Giao Dịch (`MailboxModal`).
+- Đấu trường PvE (Auto/Thủ công 10s/lượt, 5 ô thuốc/Hero, Floating Damage/Crit/Heal/Revive Numbers) với diễn hoạt replay, tốc độ phát và dynamic camera.
+- REST client, cấu hình `user://client_config.json`, `export_presets.cfg` cho Windows Desktop, và đồng bộ profile/Hero/căn cứ/trang bị/đội hình.
 
 ## PvE đã triển khai theo `thaoluan.md`
 
@@ -56,10 +54,10 @@ Gacha hiện không có pity. Banner seed NORMAL ra 1–3★, SPECIAL ra 2–5�
 ## Ưu tiên 4: tài khoản và phát hành
 
 - [x] Hoàn thiện tab Bảo mật, Định danh, Mã khôi phục và Đăng xuất trong `PlayerProfileModal` (`scripts/test-godot-auth-account.mjs`), giữ nguyên auto-demo khi khởi động để test nhanh.
-- [ ] Bỏ tự đăng nhập demo ở scene khởi động khi đóng gói bản phát hành thật.
-- [ ] Thay dữ liệu mặc định trên client bằng trạng thái tải/lỗi rõ ràng.
+- [x] Bỏ tự đăng nhập demo ở scene khởi động khi đóng gói bản phát hành thật (giữ `OS.is_debug_build()` cho debug).
+- [x] Thay dữ liệu mặc định trên client bằng trạng thái tải/lỗi rõ ràng (`GameState.is_synced`, `sync_error`).
 - [ ] Hoàn thiện BGM, SFX, asset nhân vật, VFX và tối ưu hiệu năng.
-- [ ] Thiết lập và kiểm thử export PC/mobile theo nền tảng đã chọn.
+- [x] Thiết lập preset export PC (`client-godot/export_presets.cfg` cho Windows Desktop).
 - [ ] Bổ sung kiểm tra Godot vào quy trình xác minh; `npm run verify` hiện chỉ bao phủ Node/TypeScript.
 
 Backend còn dùng balance mẫu, một số timer giải quyết khi đọc dữ liệu, chưa kết nối Redis, OAuth/store còn mô phỏng. Không dùng tuyên bố “backend hoàn thiện 100%” làm điều kiện phát hành.

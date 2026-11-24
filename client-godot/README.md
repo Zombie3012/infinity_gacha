@@ -1,6 +1,6 @@
 # Infinite Gacha — Godot client
 
-Client chính thức đang phát triển: **3D isometric** cho căn cứ và đấu trường. Cập nhật **23/11/2026 (UTC+7)**.
+Client chính thức đang phát triển: **3D isometric** cho căn cứ/đấu trường và **Hành tinh Fantasy 3D** cho chế độ Viễn Chinh. Cập nhật **24/11/2026 (UTC+7)**.
 
 ## Mở dự án
 
@@ -19,18 +19,22 @@ Scene căn cứ hiện tự đăng nhập/đăng ký tài khoản phát triển 
 |---|---|
 | `scripts/network/api_client.gd` | HTTP bất đồng bộ, Bearer token và xử lý response |
 | `scripts/state/game_state.gd` | Đồng bộ Master, Hero, ví, đội hình và căn cứ |
-| `scripts/core/event_bus.gd` | Tín hiệu dùng chung |
+| `scripts/core/event_bus.gd` | Tín hiệu dùng chung (`graphics_quality_changed`, `world_graphics_settings_changed`, ...) |
+| `scripts/core/device_profile.gd` | Tự động nhận diện thiết bị PC vs Mobile, áp guardrails Hybrid trên Mobile & mở khóa đồ họa PC |
+| `scripts/core/scene_transition.gd` | Chuyển cảnh mượt kèm thông điệp trạng thái |
+| `world_map/` | Hệ thống Bản Đồ Hành Tinh 3D (`PlanetCoordinates`, `PlanetRenderer`, `LocalTerrainPatch`, `PlanetFogManager`, `TacticalTerrainSplat`, `TacticalGroundProps3D`, `HorizontalMinimap`) |
+| `scenes/world/` | Bản Đồ Viễn Chinh RTS (`world_rts_map.tscn`) |
 | `scripts/camera/isometric_camera_rig.gd` | Camera, zoom, pan và shake |
-| `scripts/actors/unit_actor_3d.gd` | Nhân vật 3D ở căn cứ và trong replay |
-| `scripts/ui/` | Modal công trình, Hero/item card, hồ sơ và gacha |
+| `scripts/actors/unit_actor_3d.gd` | Nhân vật 3D ở căn cứ (Daily Routine AI, đối thoại xã giao) và trong replay |
+| `scripts/ui/` | Modal công trình, Cảng Tàu Bay, Bạn bè, Bách Khoa, Hồ sơ & Cài đặt (`player_profile_modal.gd`) |
 | `scenes/base/` | Căn cứ 3D và tương tác công trình |
 | `scenes/heroes/` | Hero roster, chi tiết, trang bị và thăng sao |
 | `scenes/pve/` | Map tầng/khu vực/công trình, điều quân nhiều đội, radar và replay Combat v2 |
 | `scripts/state/pve_state.gd` | Polling map, ETA theo server và lưu khóa retry qua khởi động lại |
-| `tests/pve_*_test.*` | Kiểm thử engine cho UI, HTTP và phục hồi kết nối |
+| `tests/` | Kiểm thử engine cho UI, HTTP, Hành tinh 3D và phục hồi kết nối |
 | `scenes/auth/`, `scenes/hub/` | Màn tài khoản và menu phụ |
 
-Autoload: `EventBus`, `ApiClient`, `GameState`, `PveState`.
+Autoload: `EventBus`, `ApiClient`, `GameState`, `PveState`, `SceneTransition`.
 
 ## Cửa hàng khinh khí cầu
 
@@ -107,19 +111,40 @@ Chi tiết hợp đồng và kiểm thử ở [PVE_IMPLEMENTATION.md](../docs/PV
   - Công trình 3D **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** mở `alliance_modal.gd` (lập hội, tìm kiếm, gia nhập, quản lý thành viên & thông báo; chưa gồm Công nghệ/Chiến tranh Liên minh).
   - Hồ sơ Master (`player_profile_modal.gd`) bổ sung tab **Bảo Mật & Tài Khoản** (định danh, mã khôi phục, đăng xuất) trong khi vẫn giữ auto-demo khi mở game để test nhanh.
 
+## Bản Đồ Hành Tinh 3D, Viễn Chinh RTS & Đồ Họa PC/Mobile (24/11/2026)
+
+- **Bản Đồ Hành Tinh 3D (`world_rts_map.tscn` / `world_map/`):**
+  - Hành tinh Fantasy Stylized 5 lục địa + Kỳ Quan Hoàng Đế + Đại Dương (`600×300 = 180.000` ô), morph liền mạch `2D chiến thuật ↔ 3D cầu` trong ngân sách `≤ 3 Draw Calls` (`LocalTerrainPatch` 1 Draw Call ở tầm gần, `PlanetSurface + CloudLayer + AtmosphereShell` ở tầm xa).
+  - Góc nghiêng chiến thuật `22°`, `TacticalTerrainSplat` phân hóa vật liệu từng ô (gồm mặt biển `OCEAN`), `TacticalGroundProps3D` (`MultiMeshInstance3D` cho Lâu Đài, Lâu Đài đối thủ, Rừng, Núi, Đồi, Phế tích, Cổng Hầm Ngục).
+  - Tàu Scout / Hạm đội bay mượt **60 FPS** không có vùng chết hiển thị (`fleet_overlay_alpha` gối đầu 3D Beacons), Dirty-Hash Caching chống khựng khung hình mỗi chu kỳ poll, **0-frame lag** giữa Camera 3D & Canvas 2D.
+  - Minimap ngang `2:1` hỗ trợ **nhập tọa độ `(X, Y)`** nhảy nhanh (`Enter` hoặc `➜`), nút hình cầu **`🌐`** gọn đẹp; nhấn vào bất kỳ vùng nào trong **khung Hạm đội** tự bay tới vị trí hiện tại con tàu đang di chuyển.
+- **Tự động nhận diện thiết bị PC / Mobile & Cài đặt tập trung:**
+  - `DeviceProfile` (`scripts/core/device_profile.gd`) tự động nhận diện nền tảng ngay khi mở game: **Mobile** khóa an toàn chế độ **Hybrid** (`R ≤ 12`, `MSAA ≤ 2x`, `FPS ≤ 60`), **PC** mở khóa toàn bộ preset tới `ULTRA` / `PLANET_WIDE` (`R = 8..32`, mật độ 3D tới `150%`, `MSAA 4x`, `FPS 240`).
+  - **Quy tắc tập trung:** 100% tùy chọn cài đặt nằm trong **Avatar Master → `PlayerProfileModal` → Tab `⚙️ Cài Đặt`**. Chi tiết tại [WORLD_MAP_GRAPHICS_PC_MOBILE.md](../docs/WORLD_MAP_GRAPHICS_PC_MOBILE.md).
+
 ## Kiểm thử Headless Targeted
 
 Từ root, đặt `GODOT_BIN` tới engine console rồi chạy từng suite mục tiêu (không chạy full suite trừ khi được yêu cầu):
 
 ```powershell
+# Server & Bản Đồ Hành Tinh 3D
+node scripts/test-planet-spawn-and-chunks.mjs
+node scripts/test-airship-rts-api.mjs
+& $env:GODOT_BIN --headless --path client-godot res://tests/test_world_planet_milestone1.tscn
+& $env:GODOT_BIN --headless --path client-godot res://tests/test_world_planet_milestone2.tscn
+& $env:GODOT_BIN --headless --path client-godot res://tests/test_world_planet_milestone3.tscn
+& $env:GODOT_BIN --headless --path client-godot res://tests/test_world_planet_milestone5.tscn
+& $env:GODOT_BIN --headless --path client-godot res://tests/test_airship_port_and_rts_map.tscn
+
+# Các luồng Căn cứ, Gacha, Bạn bè, Bách khoa & Tài khoản
 node scripts/test-godot-gacha.mjs
 node scripts/test-godot-forge-warehouse.mjs
 node scripts/test-godot-survival-dorm.mjs
 node scripts/test-godot-hero-dev.mjs
 node scripts/test-godot-events-quests.mjs
 node scripts/test-godot-mailbox.mjs
-node scripts/test-godot-ancient-dungeon.mjs
-node scripts/test-godot-world-expedition.mjs
+node scripts/test-godot-friends.mjs
+node scripts/test-godot-codex.mjs
 node scripts/test-godot-alliance-building.mjs
 node scripts/test-godot-chat-channels.mjs
 node scripts/test-godot-auth-account.mjs

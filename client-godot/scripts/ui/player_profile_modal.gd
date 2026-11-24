@@ -7,6 +7,8 @@ class_name PlayerProfileModal
 signal closed()
 signal weather_changed(preset: String)
 
+const DeviceProfileScript := preload("res://scripts/core/device_profile.gd")
+
 var _active_tab: int = 0
 var _is_ui_built: bool = false
 
@@ -54,14 +56,11 @@ func _on_viewport_size_changed() -> void:
 
 func _update_fullscreen_layout() -> void:
 	var vp_size := get_viewport_rect().size
-	if vp_size.x > 0 and vp_size.y > 0:
-		size = vp_size
-		if _dimmer != null:
-			_dimmer.size = vp_size
-		if _center_box != null:
-			_center_box.size = vp_size
-		if _avatar_picker_wrap != null:
-			_avatar_picker_wrap.size = vp_size
+	if vp_size.x > 0 and vp_size.y > 0 and _main_panel != null:
+		_main_panel.custom_minimum_size = Vector2(
+			clampf(vp_size.x * 0.86, 680.0, 960.0),
+			clampf(vp_size.y * 0.86, 480.0, 620.0)
+		)
 
 func _init_audio_buses() -> void:
 	_audio_bus_master_idx = AudioServer.get_bus_index("Master")
@@ -93,10 +92,6 @@ func _build_ui() -> void:
 	grow_horizontal = Control.GROW_DIRECTION_BOTH
 	grow_vertical = Control.GROW_DIRECTION_BOTH
 	mouse_filter = Control.MOUSE_FILTER_STOP
-
-	var vp_size := get_viewport_rect().size
-	if vp_size.x > 0 and vp_size.y > 0:
-		size = vp_size
 
 	# 1. Dimmer Background
 	_dimmer = ColorRect.new()
@@ -248,6 +243,7 @@ func _create_tab_buttons() -> void:
 		{"icon": "🎁", "title": "Mã Quà Tặng", "tab": 2},
 		{"icon": "🛟", "title": "Hỗ Trợ", "tab": 3},
 		{"icon": "🔐", "title": "Bảo Mật & Tài Khoản", "tab": 4},
+		{"icon": "📖", "title": "Bách Khoa", "tab": 5},
 	]
 
 	for item in tab_defs:
@@ -307,6 +303,19 @@ func _render_active_tab() -> void:
 			_render_support_tab()
 		4:
 			_render_security_tab()
+		5:
+			_render_codex_tab()
+
+func _render_codex_tab() -> void:
+	var codex_script = load("res://scripts/ui/codex_modal.gd")
+	if codex_script == null:
+		return
+	var codex: Control = codex_script.new()
+	codex.set_embedded(true)
+	codex.set_anchors_preset(Control.PRESET_FULL_RECT)
+	codex.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	codex.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_content_panel.add_child(codex)
 
 func _render_security_tab() -> void:
 	var margin := MarginContainer.new()
@@ -744,7 +753,7 @@ func _get_hero_rarity_summary() -> String:
 func _get_avatar_icon() -> String:
 	if GameState.selected_avatar_hero_id != "":
 		for h in GameState.heroes:
-			if h is Dictionary and str(h.get("id", "")) == GameState.selected_avatar_hero_id:
+			if h is Dictionary and GameState.is_hero_alive(h) and str(h.get("id", "")) == GameState.selected_avatar_hero_id:
 				return _get_element_emoji(str(h.get("element", "NEUTRAL")))
 	return "🧙‍♂️"
 
@@ -797,10 +806,76 @@ func _render_settings_tab() -> void:
 	)
 	audio_sec.add_child(mute_cb)
 
-	# --- 2. SECTION: ĐỒ HỌA & HIỂN THỊ (FPS 30/60/120/240 as requested) ---
+	# --- 2. SECTION: ĐỒ HỌA & HIỂN THỊ (Tự động nhận diện PC / Mobile) ---
 	var gfx_sec := _create_settings_section(root_vbox, "🖥️ ĐỒ HỌA & HIỂN THỊ")
+	var dev_info: Dictionary = GameState.get_device_profile()
+	var gfx_cfg: Dictionary = GameState.get_world_graphics_settings()
+	var is_mobile: bool = bool(dev_info.get("is_mobile", false))
 
-	# FPS Selector: 30 / 60 / 120 / 240
+	# Device Auto-Detection Banner + Auto Reset Button
+	var dev_row := HBoxContainer.new()
+	dev_row.add_theme_constant_override("separation", 10)
+	gfx_sec.add_child(dev_row)
+
+	var dev_lbl := Label.new()
+	dev_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+	dev_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dev_lbl.add_theme_font_size_override("font_size", 11)
+	var os_name := str(dev_info.get("os_name", "Unknown"))
+	var gpu_name := str(dev_info.get("gpu_name", ""))
+	if is_mobile:
+		dev_lbl.text = "📱 Thiết bị: Mobile (%s) — Chế độ Hybrid Tối ưu Pin/RAM" % os_name
+		dev_lbl.add_theme_color_override("font_color", Color(0.55, 0.90, 0.72))
+	else:
+		dev_lbl.text = "🖥️ Thiết bị: PC (%s • %s) — Đã mở khóa toàn bộ cài đặt" % [os_name, gpu_name]
+		dev_lbl.add_theme_color_override("font_color", Color(0.50, 0.86, 1.0))
+	dev_row.add_child(dev_lbl)
+
+	var auto_btn := Button.new()
+	auto_btn.text = "🔄 Tự động"
+	auto_btn.tooltip_text = "Khôi phục mức đồ họa khuyến nghị theo phần cứng thiết bị"
+	auto_btn.custom_minimum_size = Vector2(96, 28)
+	auto_btn.focus_mode = FOCUS_NONE
+	auto_btn.add_theme_font_size_override("font_size", 11)
+	auto_btn.pressed.connect(func():
+		GameState.reset_graphics_to_device_default()
+		show_toast("🔄 Đã áp dụng cấu hình tự động theo thiết bị: %s" % GameState.graphics_quality, true)
+		_render_active_tab()
+	)
+	dev_row.add_child(auto_btn)
+
+	# Graphics Quality Preset (Mobile: LOW/MEDIUM/HIGH Hybrid; PC: LOW..PLANET_WIDE Full Unlock)
+	var qual_row := HBoxContainer.new()
+	qual_row.add_theme_constant_override("separation", 12)
+	gfx_sec.add_child(qual_row)
+
+	var q_lbl := Label.new()
+	q_lbl.text = "Chất lượng Đồ họa Tổng thể:"
+	q_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+	q_lbl.add_theme_font_size_override("font_size", 12)
+	qual_row.add_child(q_lbl)
+
+	var q_opt := OptionButton.new()
+	q_opt.custom_minimum_size = Vector2(185, 30)
+	q_opt.focus_mode = FOCUS_NONE
+	var allowed_presets: Array[String] = DeviceProfileScript.get_allowed_presets(is_mobile)
+	var cur_q := GameState.graphics_quality.to_upper()
+	var sel_q_idx := 0
+	for i in range(allowed_presets.size()):
+		var p_key := allowed_presets[i]
+		q_opt.add_item(DeviceProfileScript.get_preset_label(p_key, is_mobile), i)
+		if p_key == cur_q:
+			sel_q_idx = i
+	q_opt.selected = sel_q_idx
+	q_opt.item_selected.connect(func(idx: int):
+		if idx >= 0 and idx < allowed_presets.size():
+			GameState.set_graphics_quality(allowed_presets[idx])
+			show_toast("✨ Chất lượng đồ họa: %s" % DeviceProfileScript.get_preset_label(allowed_presets[idx], is_mobile), true)
+			_render_active_tab()
+	)
+	qual_row.add_child(q_opt)
+
+	# FPS Selector: 30 / 60 (Mobile) | 30 / 60 / 120 / 240 (PC)
 	var fps_row := HBoxContainer.new()
 	fps_row.add_theme_constant_override("separation", 12)
 	gfx_sec.add_child(fps_row)
@@ -812,51 +887,52 @@ func _render_settings_tab() -> void:
 	fps_row.add_child(fps_lbl)
 
 	var fps_opt := OptionButton.new()
-	fps_opt.custom_minimum_size = Vector2(130, 30)
+	fps_opt.custom_minimum_size = Vector2(185, 30)
 	fps_opt.focus_mode = FOCUS_NONE
-	fps_opt.add_item("30 FPS", 30)
+	fps_opt.add_item("30 FPS (Tiết kiệm)", 30)
 	fps_opt.add_item("60 FPS (Chuẩn)", 60)
-	fps_opt.add_item("120 FPS (Mượt)", 120)
-	fps_opt.add_item("240 FPS (Tối đa)", 240)
+	if not is_mobile:
+		fps_opt.add_item("120 FPS (Mượt)", 120)
+		fps_opt.add_item("240 FPS (Tối đa)", 240)
 
-	var cur_fps := Engine.max_fps
-	var sel_idx := 1 # Default 60
-	if cur_fps == 30: sel_idx = 0
-	elif cur_fps == 60: sel_idx = 1
-	elif cur_fps == 120: sel_idx = 2
-	elif cur_fps == 240: sel_idx = 3
+	var cur_fps := int(gfx_cfg.get("max_fps", Engine.max_fps if Engine.max_fps > 0 else 60))
+	var sel_idx := 1
+	for fi in range(fps_opt.item_count):
+		if int(fps_opt.get_item_id(fi)) == cur_fps:
+			sel_idx = fi
+			break
 	fps_opt.selected = sel_idx
-
 	fps_opt.item_selected.connect(func(idx: int):
 		var target_fps: int = int(fps_opt.get_item_id(idx))
-		Engine.max_fps = target_fps
+		GameState.update_world_graphics_setting("max_fps", target_fps)
 		show_toast("🖥️ Đã đặt giới hạn khung hình: %d FPS" % target_fps, true)
 	)
 	fps_row.add_child(fps_opt)
 
-	# Screen mode
-	var screen_row := HBoxContainer.new()
-	screen_row.add_theme_constant_override("separation", 12)
-	gfx_sec.add_child(screen_row)
+	# Screen mode (PC only)
+	if not is_mobile:
+		var screen_row := HBoxContainer.new()
+		screen_row.add_theme_constant_override("separation", 12)
+		gfx_sec.add_child(screen_row)
 
-	var screen_lbl := Label.new()
-	screen_lbl.text = "Chế độ Toàn Màn Hình (Fullscreen):"
-	screen_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
-	screen_lbl.add_theme_font_size_override("font_size", 12)
-	screen_row.add_child(screen_lbl)
+		var screen_lbl := Label.new()
+		screen_lbl.text = "Chế độ Toàn Màn Hình (Fullscreen):"
+		screen_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		screen_lbl.add_theme_font_size_override("font_size", 12)
+		screen_row.add_child(screen_lbl)
 
-	var full_check := CheckButton.new()
-	full_check.focus_mode = FOCUS_NONE
-	var cur_mode := DisplayServer.window_get_mode()
-	full_check.button_pressed = (cur_mode == DisplayServer.WINDOW_MODE_FULLSCREEN or cur_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
-	full_check.toggled.connect(func(is_full: bool):
-		if is_full:
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-		else:
-			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-		show_toast("🖥️ Chế độ màn hình: %s" % ("Toàn màn hình" if is_full else "Cửa sổ"), true)
-	)
-	screen_row.add_child(full_check)
+		var full_check := CheckButton.new()
+		full_check.focus_mode = FOCUS_NONE
+		var cur_mode := DisplayServer.window_get_mode()
+		full_check.button_pressed = (cur_mode == DisplayServer.WINDOW_MODE_FULLSCREEN or cur_mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
+		full_check.toggled.connect(func(is_full: bool):
+			if is_full:
+				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+			else:
+				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+			show_toast("🖥️ Chế độ màn hình: %s" % ("Toàn màn hình" if is_full else "Cửa sổ"), true)
+		)
+		screen_row.add_child(full_check)
 
 	# Weather Selection inside Settings
 	var weather_row := HBoxContainer.new()
@@ -870,7 +946,7 @@ func _render_settings_tab() -> void:
 	weather_row.add_child(w_lbl)
 
 	var w_opt := OptionButton.new()
-	w_opt.custom_minimum_size = Vector2(130, 30)
+	w_opt.custom_minimum_size = Vector2(185, 30)
 	w_opt.focus_mode = FOCUS_NONE
 	w_opt.add_item("🌤️ Ban Ngày", 0)
 	w_opt.add_item("🌅 Hoàng Hôn", 1)
@@ -883,6 +959,171 @@ func _render_settings_tab() -> void:
 		show_toast("🌤️ Đã đổi thời tiết sang: %s" % w_opt.get_item_text(idx), true)
 	)
 	weather_row.add_child(w_opt)
+
+	# --- 2B. SECTION: BẢN ĐỒ HÀNH TINH & RENDER DISTANCE ---
+	var world_sec := _create_settings_section(root_vbox, "🌍 BẢN ĐỒ HÀNH TINH & RENDER DISTANCE")
+
+	# Streaming mode row
+	var stream_row := HBoxContainer.new()
+	stream_row.add_theme_constant_override("separation", 12)
+	world_sec.add_child(stream_row)
+
+	var stream_lbl := Label.new()
+	stream_lbl.text = "Chế độ Tải Bản Đồ Hành Tinh:"
+	stream_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+	stream_lbl.add_theme_font_size_override("font_size", 12)
+	stream_row.add_child(stream_lbl)
+
+	if is_mobile:
+		var mob_badge := Label.new()
+		mob_badge.text = "📱 Hybrid Streaming (Khóa an toàn)"
+		mob_badge.add_theme_font_size_override("font_size", 11)
+		mob_badge.add_theme_color_override("font_color", Color(0.55, 0.90, 0.72))
+		stream_row.add_child(mob_badge)
+	else:
+		var stream_opt := OptionButton.new()
+		stream_opt.custom_minimum_size = Vector2(185, 30)
+		stream_opt.focus_mode = FOCUS_NONE
+		stream_opt.add_item("⚡ Hybrid (Tối ưu)", 0)
+		stream_opt.add_item("🌍 Toàn Hành Tinh (PC)", 1)
+		var is_pw := str(gfx_cfg.get("streaming_mode", "HYBRID")) == "PLANET_WIDE"
+		stream_opt.selected = 1 if is_pw else 0
+		stream_opt.item_selected.connect(func(idx: int):
+			var mode_str := "PLANET_WIDE" if idx == 1 else "HYBRID"
+			GameState.update_world_graphics_setting("streaming_mode", mode_str)
+			show_toast("🌍 Chế độ bản đồ: %s" % ("Toàn Hành Tinh (PC)" if idx == 1 else "Hybrid"), true)
+		)
+		stream_row.add_child(stream_opt)
+
+	# Render Distance Slider (8..12 on Mobile, 8..32 on PC)
+	var rd_row := HBoxContainer.new()
+	rd_row.add_theme_constant_override("separation", 12)
+	world_sec.add_child(rd_row)
+
+	var rd_lbl := Label.new()
+	rd_lbl.text = "Tầm nhìn Cảnh quan 3D (Render Distance):"
+	rd_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+	rd_lbl.add_theme_font_size_override("font_size", 12)
+	rd_row.add_child(rd_lbl)
+
+	var rd_val_lbl := Label.new()
+	var cur_rd := int(gfx_cfg.get("world_render_radius", 12))
+	rd_val_lbl.text = "%d ô" % cur_rd
+	rd_val_lbl.custom_minimum_size = Vector2(48, 0)
+	rd_val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	rd_val_lbl.add_theme_font_size_override("font_size", 12)
+	rd_val_lbl.add_theme_color_override("font_color", Color(0.45, 0.85, 1.0))
+
+	var rd_slider := HSlider.new()
+	rd_slider.custom_minimum_size = Vector2(150, 20)
+	rd_slider.min_value = 8
+	rd_slider.max_value = 12 if is_mobile else 32
+	rd_slider.step = 2
+	rd_slider.value = cur_rd
+	rd_slider.focus_mode = FOCUS_NONE
+	rd_slider.value_changed.connect(func(v: float):
+		var iv := int(round(v))
+		rd_val_lbl.text = "%d ô" % iv
+		GameState.update_world_graphics_setting("world_render_radius", iv)
+	)
+	rd_row.add_child(rd_slider)
+	rd_row.add_child(rd_val_lbl)
+
+	# 3D Props Density Slider (50%..100% Mobile | 50%..150% PC)
+	var dens_row := HBoxContainer.new()
+	dens_row.add_theme_constant_override("separation", 12)
+	world_sec.add_child(dens_row)
+
+	var dens_lbl := Label.new()
+	dens_lbl.text = "Mật độ Rừng & Chi tiết 3D:"
+	dens_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+	dens_lbl.add_theme_font_size_override("font_size", 12)
+	dens_row.add_child(dens_lbl)
+
+	var dens_val_lbl := Label.new()
+	var cur_dens := float(gfx_cfg.get("props_density", 1.0))
+	dens_val_lbl.text = "%d%%" % int(round(cur_dens * 100.0))
+	dens_val_lbl.custom_minimum_size = Vector2(48, 0)
+	dens_val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	dens_val_lbl.add_theme_font_size_override("font_size", 12)
+	dens_val_lbl.add_theme_color_override("font_color", Color(0.45, 0.85, 1.0))
+
+	var dens_slider := HSlider.new()
+	dens_slider.custom_minimum_size = Vector2(150, 20)
+	dens_slider.min_value = 0.50
+	dens_slider.max_value = 1.00 if is_mobile else 1.50
+	dens_slider.step = 0.25
+	dens_slider.value = cur_dens
+	dens_slider.focus_mode = FOCUS_NONE
+	dens_slider.value_changed.connect(func(v: float):
+		dens_val_lbl.text = "%d%%" % int(round(v * 100.0))
+		GameState.update_world_graphics_setting("props_density", v)
+	)
+	dens_row.add_child(dens_slider)
+	dens_row.add_child(dens_val_lbl)
+
+	# MSAA 3D Selector
+	var msaa_row := HBoxContainer.new()
+	msaa_row.add_theme_constant_override("separation", 12)
+	world_sec.add_child(msaa_row)
+
+	var msaa_lbl := Label.new()
+	msaa_lbl.text = "Khử răng cưa 3D (MSAA):"
+	msaa_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+	msaa_lbl.add_theme_font_size_override("font_size", 12)
+	msaa_row.add_child(msaa_lbl)
+
+	var msaa_opt := OptionButton.new()
+	msaa_opt.custom_minimum_size = Vector2(185, 30)
+	msaa_opt.focus_mode = FOCUS_NONE
+	msaa_opt.add_item("Tắt (Nhẹ nhất)", int(Viewport.MSAA_DISABLED))
+	msaa_opt.add_item("2x MSAA (Cân bằng)", int(Viewport.MSAA_2X))
+	if not is_mobile:
+		msaa_opt.add_item("4x MSAA (Sắc nét)", int(Viewport.MSAA_4X))
+	var cur_msaa := int(gfx_cfg.get("msaa_3d", int(Viewport.MSAA_2X)))
+	var sel_msaa := 0
+	for mi in range(msaa_opt.item_count):
+		if int(msaa_opt.get_item_id(mi)) == cur_msaa:
+			sel_msaa = mi
+			break
+	msaa_opt.selected = sel_msaa
+	msaa_opt.item_selected.connect(func(idx: int):
+		var m_val := int(msaa_opt.get_item_id(idx))
+		GameState.update_world_graphics_setting("msaa_3d", m_val)
+		show_toast("✨ Đã cập nhật MSAA 3D: %s" % msaa_opt.get_item_text(idx), true)
+	)
+	msaa_row.add_child(msaa_opt)
+
+	# Clouds 3D & Glow Toggles
+	var fx_row := HBoxContainer.new()
+	fx_row.add_theme_constant_override("separation", 18)
+	world_sec.add_child(fx_row)
+
+	var clouds_cb := CheckBox.new()
+	clouds_cb.text = " ☁️ Mây Hành Tinh 3D"
+	clouds_cb.button_pressed = bool(gfx_cfg.get("enable_clouds_3d", true))
+	clouds_cb.focus_mode = FOCUS_NONE
+	clouds_cb.toggled.connect(func(on: bool):
+		GameState.update_world_graphics_setting("enable_clouds_3d", on)
+	)
+	fx_row.add_child(clouds_cb)
+
+	var glow_cb := CheckBox.new()
+	glow_cb.text = " ✨ Hiệu ứng Phát sáng (Glow)"
+	glow_cb.button_pressed = bool(gfx_cfg.get("enable_glow", true))
+	glow_cb.focus_mode = FOCUS_NONE
+	glow_cb.toggled.connect(func(on: bool):
+		GameState.update_world_graphics_setting("enable_glow", on)
+	)
+	fx_row.add_child(glow_cb)
+
+	if is_mobile:
+		var mob_note := Label.new()
+		mob_note.text = "🔒 Mức Cực đại & Toàn Hành Tinh chỉ mở khóa trên bản PC để bảo vệ pin và RAM thiết bị."
+		mob_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		mob_note.add_theme_font_size_override("font_size", 10)
+		mob_note.add_theme_color_override("font_color", Color(0.68, 0.75, 0.85))
+		world_sec.add_child(mob_note)
 
 	# --- 3. SECTION: TÀI KHOẢN ---
 	var acc_sec := _create_settings_section(root_vbox, "👤 TÀI KHOẢN & PHIÊN ĐĂNG NHẬP")

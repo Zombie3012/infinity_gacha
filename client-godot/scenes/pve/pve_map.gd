@@ -933,7 +933,7 @@ func _finish_party_save(result: Dictionary) -> void:
 
 func _watch_report(battle_id: String) -> void:
 	PveState.selected_battle_id = battle_id
-	get_tree().change_scene_to_file("res://scenes/pve/isometric_pve_arena_3d.tscn")
+	SceneTransition.change_scene("res://scenes/pve/isometric_pve_arena_3d.tscn", "⚔️ Đang vào Đấu Trường 3D...")
 
 func _set_message(message: String, is_error: bool) -> void:
 	_status.text = message
@@ -942,8 +942,8 @@ func _set_message(message: String, is_error: bool) -> void:
 
 func _back_to_tower() -> void:
 	PveState.polling_enabled = false
-	get_tree().change_scene_to_file("res://scenes/pve/pve_tower.tscn")
+	SceneTransition.change_scene("res://scenes/pve/pve_tower.tscn", "🗼 Đang quay lại Tháp PvE...")
 
 func _back_to_base() -> void:
 	PveState.polling_enabled = false
-	get_tree().change_scene_to_file("res://scenes/base/isometric_base_3d.tscn")
+	SceneTransition.change_scene("res://scenes/base/isometric_base_3d.tscn", "🏰 Đang quay về Lâu Đài 3D...")

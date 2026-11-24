@@ -234,6 +234,7 @@ func _run() -> void:
 	expect(arena._actors_by_id["ui-hero-0"].current_mp == 85, "Replay restores final MP from the report")
 	expect(not arena._actors_by_id["enemy"].is_alive, "Replay ends with the authoritative death state")
 	expect(arena.combat_log_label.get_parsed_text().contains("hồi sinh"), "Revive is represented in playback")
+	expect(arena._floating_numbers_spawned >= 3, "Arena spawns floating combat numbers for crit, revive, heal, and damage")
 	expect(arena._actors_by_id["ui-hero-1"].home_position == arena.formation_position("HERO", 8), "Back-row Hero occupies the ninth formation cell")
 	expect(not arena.start_battle_btn.disabled, "A completed replay can be watched again")
 	PveState.battle_completed.emit("another-squad-report")

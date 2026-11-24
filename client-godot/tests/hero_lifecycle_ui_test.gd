@@ -24,6 +24,8 @@ func texts(root: Node) -> String:
 	return result
 
 func _ready() -> void:
+	var watchdog := get_tree().create_timer(20.0)
+	watchdog.timeout.connect(func(): push_error("HERO LIFECYCLE: Timed out"); get_tree().quit(1))
 	await run_checks()
 	print("HERO_LIFECYCLE_UI_TESTS: %d checks, %s" % [checks, "FAILED" if failed else "PASS"])
 	get_tree().quit(1 if failed else 0)
@@ -78,11 +80,45 @@ func run_checks() -> void:
 	actor.setup_base_resident(dead, Vector3.ZERO)
 	actor.set_floor_focus_state(true, false)
 	expect(not actor.visible and not actor.is_alive, "Floor focus cannot display a deceased base resident")
+
+	# P2-10: Personality & Loyalty card in UniversalHeroCard and GameState
+	GameState.personality_map["alive"] = {"heroId": "alive", "coreTrait": "Kiên định", "socialTrait": "Ôn hòa", "favoriteFood": "Súp Nấm", "loyaltyScore": 85, "loyaltyState": "LOYAL"}
+	expect(GameState.get_hero_personality("alive").get("favoriteFood", "") == "Súp Nấm", "GameState.get_hero_personality returns synced personality data")
+	card.setup({"id": "alive", "name": "Living Hero", "hp": 30, "maxHp": 100, "rarity": 3, "level": 1, "loyaltyScore": 85}, 0, false)
+	expect(texts(card).contains("Trung thành"), "UniversalHeroCard displays loyalty badge for loyal hero")
 	var roster: Control = load("res://scenes/heroes/hero_roster.tscn").instantiate()
 	roster.set_script(RosterFixture)
 	add_child(roster)
 	await get_tree().process_frame
 	expect(roster._filtered_heroes.size() == 1 and roster._filtered_heroes[0]["id"] == "alive", "Barracks default list contains living Heroes only")
+
+	# Hero Detail UI Unification checks: TopBar hidden, stable 3-column widths across 4 tabs, no nested ScrollContainer
+	var top_bar: Control = roster.get_node("MarginContainer/VBoxContainer/TopBar")
+	expect(top_bar.visible and not roster.status_label.visible, "TopBar is visible in Hero Roster grid view and redundant StatusLabel is hidden")
+	expect(roster._filter_option_btn != null and roster._sort_option_btn != null, "Filter and sort use compact dropdown boxes on the right")
+	roster._open_hero_detail(alive)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	expect(not top_bar.visible, "Redundant TopBar hides in Hero Detail view")
+	var base_ped_w: float = roster._pedestal_card.size.x
+	var base_right_w: float = roster._right_card.size.x
+	var widths_stable := true
+	var no_nested_scroll := true
+	for t_idx in [1, 2, 3, 0]:
+		roster._active_profile_tab = t_idx
+		roster._render_active_profile_tab()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		if absf(roster._pedestal_card.size.x - base_ped_w) > 2.0 or absf(roster._right_card.size.x - base_right_w) > 2.0:
+			widths_stable = false
+		if not roster._tab_content_vbox.find_children("*", "ScrollContainer", true, false).is_empty():
+			no_nested_scroll = false
+	expect(widths_stable, "Pedestal and Right Panel widths stay stable when switching across all 4 tabs")
+	expect(no_nested_scroll, "No nested ScrollContainer exists inside _tab_content_vbox on any tab")
+	expect(roster._tab_content_scroll.scroll_vertical == 0, "Tab switch resets scroll position to top")
+	roster._close_hero_detail()
+	await get_tree().process_frame
+	expect(top_bar.visible, "TopBar reappears when returning to Hero Roster grid view")
 	roster._roster_filter_mode = 4
 	roster._refresh_hero_list()
 	expect(roster._filtered_heroes.size() == 2, "Resurrection candidates have their own roster filter")

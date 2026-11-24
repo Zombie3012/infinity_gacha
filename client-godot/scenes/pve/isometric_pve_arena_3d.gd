@@ -29,7 +29,7 @@ func _ready() -> void:
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	speed_toggle_btn.pressed.connect(_on_speed_toggle_pressed)
 	camera_mode_btn.pressed.connect(_on_camera_mode_pressed)
-	back_base_btn.pressed.connect(func(): get_tree().change_scene_to_file(MAP_SCENE))
+	back_base_btn.pressed.connect(func(): SceneTransition.change_scene(MAP_SCENE, "🗺️ Đang quay về Bản Đồ PvE..."))
 	_draw_formation_cells()
 	PveState.battle_completed.connect(func(battle_id: String):
 		if battle_id != PveState.selected_battle_id:
@@ -58,7 +58,7 @@ func _ready() -> void:
 		var live = preload("res://scripts/ui/pve_live_battle_modal.gd").new()
 		live.battle_id = PveState.selected_battle_id
 		live.battle = _battle
-		live.closed.connect(func(): get_tree().change_scene_to_file(MAP_SCENE))
+		live.closed.connect(func(): SceneTransition.change_scene(MAP_SCENE, "🗺️ Đang quay về Bản Đồ PvE..."))
 		$HUD.add_child(live)
 		return
 	start_battle_btn.disabled = false
@@ -150,6 +150,7 @@ func _on_start_battle_pressed() -> void:
 			if is_instance_valid(actor):
 				actor.play_revive_feedback(hp_after)
 				actor.set_combat_resources(hp_after, int(entry.get("actorMp", actor.current_mp)))
+				_spawn_floating_combat_number(actor.global_position, "✨ REVIVE +%d" % heal, Color(1.0, 0.88, 0.32), 46)
 				if _dynamic_cam_enabled:
 					camera_rig.focus_action_unit(actor.global_position, 8.2, 0.2 / _playback_speed)
 			_append_log("[color=#ffc873]%s hồi sinh: +%d HP[/color]" % [_escape(actor_name), heal])
@@ -158,6 +159,7 @@ func _on_start_battle_pressed() -> void:
 			if heal > 0:
 				if is_instance_valid(target):
 					target.apply_heal_feedback(heal, hp_after)
+					_spawn_floating_combat_number(target.global_position, "+%d HP" % heal, Color(0.35, 1.0, 0.52), 42)
 				_append_log("%s hồi %d HP cho %s" % [_escape(actor_name), heal, _escape(target_name)])
 			else:
 				var skill := str(entry.get("actionType", "")) == "SKILL" or action != "BASIC"
@@ -169,7 +171,14 @@ func _on_start_battle_pressed() -> void:
 					await actor.perform_attack_lunge(target.global_position, skill, _playback_speed)
 					if _cancelled:
 						return
-					target.apply_hit_feedback(int(entry.get("damage", 0)), critical, missed, bool(entry.get("blocked", false)), hp_after)
+					var dmg_val := int(entry.get("damage", 0))
+					target.apply_hit_feedback(dmg_val, critical, missed, bool(entry.get("blocked", false)), hp_after)
+					if missed:
+						_spawn_floating_combat_number(target.global_position, "💨 NÉ!", Color(0.65, 0.88, 1.0), 38)
+					elif critical:
+						_spawn_floating_combat_number(target.global_position, "💥 CRIT -%d" % dmg_val, Color(1.0, 0.78, 0.18), 52)
+					else:
+						_spawn_floating_combat_number(target.global_position, "-%d" % dmg_val, Color(1.0, 0.38, 0.38), 40)
 					if _dynamic_cam_enabled and critical:
 						camera_rig.shake(0.2, 0.15)
 					await actor.return_to_slot(_playback_speed)
@@ -178,7 +187,11 @@ func _on_start_battle_pressed() -> void:
 				var outcome := "Né tránh" if missed else "-%d HP" % int(entry.get("damage", 0))
 				_append_log("Hiệp %d · %s → %s: %s%s" % [round_number, _escape(actor_name), _escape(target_name), "CRIT " if critical else "", outcome])
 			if is_instance_valid(actor):
-				actor.set_combat_resources(int(entry.get("actorHp", actor.current_hp)), int(entry.get("actorMp", actor.current_mp)))
+				var prev_mp := actor.current_mp
+				var next_mp := int(entry.get("actorMp", actor.current_mp))
+				actor.set_combat_resources(int(entry.get("actorHp", actor.current_hp)), next_mp)
+				if next_mp > prev_mp:
+					_spawn_floating_combat_number(actor.global_position + Vector3(0.4, 0.0, 0.0), "+%d MP" % (next_mp - prev_mp), Color(0.42, 0.78, 1.0), 34)
 		await get_tree().create_timer(0.25 / _playback_speed).timeout
 		if _cancelled:
 			return
@@ -207,9 +220,35 @@ func _show_summary() -> void:
 		_append_log("[color=#ffad98]%s · %s[/color]" % [_escape(str(death.get("name", "Hero"))),
 			"Tử trận; trang bị rơi. Hồi sinh tại Sử Điện bằng Ngọc hồi sinh 7★."])
 	_append_log("Kết quả đã được lưu. Bạn có thể trở về map bất cứ lúc nào.")
+	if GameState.is_logged_in():
+		var chat_script = load("res://scripts/ui/chat_panel_modal.gd")
+		var share_msg: String = chat_script.format_battle_share(_battle, _report)
+		await ApiClient.post_req("/api/chat/world", {"body": share_msg})
 
 static func _escape(value: String) -> String:
 	return value.replace("[", "[lb]")
+
+var _floating_numbers_spawned: int = 0
+
+func _spawn_floating_combat_number(world_pos: Vector3, text_str: String, color: Color, font_size: int = 40) -> void:
+	if not is_inside_tree():
+		return
+	_floating_numbers_spawned += 1
+	var lbl := Label3D.new()
+	lbl.text = text_str
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.font_size = font_size
+	lbl.outline_size = 6
+	lbl.pixel_size = 0.018
+	lbl.modulate = color
+	lbl.position = world_pos + Vector3(randf_range(-0.35, 0.35), 2.1, 0.0)
+	add_child(lbl)
+	var dur := maxf(0.15, 0.85 / maxf(0.1, _playback_speed))
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "position:y", lbl.position.y + 1.8, dur).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate:a", 0.0, dur).set_delay(dur * 0.3)
+	tw.finished.connect(lbl.queue_free, CONNECT_ONE_SHOT)
 
 func _append_log(value: String) -> void:
 	combat_log_label.append_text(value + "\n")

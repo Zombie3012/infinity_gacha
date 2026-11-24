@@ -40,8 +40,11 @@ func _build_ui() -> void:
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 
+	var vp := get_viewport_rect().size
+	var pw := clampf(vp.x * 0.82, 660.0, 900.0) if vp.x > 0 else 900.0
+	var ph := clampf(vp.y * 0.85, 460.0, 620.0) if vp.y > 0 else 620.0
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(900, 620)
+	panel.custom_minimum_size = Vector2(pw, ph)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.06, 0.09, 0.15, 0.98)
@@ -202,9 +205,27 @@ func _render_my_alliance(al: Dictionary) -> void:
 
 	for mem in members:
 		if not (mem is Dictionary): continue
+		var mem_id := str(mem.get("masterId", ""))
+		var mem_name := str(mem.get("masterName", mem_id if not mem_id.is_empty() else "Thành viên"))
+		var mem_row := HBoxContainer.new()
+		mem_row.add_theme_constant_override("separation", 8)
+		_body_vbox.add_child(mem_row)
+
 		var mlbl := Label.new()
-		mlbl.text = "• %s [%s]" % [str(mem.get("masterName", mem.get("masterId", "Thành viên"))), str(mem.get("role", "MEMBER"))]
-		_body_vbox.add_child(mlbl)
+		mlbl.text = "• %s [%s]" % [mem_name, str(mem.get("role", "MEMBER"))]
+		mlbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mem_row.add_child(mlbl)
+
+		if not mem_id.is_empty() and mem_id != GameState.master_id:
+			var add_f_btn := Button.new()
+			add_f_btn.text = "➕ Kết Bạn"
+			add_f_btn.custom_minimum_size = Vector2(104, 28)
+			add_f_btn.pressed.connect(func():
+				var res := await ApiClient.post_req("/api/friends/requests", {"targetMasterId": mem_id})
+				if is_instance_valid(self) and _status_lbl != null:
+					_status_lbl.text = "📨 Đã gửi lời mời kết bạn tới %s!" % mem_name if res.get("ok", false) else ("❌ " + str(res.get("error", "Lỗi")))
+			)
+			mem_row.add_child(add_f_btn)
 
 	var act_row := HBoxContainer.new()
 	act_row.add_theme_constant_override("separation", 10)

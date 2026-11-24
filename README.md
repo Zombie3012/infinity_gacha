@@ -2,7 +2,7 @@
 
 Game quản lý Hero, sinh tồn và chiến thuật. Client hiện tại là **Godot 3D isometric**, kết nối REST API Node.js/Express và PostgreSQL. Web React/Vite đã được gỡ khỏi workspace.
 
-Cập nhật: **23/11/2026 (UTC+7)**. Đây là bản prototype đang hoàn thiện, với dữ liệu cân bằng mẫu; các checklist P0–P3 cũ không có nghĩa toàn bộ game đã sẵn sàng phát hành.
+Cập nhật: **24/11/2026 (UTC+7)**. Đây là bản prototype đang hoàn thiện, với dữ liệu cân bằng mẫu; các checklist P0–P3 cũ không có nghĩa toàn bộ game đã sẵn sàng phát hành.
 
 Hero và vật liệu dùng độ hiếm **1–7★** (1★ Bạc, 2★ Xanh lá, 3★ Xanh dương, 4★ Tím, 5★ Vàng, 6★ Đỏ, 7★ viền Rainbow). Mọi Hero đều có thể tử trận; hồ sơ được giữ tại công trình **Sử Điện Anh Hùng**. Dùng **1 Ngọc hồi sinh 7★** để hồi sinh một Hero về **100% HP**, không phí thêm. Xem [cơ chế và API](docs/HERO_CHRONICLE.md).
 
@@ -20,10 +20,11 @@ Công trình **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** cho phép xây dựn
 client-godot/                   Client Godot, giao diện và diễn hoạt 3D
 packages/shared/               Combat v2, sinh chỉ số, công thức, hằng số
 packages/server/               Express API, domain services, Drizzle ORM
-packages/server/drizzle/       Lịch sử migration (0000–0060)
+packages/server/drizzle/       Lịch sử migration (0000–0064)
 packages/server/src/database/seeds/  Dữ liệu mẫu
+docs/                          Tài liệu kỹ thuật hệ thống (PvE, Căn cứ, Đồ họa PC/Mobile, ...)
 docs/design_drafts/            Đặc tả/checklist lịch sử P0–P3
-scripts/                       Build cleanup, encoding, seed, test Godot và tài liệu API
+scripts/                       Build cleanup, encoding, seed hành tinh, test Godot và tài liệu API
 ```
 
 ## Trạng thái hiện tại
@@ -36,10 +37,11 @@ scripts/                       Build cleanup, encoding, seed, test Godot và tà
 | Căn cứ & HUD chính | Xây/nâng cấp tức thì, mở rộng, sản xuất, tách biệt ký túc xá và phân công Hero | Căn cứ 3D thoáng với Top-Right 3 tài nguyên + thanh Sự Kiện, nút xoay vòng góc nhìn T1/T2/Toàn cảnh, Build Drawer ẩn mặc định và Dock CTA |
 | Sinh tồn, y tế, rèn & kho | Có API đầy đủ và lưu trạng thái | Bếp/tâm lý, ký túc xá, hồi phục, lò rèn (`ItemGridBrowser` + lọc `+15`) và Nhà Kho tổng hợp mọi vật phẩm theo phân loại + thu hồi đồ rơi tầng |
 | Giả kim và công nghệ | Nghiên cứu tức thì, chế ba loại thuốc, dược liệu 1–7★ và tiến độ theo Master | Cây Giả kim, chế/dùng thuốc và thẻ kho vật phẩm 1–7★ trong Đại Sảnh; [hướng dẫn](docs/ALCHEMY_PVE_CONSUMABLES.md) |
-| PvE, Hầm Ngục & Viễn Chinh | Map PvE ba cấp, Combat v2 (Auto/Thủ công), Hầm Ngục Cổ Đại (`/api/dungeon`), Viễn Chinh (`/api/world/expeditions`) | `PveModeModal` 3 chế độ (Tháp PvE, Hầm Ngục Cổ Đại, Viễn Chinh Thế Giới — đã bỏ Chinh Phạt Lãnh Thổ), replay Combat v2 và đồng bộ Hero đi viễn chinh |
+| PvE, Hầm Ngục & Viễn Chinh Hành Tinh 3D | Map PvE ba cấp, Combat v2, Hầm Ngục Cổ Đại, Hành tinh `600×300` (`180.000` ô gồm 5 lục địa + `OCEAN`), RTS Random Spawn, Chunk Streaming, Cảng Tàu Bay (`AIRSHIP_PORT`), Hầm Ngục Nổi, Tập kết & Cứu hộ SOS | `WorldRtsMap` hành tinh 3D morph 2D↔3D (`≤ 3 Draw Calls`), cảnh quan 3D `MultiMesh`, sương mù mây mềm 1h, nội suy tàu bay 60 FPS, nhập tọa độ Minimap, click hộp Hạm đội nhảy theo tàu, `AirshipPortModal`, `WorldDispatchModal`, `WorldReportsModal` |
 | Cửa hàng khinh khí cầu | Danh mục, mua bằng bạc, chống trả tiền hai lần | Mô hình khinh khí cầu và giao diện mua hàng auto-fit thẻ 92×92 Godot |
-| Sự kiện, nhiệm vụ, hòm thư | API LiveOps, nhiệm vụ, thành tựu, hòm thư và sổ giao dịch ví | `EventsQuestsModal` (3 tab Sự Kiện / Nhiệm Vụ / Thành Tựu) và `MailboxModal` (Hòm Thư + Sổ giao dịch) gắn trực tiếp trên thanh Sự Kiện Top-Right |
-| Liên minh & Chat 3 kênh | API Liên minh cơ bản, Chat Liên minh (`/api/alliance/chat`), Chat Thế Giới (`/api/chat/world`), Chat Riêng Tư (`/api/chat/private`) | Công trình 3D `ALLIANCE_HALL` mở `AllianceModal` (chưa gồm Công nghệ/Chiến tranh Liên minh) và `ChatPanelModal` 3 kênh tại góc dưới trái |
+| Sự kiện, nhiệm vụ, hòm thư & Bách khoa | API LiveOps, nhiệm vụ, thành tựu, hòm thư, sổ giao dịch ví & dữ liệu từ điển | `EventsQuestsModal`, `MailboxModal`, chấm đỏ thông báo (Red-Dot), hàng đợi Toast mượt và `CodexModal` (Bách Khoa 4 tab trong Avatar Master) |
+| Bạn bè, Liên minh & Chat 3 kênh SSE | API Bạn bè + tặng quà ngày + chặn chat, Liên minh cơ bản, Chat 3 kênh + SSE Stream (`/api/chat/stream`; Thế Giới in-memory, Liên Minh & Riêng Tư lưu DB) | `FriendsModal` (3 tab), công trình 3D `ALLIANCE_HALL` → `AllianceModal`, `ChatPanelModal` real-time SSE & liên kết chéo Bạn bè/Liên minh |
+| Cài đặt đồ họa PC / Mobile | Chế độ Chunk Streaming tương thích Hybrid & PC mở rộng | Tự động nhận diện thiết bị (`DeviceProfile`): Mobile khóa **Hybrid** an toàn (`R ≤ 12`), PC mở khóa toàn bộ tới `ULTRA` / `PLANET_WIDE` — tập trung 100% tại **Avatar Master → Tab Cài Đặt**; xem [chuẩn đồ họa PC/Mobile](docs/WORLD_MAP_GRAPHICS_PC_MOBILE.md) |
 | Vận hành | Admin API key, cấu hình, audit, analytics, hỗ trợ | Có gửi ticket trong hồ sơ; console quản trị Web cũ đã gỡ |
 
 ## Quy tắc gacha hiện hành
@@ -74,6 +76,7 @@ Copy-Item packages/server/.env.example packages/server/.env
 ```powershell
 npm run db:migrate
 npm run db:seed
+node scripts/seed-planet-world.mjs
 npm run build
 npm run dev:server
 ```

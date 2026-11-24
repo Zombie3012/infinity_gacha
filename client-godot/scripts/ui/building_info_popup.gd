@@ -398,7 +398,7 @@ func _get_resting_heroes() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var b_id := str(building_data.get("id", ""))
 	for h in GameState.heroes:
-		if not (h is Dictionary):
+		if not (h is Dictionary) or not GameState.is_hero_alive(h):
 			continue
 		var hid_building := str(h.get("housingBuildingId", "")) if h.get("housingBuildingId") != null else ""
 		if not b_id.is_empty():

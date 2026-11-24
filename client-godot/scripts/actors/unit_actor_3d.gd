@@ -37,6 +37,8 @@ var floor_index: int = 1
 var terrace_center: Vector3 = Vector3.ZERO
 var max_walk_radius: float = 5.8
 var is_on_active_floor: bool = true
+var routine_goal: String = "IDLE"
+var routine_targets: Dictionary = {}
 var _current_actor_transparency: float = 0.0
 var _floor_focus_tween: Tween = null
 
@@ -87,6 +89,13 @@ const DRAGGED_SPEECH_LINES := [
 	"🌀 Đi làm việc ở Xưởng hay vào Cổng Tháp đây Ngài?!"
 ]
 
+const HeroDialogueBankScript := preload("res://scripts/actors/hero_dialogue_bank.gd")
+
+var _status_icon_label: Label3D = null
+var _social_pause_timer: float = 0.0
+var _social_cooldown: float = 0.0
+var time_of_day_mode: int = 0
+
 func _ready() -> void:
 	home_position = global_position
 	_wander_target = home_position
@@ -94,8 +103,58 @@ func _ready() -> void:
 		click_body.set_meta("interactable_type", "HERO")
 		click_body.set_meta("hero_node", self)
 	_speech_timer = randf_range(2.5, 9.0)
+	_ensure_status_icon_label()
 	_apply_team_material()
 	_refresh_labels()
+
+func _ensure_status_icon_label() -> void:
+	if _status_icon_label != null and is_instance_valid(_status_icon_label):
+		return
+	_status_icon_label = Label3D.new()
+	_status_icon_label.name = "StatusIconLabel3D"
+	_status_icon_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_status_icon_label.font_size = 34
+	_status_icon_label.pixel_size = 0.012
+	_status_icon_label.position = Vector3(0.0, 2.95, 0.0)
+	_status_icon_label.modulate = Color(1.0, 1.0, 1.0, 0.95)
+	add_child(_status_icon_label)
+
+func update_status_icon_visibility(camera: Camera3D) -> void:
+	if _status_icon_label == null or not is_instance_valid(_status_icon_label):
+		return
+	if mode == ActorMode.PVE_COMBAT or not is_on_active_floor or not visible:
+		_status_icon_label.visible = false
+		return
+	var btype := ""
+	var workers_b: Variant = hero_raw_data.get("buildingType", "")
+	if not str(workers_b).is_empty():
+		btype = str(workers_b)
+	_status_icon_label.text = HeroDialogueBankScript.status_icon_for(routine_goal, btype)
+	if camera == null:
+		_status_icon_label.visible = true
+		return
+	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		_status_icon_label.visible = camera.size <= 64.0
+	else:
+		_status_icon_label.visible = camera.global_position.distance_to(global_position) <= 55.0
+
+func start_social_interaction(partner: UnitActor3D, line: String, delay: float = 0.0) -> void:
+	if mode == ActorMode.BASE_DRAGGED or mode == ActorMode.PVE_COMBAT:
+		return
+	_social_pause_timer = 3.2 + delay
+	_social_cooldown = 16.0
+	if partner != null and is_instance_valid(partner):
+		var to_partner := partner.global_position - global_position
+		to_partner.y = 0.0
+		if to_partner.length() > 0.05 and visual_root != null:
+			visual_root.rotation.y = atan2(to_partner.x, to_partner.z)
+	if delay <= 0.0:
+		show_speech_bubble(line, 3.0)
+	else:
+		get_tree().create_timer(delay).timeout.connect(func():
+			if is_instance_valid(self) and is_on_active_floor:
+				show_speech_bubble(line, 3.0)
+		, CONNECT_ONE_SHOT)
 
 func setup_combat_unit(data: Dictionary) -> void:
 	mode = ActorMode.PVE_COMBAT
@@ -134,8 +193,9 @@ func setup_base_resident(data: Dictionary, spawn_pos: Vector3, worker_info: Dict
 	terrace_center = t_center
 	max_walk_radius = 6.6 if floor_index <= 1 else 5.8
 
-	var hero_state := str(data.get("state", "IDLE"))
-	if not worker_info.is_empty():
+	var hero_state := str(data.get("state", "IDLE")).to_upper()
+	routine_goal = compute_routine_goal(data, not worker_info.is_empty())
+	if routine_goal == "WORK":
 		mode = ActorMode.BASE_WORKING
 		_prev_base_mode = ActorMode.BASE_WORKING
 		var b: Dictionary = worker_info.get("building", {})
@@ -145,7 +205,7 @@ func setup_base_resident(data: Dictionary, spawn_pos: Vector3, worker_info: Dict
 		work_look_target = worker_info.get("buildingCenter", home_position)
 		global_position = home_position
 		_wander_target = home_position
-	elif hero_state == "INJURED" or hero_state == "RESTING" or current_hp < int(max_hp * 0.5):
+	elif routine_goal == "INJURED":
 		mode = ActorMode.BASE_INJURED
 		_prev_base_mode = ActorMode.BASE_INJURED
 		assigned_building_id = ""
@@ -164,6 +224,36 @@ func setup_base_resident(data: Dictionary, spawn_pos: Vector3, worker_info: Dict
 
 	_apply_team_material()
 	_refresh_base_labels()
+
+static func compute_routine_goal(data: Dictionary, has_worker_info: bool = false) -> String:
+	if has_worker_info:
+		return "WORK"
+	var hero_state := str(data.get("state", "IDLE")).to_upper()
+	var mhp := maxi(1, int(data.get("maxHp", 100)))
+	var chp := clampi(int(data.get("hp", mhp)), 0, mhp)
+	if hero_state == "INJURED" or hero_state == "RESTING" or (float(chp) / float(mhp)) < 0.80:
+		return "INJURED"
+	if float(data.get("hunger", 0.0)) >= 55.0:
+		return "HUNGRY"
+	if float(data.get("fatigue", 0.0)) >= 55.0:
+		return "TIRED"
+	return "IDLE"
+
+func apply_routine_targets(targets: Dictionary) -> void:
+	routine_targets = targets
+	if mode == ActorMode.BASE_WORKING or mode == ActorMode.PVE_COMBAT:
+		return
+	var key := "plaza"
+	match routine_goal:
+		"HUNGRY": key = "kitchen"
+		"TIRED": key = "dorm"
+		"INJURED": key = "infirmary"
+		_: key = "plaza"
+	if targets.has(key) and targets[key] is Vector3:
+		var base_pt: Vector3 = targets[key]
+		home_position = base_pt + Vector3(randf_range(-1.6, 1.6), 0.0, randf_range(-1.6, 1.6))
+		_wander_target = home_position
+		global_position = home_position
 
 ## Isolates Hero actors on the active floor and completely hides/disables them on other floors to eliminate lag
 func set_floor_focus_state(active_floor: bool, animate: bool = true) -> void:
@@ -258,8 +348,25 @@ func show_speech_bubble(text: String, duration: float = 3.2) -> void:
 	speech_label.visible = true
 	_speech_hide_timer = duration
 
+func face_camera(cam: Camera3D) -> void:
+	if cam == null or visual_root == null:
+		return
+	var dir := cam.global_position - global_position
+	dir.y = 0.0
+	if dir.length() > 0.05:
+		visual_root.rotation.y = atan2(dir.x, dir.z)
+
 func _process(delta: float) -> void:
 	if mode == ActorMode.PVE_COMBAT:
+		return
+	if _social_cooldown > 0.0:
+		_social_cooldown = maxf(0.0, _social_cooldown - delta)
+	if _social_pause_timer > 0.0:
+		_social_pause_timer = maxf(0.0, _social_pause_timer - delta)
+		if _speech_hide_timer > 0.0:
+			_speech_hide_timer -= delta
+			if _speech_hide_timer <= 0.0 and speech_label != null:
+				speech_label.visible = false
 		return
 
 	# Speech bubble countdown & periodic ambient lines
@@ -286,16 +393,27 @@ func _process(delta: float) -> void:
 func _trigger_ambient_speech() -> void:
 	if randf() > 0.55:
 		return
-	match mode:
-		ActorMode.BASE_WORKING:
-			show_speech_bubble(WORK_SPEECH_LINES[randi() % WORK_SPEECH_LINES.size()], 3.2)
-		ActorMode.BASE_INJURED:
-			show_speech_bubble(INJURED_SPEECH_LINES[randi() % INJURED_SPEECH_LINES.size()], 3.2)
-		ActorMode.BASE_WANDER:
-			if is_in_active_party:
-				show_speech_bubble(PARTY_SPEECH_LINES[randi() % PARTY_SPEECH_LINES.size()], 3.2)
-			else:
-				show_speech_bubble(IDLE_SPEECH_LINES[randi() % IDLE_SPEECH_LINES.size()], 3.2)
+	var mood := str(hero_raw_data.get("mood", "NEUTRAL"))
+	if time_of_day_mode == 2 and mode == ActorMode.BASE_WANDER:
+		var night_lines := [
+			"🔥 Ngọn lửa trại ban đêm ấm áp thật!",
+			"🌙 Đêm xuống rồi, nghỉ ngơi lấy sức cho ngày mai thôi.",
+			"✨ Ánh sao trên Lâu Đài đêm nay đẹp quá!"
+		]
+		show_speech_bubble(night_lines[randi() % night_lines.size()], 3.2)
+		return
+	show_speech_bubble(HeroDialogueBankScript.pick_ambient_line(class_code, routine_goal, mood), 3.2)
+
+func set_time_of_day(mode_idx: int, bonfire_pos: Vector3, dorm_pos: Vector3) -> void:
+	time_of_day_mode = mode_idx
+	if mode != ActorMode.BASE_WANDER:
+		return
+	if mode_idx == 2:
+		var target := dorm_pos if routine_goal == "TIRED" else bonfire_pos
+		home_position = target + Vector3(randf_range(-2.4, 2.4), 0.0, randf_range(-2.4, 2.4))
+		_wander_target = home_position
+	elif not routine_targets.is_empty():
+		apply_routine_targets(routine_targets)
 
 func _process_base_wander(delta: float) -> void:
 	var to_target := _wander_target - global_position

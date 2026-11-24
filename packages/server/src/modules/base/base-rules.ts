@@ -219,5 +219,8 @@ export function maxConstructibleCountForType(code: string, masterLevel: number):
   if (code === 'TRAINING_CENTER') {
     return mLvl >= 30 ? 2 : 1;
   }
+  if (code === 'AIRSHIP_PORT') {
+    return 1;
+  }
   return null;
 }

@@ -71,7 +71,7 @@ func refresh_ui() -> void:
 	var resident_count := 0
 	var resting_count := 0
 	for h in GameState.heroes:
-		if not (h is Dictionary):
+		if not (h is Dictionary) or not GameState.is_hero_alive(h):
 			continue
 		var hid_b := str(h.get("housingBuildingId", "")) if h.get("housingBuildingId") != null else ""
 		if not b_id.is_empty():

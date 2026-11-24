@@ -1,6 +1,6 @@
 # API route inventory
 
-Generated from `packages/server/src/server.ts` (242 routes).
+Generated from `packages/server/src/server.ts` (265 routes).
 Errors use `{ "error": string }`; the string may be an error code or a readable message. Detailed schemas: [private PvE map](openapi.pve.yaml) and [Combat v2](openapi.combat-v2.yaml). PvE mutations require `Idempotency-Key`; map reads settle due arrivals. This inventory lists the remaining API coverage.
 
 | Method | Path | Auth | Feature |
@@ -78,6 +78,13 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | POST | `/api/auth/recover` | public | — |
 | POST | `/api/auth/register` | public | — |
 | GET | `/api/auth/security` | Bearer | — |
+| GET | `/api/base/airships` | Bearer | — |
+| DELETE | `/api/base/airships/:airshipId` | Bearer | — |
+| POST | `/api/base/airships/:airshipId/move` | Bearer | — |
+| POST | `/api/base/airships/:airshipId/repair` | Bearer | — |
+| POST | `/api/base/airships/:airshipId/upgrade` | Bearer | — |
+| POST | `/api/base/airships/craft` | Bearer | — |
+| POST | `/api/base/airships/tech/:techCode/unlock` | Bearer | — |
 | POST | `/api/base/buildings` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/collect` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/demolish` | Bearer | — |
@@ -91,6 +98,7 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | GET | `/api/base/overview` | Bearer | — |
 | GET | `/api/chat/private` | Bearer | — |
 | POST | `/api/chat/private` | Bearer | — |
+| GET | `/api/chat/stream` | Bearer | — |
 | GET | `/api/chat/world` | Bearer | — |
 | POST | `/api/chat/world` | Bearer | — |
 | GET | `/api/chronicles/heroes` | Bearer | — |
@@ -133,6 +141,19 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | POST | `/api/equipment/heroes/:heroId/quick-unequip` | Bearer | EQUIPMENT |
 | GET | `/api/events` | Bearer | — |
 | POST | `/api/events/missions/:missionId/claim` | Bearer | — |
+| GET | `/api/friends` | Bearer | — |
+| DELETE | `/api/friends/:friendMasterId` | Bearer | — |
+| GET | `/api/friends/:friendMasterId/base` | Bearer | — |
+| DELETE | `/api/friends/:friendMasterId/block` | Bearer | — |
+| POST | `/api/friends/:friendMasterId/block` | Bearer | — |
+| POST | `/api/friends/:friendMasterId/gift` | Bearer | — |
+| GET | `/api/friends/:friendMasterId/profile` | Bearer | — |
+| POST | `/api/friends/gifts/claim-all` | Bearer | — |
+| GET | `/api/friends/requests` | Bearer | — |
+| POST | `/api/friends/requests` | Bearer | — |
+| POST | `/api/friends/requests/:requestId/accept` | Bearer | — |
+| POST | `/api/friends/requests/:requestId/decline` | Bearer | — |
+| GET | `/api/friends/search` | Bearer | — |
 | GET | `/api/gacha/banners` | Bearer | SUMMON |
 | GET | `/api/gacha/banners/:bannerId` | Bearer | SUMMON |
 | GET | `/api/gacha/history` | Bearer | SUMMON |
@@ -232,6 +253,7 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | GET | `/api/world/expeditions` | Bearer | — |
 | POST | `/api/world/expeditions` | Bearer | — |
 | POST | `/api/world/expeditions/:expeditionId/recall` | Bearer | — |
+| POST | `/api/world/expeditions/:expeditionId/redirect` | Bearer | — |
 | GET | `/api/world/global` | Bearer | — |
 | GET | `/api/world/global/map` | Bearer | — |
 | GET | `/api/world/global/tiles/:tileId` | Bearer | — |
@@ -241,6 +263,7 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | GET | `/api/world/heroes/away` | Bearer | — |
 | GET | `/api/world/leaderboard` | Bearer | — |
 | GET | `/api/world/pvp/battles` | Bearer | — |
+| GET | `/api/world/rts/snapshot` | Bearer | — |
 | GET | `/api/world/territories` | Bearer | — |
 | POST | `/api/world/territories/:territoryId/abandon` | Bearer | — |
 | POST | `/api/world/territories/:territoryId/upgrade` | Bearer | — |

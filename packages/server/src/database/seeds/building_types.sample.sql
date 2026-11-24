@@ -15,7 +15,8 @@ VALUES
   ('FORGE', 'Forge – Xưởng Rèn Trang Bị', 'CRAFTING', 'Xưởng rèn 3 cấp nơi chế tạo vũ khí, giáp trụ, cường hóa và ghép sao trang bị.', 3, 3, 1, 2200, NULL),
   ('KITCHEN', 'Kitchen – Bếp', 'PRODUCTION', 'Bếp 3 cấp (mỗi cấp +1 Hero làm việc): tự động nấu 20 / 40 / 80 FOOD mỗi giờ và chế biến món ăn đặc biệt tạo Buff.', 3, 3, 1, 1600, '{"resourceType":"FOOD","ratePerHour":20,"capacity":200}'::jsonb),
   ('MEDICAL', 'Recovery Center – Trung Tâm Hồi Phục', 'MEDICAL', 'Trung tâm hồi phục 3 cấp (1 Hero phụ trách): mở 2 / 4 / 6 slot chữa trị chấn thương theo từng cấp độ.', 3, 1, 1, 2400, NULL),
-  ('HALL_OF_MAGIC', 'Hall of Magic – Đại Sảnh Ma Thuật', 'MAGIC', 'Đại sảnh Ma thuật 3 cấp (mở theo cấp Master, 2 người mỗi phân khu = tổng 6 Hero): Thư Viện Ma Thuật, Xưởng Giả Kim và Phòng Nghiên Cứu.', 3, 6, 2, 4000, NULL)
+  ('HALL_OF_MAGIC', 'Hall of Magic – Đại Sảnh Ma Thuật', 'MAGIC', 'Đại sảnh Ma thuật 3 cấp (mở theo cấp Master, 2 người mỗi phân khu = tổng 6 Hero): Thư Viện Ma Thuật, Xưởng Giả Kim và Phòng Nghiên Cứu.', 3, 6, 2, 4000, NULL),
+  ('AIRSHIP_PORT', 'Bến Thiên Hành – Cảng Tàu Bay', 'UTILITY', 'Mở khóa khi vượt Tháp tầng 25. Nơi nghiên cứu công nghệ hàng không, chế tạo, nâng cấp, sửa chữa và neo đậu tàu bay theo diện tích lưới (Lv.1: 4x4 đến Lv.5: 8x8 + mở rộng qua Cây Công Nghệ).', 5, 3, 1, 3000, NULL)
 ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
   category = EXCLUDED.category,

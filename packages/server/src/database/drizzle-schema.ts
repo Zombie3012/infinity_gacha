@@ -1054,16 +1054,23 @@ export const worldTiles = pgTable('world_tiles', {
   baseYieldPerHour: doublePrecision('base_yield_per_hour').notNull(),
   requiredPower: integer('required_power').default(0).notNull(),
   isOuterRim: boolean('is_outer_rim').default(true).notNull(),
+  continentId: varchar('continent_id', { length: 40 }).default('emerald_reach').notNull(),
+  regionId: varchar('region_id', { length: 64 }),
+  zoneTier: integer('zone_tier').default(1).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [uniqueIndex('uq_world_tile_coords').on(table.x, table.y)]);
+}, (table) => [
+  uniqueIndex('uq_world_tile_coords').on(table.x, table.y),
+  index('idx_world_tiles_spawn').on(table.isOuterRim, table.continentId, table.zoneTier),
+]);
 
 export const masterWorldStatus = pgTable('master_world_status', {
   masterId: varchar('master_id', { length: 36 }).primaryKey().references(() => masters.id, { onDelete: 'cascade' }),
   unlockedAt: timestamp('unlocked_at', { withTimezone: true }).defaultNow().notNull(),
   baseX: integer('base_x').notNull(),
   baseY: integer('base_y').notNull(),
+  continentId: varchar('continent_id', { length: 40 }).default('emerald_reach').notNull(),
   shieldUntil: timestamp('shield_until', { withTimezone: true }).notNull(),
-});
+}, (table) => [index('idx_master_world_base').on(table.baseX, table.baseY)]);
 
 export const tileDiscoveries = pgTable('tile_discoveries', {
   id: varchar('id', { length: 36 }).primaryKey(),
@@ -1102,6 +1109,14 @@ export const heroExpeditions = pgTable('hero_expeditions', {
   id: varchar('id', { length: 36 }).primaryKey(),
   masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
   tileId: varchar('tile_id', { length: 36 }).notNull().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  airshipId: varchar('airship_id', { length: 36 }),
+  dungeonId: varchar('dungeon_id', { length: 36 }),
+  originX: integer('origin_x'),
+  originY: integer('origin_y'),
+  pathTiles: jsonb('path_tiles').$type<Array<{ x: number; y: number }>>().notNull().default([]),
+  rescueTargetExpeditionId: varchar('rescue_target_expedition_id', { length: 36 }),
+  strandedAt: timestamp('stranded_at', { withTimezone: true }),
+  redirectedAt: timestamp('redirected_at', { withTimezone: true }),
   mission: varchar('mission', { length: 20 }).notNull(),
   status: varchar('status', { length: 20 }).default('TRAVELING').notNull(),
   departAt: timestamp('depart_at', { withTimezone: true }).defaultNow().notNull(),
@@ -1111,8 +1126,8 @@ export const heroExpeditions = pgTable('hero_expeditions', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('idx_expedition_master').on(table.masterId, table.status),
-  check('expedition_mission_check', sql`${table.mission} IN ('SCOUT', 'ATTACK')`),
-  check('expedition_status_check', sql`${table.status} IN ('TRAVELING', 'RETURNING', 'COMPLETED', 'RECALLED')`),
+  check('expedition_mission_check', sql`${table.mission} IN ('SCOUT', 'ATTACK', 'DUNGEON', 'RESCUE', 'GARRISON')`),
+  check('expedition_status_check', sql`${table.status} IN ('TRAVELING', 'RETURNING', 'GARRISONED', 'STRANDED', 'COMPLETED', 'RECALLED')`),
 ]);
 
 export const expeditionMembers = pgTable('expedition_members', {
@@ -1467,3 +1482,99 @@ export const chatMessages = pgTable('chat_messages', {
   index('idx_chat_messages_channel').on(table.channel, table.createdAt),
   index('idx_chat_messages_private').on(table.senderMasterId, table.recipientMasterId, table.createdAt),
 ]);
+
+export const friendships = pgTable('friendships', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  requesterMasterId: varchar('requester_master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  addresseeMasterId: varchar('addressee_master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  status: varchar('status', { length: 16 }).notNull().default('PENDING'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  unique('uq_friendships_pair').on(table.requesterMasterId, table.addresseeMasterId),
+  index('idx_friendships_requester').on(table.requesterMasterId, table.status),
+  index('idx_friendships_addressee').on(table.addresseeMasterId, table.status),
+  check('ck_friendships_not_self', sql`${table.requesterMasterId} <> ${table.addresseeMasterId}`),
+  check('ck_friendships_status', sql`${table.status} IN ('PENDING', 'ACCEPTED', 'BLOCKED')`),
+]);
+
+export const friendDailyGifts = pgTable('friend_daily_gifts', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  senderMasterId: varchar('sender_master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  receiverMasterId: varchar('receiver_master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  giftDate: varchar('gift_date', { length: 10 }).notNull(),
+  silverAmount: integer('silver_amount').notNull().default(200),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  unique('uq_friend_daily_gift').on(table.senderMasterId, table.receiverMasterId, table.giftDate),
+  index('idx_friend_daily_gifts_receiver').on(table.receiverMasterId, table.giftDate, table.claimedAt),
+]);
+
+// --- Airship Port (Bến Thiên Hành) & RTS World Vision / Emerging Dungeons ---
+
+export const masterAirships = pgTable('master_airships', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  blueprintCode: varchar('blueprint_code', { length: 32 }).notNull(),
+  name: varchar('name', { length: 64 }).notNull(),
+  sizeClass: varchar('size_class', { length: 16 }).notNull(),
+  gridW: integer('grid_w').notNull(),
+  gridH: integer('grid_h').notNull(),
+  dockX: integer('dock_x').default(0).notNull(),
+  dockY: integer('dock_y').default(0).notNull(),
+  rotation: integer('rotation').default(0).notNull(),
+  level: integer('level').default(1).notNull(),
+  hp: integer('hp').default(100).notNull(),
+  maxHp: integer('max_hp').default(100).notNull(),
+  status: varchar('status', { length: 20 }).default('DOCKED').notNull(),
+  busyUntil: timestamp('busy_until', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  index('idx_master_airships_master').on(table.masterId, table.status),
+  check('ck_airship_blueprint', sql`${table.blueprintCode} IN ('SCOUT_SKIFF', 'RESCUE_CUTTER', 'WAR_DREADNOUGHT', 'TRANSPORT_CARRIER')`),
+  check('ck_airship_size_class', sql`${table.sizeClass} IN ('SMALL', 'MEDIUM', 'LARGE')`),
+  check('ck_airship_rotation', sql`${table.rotation} IN (0, 90)`),
+  check('ck_airship_status', sql`${table.status} IN ('DOCKED', 'CRAFTING', 'DEPLOYED', 'REPAIRING', 'STRANDED')`),
+]);
+
+export const masterAirshipTechs = pgTable('master_airship_techs', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  techCode: varchar('tech_code', { length: 40 }).notNull(),
+  unlockedAt: timestamp('unlocked_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  unique('uq_master_airship_tech').on(table.masterId, table.techCode),
+]);
+
+export const masterTileVision = pgTable('master_tile_vision', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  masterId: varchar('master_id', { length: 36 }).notNull().references(() => masters.id, { onDelete: 'cascade' }),
+  tileId: varchar('tile_id', { length: 36 }).notNull().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  visibleUntil: timestamp('visible_until', { withTimezone: true }).notNull(),
+  lastScoutedAt: timestamp('last_scouted_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  unique('uq_master_tile_vision').on(table.masterId, table.tileId),
+  index('idx_master_tile_vision_expiry').on(table.masterId, table.visibleUntil),
+]);
+
+export const worldDungeons = pgTable('world_dungeons', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  tileId: varchar('tile_id', { length: 36 }).notNull().references(() => worldTiles.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 96 }).notNull(),
+  rank: varchar('rank', { length: 8 }).notNull(),
+  recommendedPower: integer('recommended_power').default(1000).notNull(),
+  maxPartySize: integer('max_party_size').default(5).notNull(),
+  bossName: varchar('boss_name', { length: 64 }).notNull(),
+  rewards: jsonb('rewards').$type<Record<string, unknown>>().default({}).notNull(),
+  status: varchar('status', { length: 16 }).default('ACTIVE').notNull(),
+  spawnedAt: timestamp('spawned_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  clearedByMasterId: varchar('cleared_by_master_id', { length: 36 }).references(() => masters.id, { onDelete: 'set null' }),
+}, table => [
+  index('idx_world_dungeons_active').on(table.status, table.expiresAt),
+  check('ck_world_dungeon_rank', sql`${table.rank} IN ('D', 'C', 'B', 'A', 'S')`),
+  check('ck_world_dungeon_status', sql`${table.status} IN ('ACTIVE', 'CLEARED', 'EXPIRED')`),
+]);
+

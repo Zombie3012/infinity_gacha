@@ -666,6 +666,28 @@ custom_minimum_size = Vector2(96, 42)
 layout_mode = 2
 text = "💬 Chat"
 
+[node name="FriendsBtn" type="Button" parent="HUD/BottomLeftDock/LeftControlsRow" unique_id=482116507]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(112, 42)
+layout_mode = 2
+text = "👥 Bạn Bè"
+
+[node name="CollectAllBtn" type="Button" parent="HUD" unique_id=482116611]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -220.0
+offset_top = -120.0
+offset_right = -14.0
+offset_bottom = -80.0
+grow_horizontal = 0
+grow_vertical = 0
+text = "🌾 Thu Hoạch Tất Cả"
+
 [node name="BottomBar" type="PanelContainer" parent="HUD" unique_id=482116610]
 anchors_preset = 3
 anchor_left = 1.0
@@ -718,13 +740,6 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(106, 44)
 layout_mode = 2
 text = "🏗️ Xây Dựng"
-
-[node name="CollectAllBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=655900079]
-unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(0, 44)
-layout_mode = 2
-text = "🌾 Thu Hoạch"
 
 [node name="EnterPveBtn" type="Button" parent="HUD/BottomBar/MarginContainer/VBoxContainer/ActionRow" unique_id=1584409842]
 unique_name_in_owner = true

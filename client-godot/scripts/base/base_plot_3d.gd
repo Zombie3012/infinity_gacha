@@ -264,6 +264,9 @@ func _fit_caption_to_camera() -> void:
 func _role_subtitle_for_type(b_type: String, b_lvl: int = 1) -> String:
 	var lvl := clampi(b_lvl, 1, 3)
 	match b_type:
+		"AIRSHIP_PORT":
+			var grid_dim := 3 + clampi(b_lvl, 1, 5)
+			return "⚓ Cảng Tàu Bay (Lưới %dx%d • Công Nghệ & RTS)" % [grid_dim, grid_dim]
 		"SHOP_AIRSHIP":
 			return "🎈 Cửa hàng • Vật phẩm & Trang bị"
 		"ALLIANCE_HALL":
@@ -375,6 +378,25 @@ func _rebuild_structure_mesh(b_type: String, b_lvl: int, b_status: String) -> vo
 	var roof_mat := StandardMaterial3D.new()
 
 	match b_type:
+		"AIRSHIP_PORT":
+			# Octagonal/wide sky-dock landing deck + control tower + hovering mini airship
+			var deck := CylinderMesh.new()
+			deck.top_radius = 1.25; deck.bottom_radius = 1.38; deck.height = 0.35; deck.radial_segments = 8
+			main_mesh.mesh = deck
+			main_mesh.position.y = 0.2
+			main_mat.albedo_color = Color(0.18, 0.24, 0.34)
+			main_mat.metallic = 0.45
+			var hull := CapsuleMesh.new()
+			hull.radius = 0.26; hull.height = 1.15
+			roof_mesh.mesh = hull
+			roof_mesh.rotation_degrees = Vector3(0.0, 25.0, 90.0)
+			roof_mesh.position = Vector3(0.0, 1.35, 0.0)
+			roof_mat.albedo_color = Color(0.28, 0.72, 0.92)
+			roof_mat.metallic = 0.35
+			# Control tower & beacon on dock corner
+			structure_root.add_child(_make_cyl_part(0.14, 0.18, 1.45, Vector3(-0.78, 0.85, -0.58), Color(0.35, 0.42, 0.54)))
+			structure_root.add_child(_make_cyl_part(0.22, 0.22, 0.22, Vector3(-0.78, 1.65, -0.58), Color(0.95, 0.78, 0.28)))
+			_add_facility_light(Vector3(-0.78, 1.9, -0.58), Color(0.35, 0.85, 1.0), 1.4, 4.5)
 		"ALLIANCE_HALL":
 			var hall := BoxMesh.new()
 			hall.size = Vector3(1.85, 1.1, 1.65)
@@ -798,6 +820,8 @@ func _add_facility_light(pos: Vector3, col: Color, energy: float, rng: float) ->
 
 func _icon_for_type(b_type: String) -> String:
 	match b_type:
+		"AIRSHIP_PORT":
+			return "⚓"
 		"SHOP_AIRSHIP":
 			return "🎈"
 		"ALLIANCE_HALL":

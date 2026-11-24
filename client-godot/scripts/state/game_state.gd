@@ -10,19 +10,21 @@ const DEFAULT_DEMO_MASTER_NAME := "Demo Master"
 
 var account_id: String = ""
 var master_id: String = ""
-var master_name: String = "Demo Master"
-var master_level: int = 30
+var master_name: String = ""
+var master_level: int = 0
 var master_exp: int = 0
-var silver_coins: int = 5000000
-var gem_stones: int = 50000
+var silver_coins: int = 0
+var gem_stones: int = 0
+var is_synced: bool = false
+var sync_error: String = ""
 
 var world_level: int = 1
-var current_floor: int = 12
-var base_zones: int = 3
-var unlocked_lobby_floors: int = 3
+var current_floor: int = 0
+var base_zones: int = 0
+var unlocked_lobby_floors: int = 1
 const PLOTS_PER_ZONE: int = 8
 const MAX_BASE_ZONES: int = 6
-var unlocked_plots: int = 24
+var unlocked_plots: int = 0
 
 var heroes: Array = []
 var active_party_ids: Array = []
@@ -42,10 +44,108 @@ var materials: Dictionary = {
 var normal_scrolls: int = 0
 var floor_assigned_hero_ids: Dictionary = {} # floor_num (int) -> Array[String hero_id]
 var away_expedition_hero_ids: Array = []
+var personality_map: Dictionary = {} # hero_id -> Dictionary
+var castle_activity_log: Array[String] = []
+const DeviceProfileScript := preload("res://scripts/core/device_profile.gd")
+
+var graphics_quality: String = "HIGH"
+var device_profile: Dictionary = {}
+var world_graphics_settings: Dictionary = {}
+
+func _ready() -> void:
+	_load_graphics_settings()
+
+func is_mobile_platform() -> bool:
+	if device_profile.is_empty():
+		device_profile = DeviceProfileScript.detect_hardware()
+	return bool(device_profile.get("is_mobile", false))
+
+func get_device_profile() -> Dictionary:
+	if device_profile.is_empty():
+		device_profile = DeviceProfileScript.detect_hardware()
+	return device_profile.duplicate()
+
+func get_world_graphics_settings() -> Dictionary:
+	if world_graphics_settings.is_empty():
+		_load_graphics_settings()
+	return world_graphics_settings.duplicate()
+
+func set_graphics_quality(q: String) -> void:
+	var is_mob := is_mobile_platform()
+	world_graphics_settings = DeviceProfileScript.get_preset_settings(q, is_mob)
+	graphics_quality = str(world_graphics_settings.get("quality", "HIGH"))
+	_apply_and_persist_graphics_settings()
+
+func update_world_graphics_setting(key: String, value: Variant) -> void:
+	if world_graphics_settings.is_empty():
+		_load_graphics_settings()
+	var merged := world_graphics_settings.duplicate()
+	merged[key] = value
+	world_graphics_settings = DeviceProfileScript.sanitize_settings(merged, is_mobile_platform())
+	graphics_quality = str(world_graphics_settings.get("quality", graphics_quality))
+	_apply_and_persist_graphics_settings()
+
+func reset_graphics_to_device_default() -> void:
+	device_profile = DeviceProfileScript.detect_hardware()
+	var rec := str(device_profile.get("recommended_preset", "HIGH"))
+	set_graphics_quality(rec)
+
+func _apply_and_persist_graphics_settings() -> void:
+	var target_fps := int(world_graphics_settings.get("max_fps", 60))
+	if target_fps > 0:
+		Engine.max_fps = target_fps
+	var payload := world_graphics_settings.duplicate()
+	payload["auto_detected_once"] = true
+	var f := FileAccess.open("user://graphics_settings.json", FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(payload))
+		f.close()
+	EventBus.graphics_quality_changed.emit(graphics_quality)
+	EventBus.world_graphics_settings_changed.emit(world_graphics_settings.duplicate())
+
+func _load_graphics_settings() -> void:
+	device_profile = DeviceProfileScript.detect_hardware()
+	var is_mob := bool(device_profile.get("is_mobile", false))
+	var rec := str(device_profile.get("recommended_preset", "HIGH"))
+	var loaded_ok := false
+
+	if FileAccess.file_exists("user://graphics_settings.json"):
+		var f := FileAccess.open("user://graphics_settings.json", FileAccess.READ)
+		if f != null:
+			var parsed: Variant = JSON.parse_string(f.get_as_text())
+			f.close()
+			if parsed is Dictionary:
+				if bool(parsed.get("auto_detected_once", false)):
+					world_graphics_settings = DeviceProfileScript.sanitize_settings(parsed, is_mob)
+					loaded_ok = true
+				elif parsed.has("quality"):
+					world_graphics_settings = DeviceProfileScript.get_preset_settings(str(parsed.get("quality", rec)), is_mob)
+					loaded_ok = true
+
+	if not loaded_ok:
+		world_graphics_settings = DeviceProfileScript.get_preset_settings(rec, is_mob)
+		var save_payload := world_graphics_settings.duplicate()
+		save_payload["auto_detected_once"] = true
+		var wf := FileAccess.open("user://graphics_settings.json", FileAccess.WRITE)
+		if wf != null:
+			wf.store_string(JSON.stringify(save_payload))
+			wf.close()
+
+	graphics_quality = str(world_graphics_settings.get("quality", rec))
+	var target_fps := int(world_graphics_settings.get("max_fps", 60))
+	if target_fps > 0:
+		Engine.max_fps = target_fps
 
 var world_base_pos: Vector2i = Vector2i(0, 0)
 var world_unlocked: bool = false
 var selected_avatar_hero_id: String = ""
+
+var badge_counts: Dictionary = {
+	"mailbox": 0,
+	"events": 0,
+	"friends": 0,
+	"chat": 0,
+}
 
 func get_party_combat_power() -> int:
 	var total_cp: int = 0
@@ -131,6 +231,7 @@ func ensure_demo_session() -> bool:
 func refresh_profile() -> bool:
 	var res = await ApiClient.get_req("/api/me")
 	if not res["ok"]:
+		sync_error = str(res.get("error", "Không thể đồng bộ hồ sơ Master."))
 		return false
 		
 	var data = res["data"]
@@ -143,6 +244,8 @@ func refresh_profile() -> bool:
 		master_exp = int(m.get("exp", 0))
 		silver_coins = int(m.get("silverCoins", 0))
 		gem_stones = int(m.get("gems", m.get("gemStones", 0)))
+		is_synced = true
+		sync_error = ""
 		EventBus.currency_updated.emit(silver_coins, gem_stones)
 		EventBus.master_profile_updated.emit(m)
 		load_floor_assignments()
@@ -322,7 +425,7 @@ static func hero_life_label(hero: Dictionary) -> String:
 	return "" if is_hero_alive(hero) else "KHÔNG THỂ HOẠT ĐỘNG"
 
 func owned_hero_count() -> int:
-	return heroes.filter(func(h): return h is Dictionary and str(h.get("state", "")) != "DEAD").size()
+	return heroes.filter(func(h): return h is Dictionary and is_hero_alive(h)).size()
 
 static func is_hero_pve_deployed(hero: Dictionary) -> bool:
 	var deployment: Variant = hero.get("pveDeployment")
@@ -414,17 +517,147 @@ func clear() -> void:
 	account_id = ""
 	master_id = ""
 	master_name = ""
-	master_level = 1
+	master_level = 0
 	master_exp = 0
 	silver_coins = 0
 	gem_stones = 0
+	is_synced = false
+	sync_error = ""
 	world_level = 1
-	current_floor = 1
-	base_zones = 1
-	unlocked_plots = PLOTS_PER_ZONE
+	current_floor = 0
+	base_zones = 0
+	unlocked_plots = 0
 	heroes.clear()
 	active_party_ids.clear()
 	base_overview.clear()
+	personality_map.clear()
 	materials = { "WOOD": 0, "STONE": 0, "RATION": 0, "RAW_FOOD": 0 }
 	normal_scrolls = 0
+	badge_counts = { "mailbox": 0, "events": 0, "friends": 0, "chat": 0 }
+	EventBus.badges_updated.emit(badge_counts)
 	ApiClient.clear_auth_token()
+
+func get_badge_count(key: String) -> int:
+	return int(badge_counts.get(key, 0))
+
+func set_badge_count(key: String, count: int) -> void:
+	badge_counts[key] = maxi(0, count)
+	EventBus.badges_updated.emit(badge_counts)
+
+func increment_badge_count(key: String, delta: int = 1) -> void:
+	set_badge_count(key, get_badge_count(key) + delta)
+
+func refresh_notification_badges() -> void:
+	if not is_logged_in():
+		return
+	var mail_unread := 0
+	var m_res := await ApiClient.get_req("/api/mailbox")
+	if m_res.get("ok", false):
+		var md: Variant = m_res.get("data")
+		var msgs: Array = md if md is Array else (md.get("messages", md.get("mails", [])) if md is Dictionary else [])
+		for msg in msgs:
+			if msg is Dictionary:
+				var claimed := bool(msg.get("claimedAt", "") != "" and msg.get("claimedAt") != null) or bool(msg.get("isClaimed", false))
+				if not claimed:
+					mail_unread += 1
+	badge_counts["mailbox"] = mail_unread
+
+	var ev_claimable := 0
+	var ev_res := await ApiClient.get_req("/api/events")
+	if ev_res.get("ok", false):
+		var ed: Variant = ev_res.get("data")
+		var evs: Array = ed if ed is Array else (ed.get("events", []) if ed is Dictionary else [])
+		for ev in evs:
+			if ev is Dictionary:
+				var missions: Variant = ev.get("missions", [])
+				if missions is Array:
+					for ms in missions:
+						if ms is Dictionary:
+							var prog := int(ms.get("progress", 0))
+							var target := maxi(1, int(ms.get("targetValue", ms.get("targetCount", 1))))
+							if not bool(ms.get("claimed", false)) and prog >= target:
+								ev_claimable += 1
+
+	var q_res := await ApiClient.get_req("/api/quests")
+	if q_res.get("ok", false) and q_res.get("data") is Dictionary:
+		var qd: Dictionary = q_res["data"]
+		var quests: Variant = qd.get("quests", [])
+		if quests is Array:
+			for q in quests:
+				if q is Dictionary:
+					var status := str(q.get("status", "AVAILABLE")).to_upper()
+					var prog := int(q.get("progress", 0))
+					var target := maxi(1, int(q.get("targetValue", q.get("targetCount", 1))))
+					if status == "COMPLETED" or (status == "ACTIVE" and prog >= target):
+						ev_claimable += 1
+		var achs: Variant = qd.get("achievements", [])
+		if achs is Array:
+			for a in achs:
+				if a is Dictionary:
+					var prog := int(a.get("progress", 0))
+					var target := maxi(1, int(a.get("targetValue", a.get("targetCount", 1))))
+					if not bool(a.get("claimed", false)) and prog >= target:
+						ev_claimable += 1
+	badge_counts["events"] = ev_claimable
+
+	var friend_notif := 0
+	var f_res := await ApiClient.get_req("/api/friends")
+	if f_res.get("ok", false) and f_res.get("data") is Dictionary:
+		friend_notif += int(f_res["data"].get("unclaimedGiftCount", 0))
+	var fr_res := await ApiClient.get_req("/api/friends/requests")
+	if fr_res.get("ok", false) and fr_res.get("data") is Dictionary:
+		var inc: Variant = fr_res["data"].get("incoming", [])
+		if inc is Array:
+			friend_notif += inc.size()
+	badge_counts["friends"] = friend_notif
+
+	EventBus.badges_updated.emit(badge_counts)
+
+func refresh_personality() -> bool:
+	if not is_logged_in():
+		return false
+	var res := await ApiClient.get_req("/api/personality")
+	if not res.get("ok", false) or not (res.get("data") is Dictionary):
+		return false
+	var list: Variant = res["data"].get("heroes", [])
+	personality_map.clear()
+	if list is Array:
+		for item in list:
+			if item is Dictionary:
+				var hid := str(item.get("heroId", ""))
+				if not hid.is_empty():
+					personality_map[hid] = item
+	for h in heroes:
+		if h is Dictionary:
+			var hid := str(h.get("id", ""))
+			if personality_map.has(hid):
+				var p: Dictionary = personality_map[hid]
+				h["coreTrait"] = str(p.get("coreTrait", ""))
+				h["socialTrait"] = str(p.get("socialTrait", ""))
+				h["favoriteFood"] = str(p.get("favoriteFood", ""))
+				h["loyaltyScore"] = int(p.get("loyaltyScore", 50))
+				h["loyalty"] = int(p.get("loyaltyScore", 50))
+				h["loyaltyState"] = str(p.get("loyaltyState", "NEUTRAL"))
+				h["mood"] = str(p.get("loyaltyState", "Bình thường"))
+	return true
+
+func get_hero_personality(hero_id: String) -> Dictionary:
+	if personality_map.has(hero_id):
+		return personality_map[hero_id]
+	return {}
+
+func serve_favorite_meal(hero_id: String) -> Dictionary:
+	var res := await ApiClient.post_req("/api/personality/heroes/%s/favorite-meal" % hero_id, {})
+	if res.get("ok", false):
+		await refresh_personality()
+		await refresh_heroes()
+	return res
+
+func record_castle_activity(entry: String) -> void:
+	var clean := entry.strip_edges()
+	if clean.is_empty():
+		return
+	var dt := Time.get_time_string_from_system()
+	castle_activity_log.push_front("[%s] %s" % [dt, clean])
+	if castle_activity_log.size() > 60:
+		castle_activity_log.resize(60)
