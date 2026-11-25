@@ -12,6 +12,8 @@ Công trình **[Thương Thuyền Khinh Khí](docs/SHOP_AIRSHIP.md)** là cửa 
 
 **[Đại Sảnh Ma Thuật](docs/MAGIC_HALL.md)** tích hợp Thư viện, Giả kim và Nghiên cứu. Ba phân khu giữ chức năng nhưng không còn là công trình xây riêng.
 
+**[Danh mục vật phẩm đề xuất](docs/ITEM_CATALOG_PROPOSAL.md)** tổng hợp vật phẩm hiện có và ý tưởng mở rộng để duyệt; đây chưa phải danh mục hoặc cân bằng đang triển khai.
+
 Công trình **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** cho phép lập hội, tìm kiếm, gia nhập, quản lý thành viên và thông báo nội bộ sau khi vượt Tháp tầng 25 (chưa mở Công nghệ & Chiến tranh Liên minh).
 
 ## Cấu trúc
