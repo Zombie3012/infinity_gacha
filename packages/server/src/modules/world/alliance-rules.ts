@@ -2,7 +2,7 @@
  * Domain 13 / MOD-13-06 (P3) alliance rules.
  *
  * Sample tuning (prototype):
- * - a Master needs level 20 and pays 5,000 Gems or 500,000 Silver to found one
+ * - founding requires clearing Tower floor 25 and costs 5,000 Gems or 500,000 Silver
  * - names are 3-20 characters, tags are 2-5 letters/digits, both unique
  * - an alliance starts at 30 members and grows by 10 per Alliance Tech level,
  *   capped at 100 (Tech level 8)
@@ -14,7 +14,6 @@
 
 export type AllianceRole = 'LEADER' | 'OFFICER' | 'MEMBER';
 
-export const ALLIANCE_CREATE_LEVEL = 20;
 export const ALLIANCE_CREATE_GEM_COST = 5_000;
 export const ALLIANCE_CREATE_SILVER_COST = 500_000;
 export const ALLIANCE_BASE_MAX_MEMBERS = 30;
@@ -93,13 +92,11 @@ export function validateAllianceIdentity(input: {
 }
 
 export function canCreateAlliance(input: {
-  masterLevel: number;
   inAlliance: boolean;
   cooldownUntil: Date | null;
   now: Date;
 }): RuleCheck {
   if (input.inAlliance) return { ok: false, reason: 'ERR_ALLIANCE_ALREADY_MEMBER' };
-  if (input.masterLevel < ALLIANCE_CREATE_LEVEL) return { ok: false, reason: 'ERR_ALLIANCE_LEVEL_REQUIRED' };
   if (input.cooldownUntil && input.cooldownUntil > input.now) return { ok: false, reason: 'ERR_ALLIANCE_COOLDOWN' };
   return { ok: true };
 }

@@ -58,7 +58,8 @@ import { getBattleRules } from './modules/admin/runtime-rules.js';
 import { PveRuleError } from '@infiniti-gacha/shared';
 import { PveError, pveService } from './modules/pve/pve.service.js';
 import { CombatReadinessError } from './modules/combat/combat-readiness.js';
-import { pveHeroReservations, pveSquads } from './database/drizzle-schema.js';
+import { baseBuildings, pveHeroReservations, pveSquads } from './database/drizzle-schema.js';
+import { requiredTowerFloorForBuilding } from './modules/base/base-rules.js';
 
 type AuthRequest = Request & { accountId?: string; sessionId?: string };
 
@@ -209,8 +210,8 @@ export function createApp() {
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
     const [feature] = await db.select().from(featureUnlockConfigs)
       .where(and(eq(featureUnlockConfigs.featureCode, featureCode), eq(featureUnlockConfigs.isActive, true))).limit(1);
-    if (!feature || master.level < feature.requiredMasterLevel) {
-      return res.status(403).json({ error: `Feature ${featureCode} unlocks at Master level ${feature?.requiredMasterLevel ?? 'TBD'}.` });
+    if (!feature) {
+      return res.status(403).json({ error: `Feature ${featureCode} is unavailable.` });
     }
     return next();
   });
@@ -246,7 +247,7 @@ export function createApp() {
       .where(and(eq(weeklyScrollExchanges.masterId, master.id), eq(weeklyScrollExchanges.periodKey, periodKey))).limit(1) : [];
     return res.json({
       account,
-      master: master ? { ...master, exp: master.exp.toString(), silverCoins: master.silverCoins.toString(), gems: master.gems.toString(), gemDebt: master.gemDebt.toString() } : null,
+      master: master ? { id: master.id, accountId: master.accountId, masterName: master.masterName, silverCoins: master.silverCoins.toString(), gems: master.gems.toString(), gemDebt: master.gemDebt.toString() } : null,
       world: world ?? null,
       summonInventory: inventory.map(item => ({ scrollType: item.scrollType, quantity: item.quantity })),
       itemInventory,
@@ -268,7 +269,6 @@ export function createApp() {
       avatar_url: profile.avatarUrl,
       settings: profile.settings,
       progress_summary: {
-        master_level: master?.level ?? 0,
         world_floor: world?.currentFloor ?? 0,
         heroes_owned: heroCount.total,
         active_heroes: activeHeroCount.total,
@@ -324,7 +324,7 @@ export function createApp() {
     const [master] = await db.select({ level: masters.level }).from(masters).where(eq(masters.accountId, req.accountId!)).limit(1);
     if (!master) return res.status(409).json({ error: 'Initialize a Master first.' });
     const configs = await db.select().from(featureUnlockConfigs).where(eq(featureUnlockConfigs.isActive, true));
-    return res.json(configs.map(feature => ({ ...feature, unlocked: master.level >= feature.requiredMasterLevel })));
+    return res.json(configs.map(feature => ({ ...feature, unlocked: true })));
   }));
 
   app.get('/api/master/skills', requireAccount, requireFeature('MASTER_SKILLS'), asyncRoute(async (req, res) => {
@@ -349,6 +349,7 @@ export function createApp() {
           seedAlgorithmVersion: initialWorld.seedAlgorithmVersion,
           difficultyMultiplier: initialWorld.difficultyMultiplier,
           currentFloor: initialWorld.currentFloor,
+          baseZones: 2,
         });
         // P1 starter kit: a small food reserve so the first dungeon run is possible.
         await tx.insert(masterItems).values({ id: uuidv4(), masterId: created.id, itemId: 'FOOD', quantity: 100, updatedAt: new Date() });
@@ -359,7 +360,7 @@ export function createApp() {
         })));
         return created;
       });
-      return res.status(201).json({ ...master, exp: master.exp.toString(), silverCoins: master.silverCoins.toString(), gems: master.gems.toString(), gemDebt: master.gemDebt.toString() });
+      return res.status(201).json({ id: master.id, accountId: master.accountId, masterName: master.masterName, silverCoins: master.silverCoins.toString(), gems: master.gems.toString(), gemDebt: master.gemDebt.toString() });
     } catch (error) {
       const pgCode = (error as { code?: string }).code ?? (error as { cause?: { code?: string } }).cause?.code;
       if (pgCode === '23505') return res.status(409).json({ error: 'Tài khoản này đã có Master.' });
@@ -388,6 +389,14 @@ export function createApp() {
     const [world] = await db.select().from(worlds).where(eq(worlds.masterId, master.id)).limit(1);
     if (!world) return res.status(404).json({ error: 'World chưa được khởi tạo.' });
     return res.json(world);
+  }));
+
+  app.use('/api/dungeon', requireAccount, asyncRoute(async (req, res) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const [world] = await db.select({ currentFloor: worlds.currentFloor }).from(worlds).where(eq(worlds.masterId, master.id)).limit(1);
+    if ((world?.currentFloor ?? 1) <= 5) return res.status(403).json({ error: 'Hầm Ngục mở sau khi vượt Tháp tầng 5.' });
+    return res.status(503).json({ error: 'Hầm Ngục Cổ Đại đang được phát triển.' });
   }));
 
   app.get('/api/dungeon/templates', requireAccount, asyncRoute(async (_req, res) => {
@@ -720,6 +729,15 @@ export function createApp() {
 
   // --- DM-13 (P3): hero-vs-hero PvP reports and territory defense ---
 
+  const requireTower25 = asyncRoute(async (req, res, next) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const [world] = await db.select({ currentFloor: worlds.currentFloor }).from(worlds).where(eq(worlds.masterId, master.id)).limit(1);
+    if ((world?.currentFloor ?? 1) <= 25) return res.status(403).json({ error: 'Viễn Chinh mở sau khi vượt Tháp tầng 25.' });
+    return next();
+  });
+  app.use(['/api/world/expeditions', '/api/world/tiles', '/api/world/pvp', '/api/world/territories', '/api/world/conquest', '/api/world/global/map', '/api/world/global/tiles'], requireAccount, requireTower25);
+
   app.get('/api/world/pvp/battles', requireAccount, asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
@@ -1045,6 +1063,14 @@ export function createApp() {
     if (!master) res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
     return master;
   };
+
+  app.use('/api/alliance', requireAccount, asyncRoute(async (req, res, next) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const [world] = await db.select({ currentFloor: worlds.currentFloor }).from(worlds).where(eq(worlds.masterId, master.id)).limit(1);
+    if ((world?.currentFloor ?? 1) <= 25) return res.status(403).json({ error: 'Liên Minh mở sau khi vượt Tháp tầng 25.' });
+    return next();
+  }));
 
   app.get('/api/alliance', requireAccount, asyncRoute(async (req, res) => {
     const master = await requireMasterOrFail(req, res);
@@ -1524,7 +1550,6 @@ export function createApp() {
       desc: string;
       gems?: number;
       silver?: number;
-      exp?: number;
       food?: number;
       scrolls?: number;
       materials?: { itemId: string; quantity: number }[];
@@ -1536,7 +1561,6 @@ export function createApp() {
         desc: 'Đã nhận toàn bộ tài nguyên tối đa (99M Đá Quý, 999M Vàng, 1M Khẩu Phần, 99K Thiên Thư)!',
         gems: 99999999,
         silver: 999999999,
-        exp: 1000000,
         food: 1000000,
         scrolls: 99999,
         materials: [
@@ -1551,7 +1575,6 @@ export function createApp() {
         desc: '10,000 Đá Quý, 500,000 Vàng, 2,000 Khẩu Phần, 50 Thiên Thư',
         gems: 10000,
         silver: 500000,
-        exp: 5000,
         food: 2000,
         scrolls: 50,
       },
@@ -1560,7 +1583,6 @@ export function createApp() {
         desc: '5,000 Đá Quý, 200,000 Vàng, 1,000 Khẩu Phần, 20 Thiên Thư',
         gems: 5000,
         silver: 200000,
-        exp: 2000,
         food: 1000,
         scrolls: 20,
       },
@@ -1582,12 +1604,10 @@ export function createApp() {
     await db.transaction(async tx => {
       const deltaGems = BigInt(reward.gems ?? 0);
       const deltaSilver = BigInt(reward.silver ?? 0);
-      const deltaExp = BigInt(reward.exp ?? 0);
 
       await tx.update(masters).set({
         gems: sql`${masters.gems} + ${deltaGems}`,
         silverCoins: sql`${masters.silverCoins} + ${deltaSilver}`,
-        exp: sql`${masters.exp} + ${deltaExp}`,
         updatedAt: now,
       }).where(eq(masters.id, master.id));
 
@@ -1638,7 +1658,6 @@ export function createApp() {
       rewards: {
         gems: reward.gems ?? 0,
         silver: reward.silver ?? 0,
-        exp: reward.exp ?? 0,
         food: reward.food ?? 0,
         scrolls: reward.scrolls ?? 0,
       },
@@ -2192,6 +2211,14 @@ export function createApp() {
     return false;
   };
 
+  app.use('/api/shop', requireAccount, asyncRoute(async (req, res, next) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const [world] = await db.select({ currentFloor: worlds.currentFloor }).from(worlds).where(eq(worlds.masterId, master.id)).limit(1);
+    if ((world?.currentFloor ?? 1) <= 5) return res.status(403).json({ error: 'Thương Thuyền mở sau khi vượt Tháp tầng 5.' });
+    return next();
+  }));
+
   app.get('/api/shop', requireAccount, asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
@@ -2597,6 +2624,22 @@ export function createApp() {
     }
   }));
 
+  app.use('/api/base/buildings/:buildingId', requireAccount, asyncRoute(async (req, res, next) => {
+    if (req.method === 'DELETE' || req.path === '/demolish') return next();
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const [[building], [world]] = await Promise.all([
+      db.select({ type: baseBuildings.buildingType }).from(baseBuildings)
+        .where(and(eq(baseBuildings.id, String(req.params.buildingId)), eq(baseBuildings.masterId, master.id))).limit(1),
+      db.select({ currentFloor: worlds.currentFloor }).from(worlds).where(eq(worlds.masterId, master.id)).limit(1),
+    ]);
+    const requiredFloor = building ? requiredTowerFloorForBuilding(building.type) : 0;
+    if ((world?.currentFloor ?? 1) - 1 < requiredFloor) {
+      return res.status(403).json({ error: `Cần vượt Tháp tầng ${requiredFloor} để sử dụng công trình.` });
+    }
+    return next();
+  }));
+
   app.post('/api/base/buildings', requireAccount, asyncRoute(async (req, res) => {
     const master = await requireMaster(req);
     if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
@@ -2623,23 +2666,6 @@ export function createApp() {
         actorId: master.id, actorType: 'MASTER', action: AUDIT_ACTIONS.BUILDING_UPGRADED,
         entityType: 'BUILDING', entityId: result.building.id,
         diff: { targetLevel: result.targetLevel, silverSpent: result.silverSpent, materialsSpent: result.materialsSpent },
-      });
-      return res.json(result);
-    } catch (error) {
-      if (baseError(res, error)) return undefined;
-      throw error;
-    }
-  }));
-
-  app.post('/api/base/buildings/:buildingId/promote-mansion', requireAccount, asyncRoute(async (req, res) => {
-    const master = await requireMaster(req);
-    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
-    try {
-      const result = await buildingService.promoteToPartyMansion(master.id, String(req.params.buildingId));
-      void auditService.record({
-        actorId: master.id, actorType: 'MASTER', action: AUDIT_ACTIONS.BUILDING_UPGRADED,
-        entityType: 'BUILDING', entityId: result.building.id,
-        diff: { promotedTo: 'PARTY_MANSION', silverSpent: result.silverSpent },
       });
       return res.json(result);
     } catch (error) {
@@ -3998,6 +4024,14 @@ export function createApp() {
       if (error instanceof SummonError) return res.status(error.statusCode).json({ error: error.message });
       throw error;
     }
+  }));
+
+  app.use('/api/alchemy', requireAccount, asyncRoute(async (req, res, next) => {
+    const master = await requireMaster(req);
+    if (!master) return res.status(409).json({ error: 'Hãy khởi tạo Master trước.' });
+    const [world] = await db.select({ currentFloor: worlds.currentFloor }).from(worlds).where(eq(worlds.masterId, master.id)).limit(1);
+    if ((world?.currentFloor ?? 1) <= 10) return res.status(403).json({ error: 'Đại Sảnh Ma Thuật mở sau khi vượt Tháp tầng 10.' });
+    return next();
   }));
 
   app.get('/api/alchemy', requireAccount, asyncRoute(async (req, res) => {

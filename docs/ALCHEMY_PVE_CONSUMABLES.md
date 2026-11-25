@@ -63,6 +63,6 @@ Lưu đội hỗ trợ thêm `loadouts` theo Hero và `plan.battleMode` (`AUTO`/
 
 ## Bến Thiên Hành và kiểm chứng
 
-**Bến Thiên Hành** là tên đã chọn cho hướng công trình chế tạo phương tiện. Mốc định hướng đạt khi hoàn thành tầng 25; API dùng `planned: true` và `milestoneReached`. Chưa tạo công trình, phương tiện hoặc bản đồ thế giới RTS. Các nhánh sản xuất/hậu cần khác và chuyển đổi nguyên liệu để thiết kế sau.
+**Bến Thiên Hành / Cảng Tàu Bay** và bản đồ Viễn Chinh RTS đã có trong prototype và mở sau khi vượt Tháp tầng 25. Riêng nhánh Bến Thiên Hành trong dữ liệu Giả Kim vẫn trả `planned: true` và `milestoneReached`; không suy ra rằng công trình và bản đồ RTS chưa tồn tại. Các nhánh sản xuất/hậu cần khác và chuyển đổi nguyên liệu để thiết kế sau.
 
 Kiểm tra có mục tiêu: `http.alchemy.test.mjs`, engine Combat v2, sinh map PvE và hồi quy combat/map/thu hồi. Godot: `scripts/test-godot-magic-hall.mjs`, `scripts/test-godot-pve-consumables.mjs`, scene `pve_ui_test.tscn`. Các runner mạng tạo tài khoản thử rồi dọn dữ liệu. Đặt `GODOT_BIN` tới engine nếu chưa có trong PATH. Không chạy full suite hoặc `npm run verify` khi chưa được yêu cầu; headless chưa thay thế chơi thử bằng cửa sổ tương tác.

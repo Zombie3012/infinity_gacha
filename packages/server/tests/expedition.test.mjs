@@ -15,10 +15,12 @@ test('P3 Expeditions - party validation', async (t) => {
 });
 
 test('P3 Expeditions - travel and battles', async (t) => {
-  await t.test('travel time is 30s per tile with a 30s floor', () => {
-    assert.equal(travelSeconds(0), 30);
+  await t.test('travel time is 30s per tile with a 15s floor and airship speed scaling', () => {
+    assert.equal(travelSeconds(0), 15);
     assert.equal(travelSeconds(1), 30);
     assert.equal(travelSeconds(4), 120);
+    assert.equal(travelSeconds(1, 2), 15);
+    assert.equal(travelSeconds(4, 2), 60);
   });
 
   await t.test('the guardian falls when party power matches the threshold', () => {

@@ -458,14 +458,6 @@ func _render_profile_tab() -> void:
 	av_icon_lbl.add_theme_font_size_override("font_size", 32)
 	av_box.add_child(av_icon_lbl)
 
-	# Level badge inside avatar
-	var lvl_badge := Label.new()
-	lvl_badge.text = "Lv.%d" % GameState.master_level
-	lvl_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lvl_badge.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	lvl_badge.add_theme_font_size_override("font_size", 10)
-	lvl_badge.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-	av_box.add_child(lvl_badge)
 
 	var change_av_btn := Button.new()
 	change_av_btn.text = "🔄 Đổi Avatar"
@@ -520,50 +512,6 @@ func _render_profile_tab() -> void:
 	)
 	uid_row.add_child(copy_btn)
 
-	# EXP Bar
-	var cur_exp: int = GameState.master_exp
-	var max_exp: int = GameState.get_master_max_exp()
-	var exp_pct: float = clampf(float(cur_exp) / float(maxi(1, max_exp)), 0.0, 1.0) * 100.0
-
-	var exp_vbox := VBoxContainer.new()
-	exp_vbox.add_theme_constant_override("separation", 2)
-	info_vbox.add_child(exp_vbox)
-
-	var exp_row := HBoxContainer.new()
-	exp_vbox.add_child(exp_row)
-
-	var exp_title := Label.new()
-	exp_title.text = "Kinh Nghiệm Master:"
-	exp_title.add_theme_font_size_override("font_size", 11)
-	exp_title.add_theme_color_override("font_color", Color(0.75, 0.85, 0.95))
-	exp_title.size_flags_horizontal = SIZE_EXPAND_FILL
-	exp_row.add_child(exp_title)
-
-	var exp_val := Label.new()
-	exp_val.text = "%s / %s (%d%%)" % [_format_number(cur_exp), _format_number(max_exp), int(exp_pct)]
-	exp_val.add_theme_font_size_override("font_size", 11)
-	exp_val.add_theme_color_override("font_color", Color(0.45, 0.85, 1.0))
-	exp_row.add_child(exp_val)
-
-	var exp_pb := ProgressBar.new()
-	exp_pb.custom_minimum_size = Vector2(0, 8)
-	exp_pb.show_percentage = false
-	exp_pb.value = exp_pct
-	var pb_bg := StyleBoxFlat.new()
-	pb_bg.bg_color = Color(0.08, 0.12, 0.18, 0.9)
-	pb_bg.corner_radius_top_left = 4
-	pb_bg.corner_radius_top_right = 4
-	pb_bg.corner_radius_bottom_left = 4
-	pb_bg.corner_radius_bottom_right = 4
-	var pb_fill := StyleBoxFlat.new()
-	pb_fill.bg_color = Color(0.2, 0.65, 0.95)
-	pb_fill.corner_radius_top_left = 4
-	pb_fill.corner_radius_top_right = 4
-	pb_fill.corner_radius_bottom_left = 4
-	pb_fill.corner_radius_bottom_right = 4
-	exp_pb.add_theme_stylebox_override("background", pb_bg)
-	exp_pb.add_theme_stylebox_override("fill", pb_fill)
-	exp_vbox.add_child(exp_pb)
 
 	# 2. Overview Stats (3 cards, No Building Count as requested)
 	var stats_title := Label.new()

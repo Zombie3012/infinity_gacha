@@ -57,6 +57,7 @@ test('HTTP combat v2: simulate a battle', { skip: skipReason }, async t => {
 
   await t.test('two-step session resolves and pays Silver', async () => {
     const before = Number((await sql('select silver_coins from masters where id = $1', [master.masterId])).rows[0].silver_coins);
+    const masterProgress = (await sql('select level, exp from masters where id = $1', [master.masterId])).rows[0];
     const started = await harness.request('/api/combat/v2/session/start', {
       method: 'POST', token: master.token,
       body: { heroIds: [hero.id], enemyCodes: [enemyCode], seed: 11 },
@@ -71,6 +72,8 @@ test('HTTP combat v2: simulate a battle', { skip: skipReason }, async t => {
     assert.equal(advanced.body.status, 'COMPLETED');
     assert.equal(advanced.body.report.winner, 'HERO');
     assert.ok(advanced.body.silverReward > 0);
+    assert.equal(Object.hasOwn(advanced.body, 'masterExpReward'), false);
+    assert.deepEqual((await sql('select level, exp from masters where id = $1', [master.masterId])).rows[0], masterProgress);
 
     const after = Number((await sql('select silver_coins from masters where id = $1', [master.masterId])).rows[0].silver_coins);
     assert.ok(after > before);

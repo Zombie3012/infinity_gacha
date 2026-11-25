@@ -31,7 +31,7 @@ func _ready() -> void:
 
 func _update_ui() -> void:
 	master_name_label.text = "Master: " + GameState.master_name
-	level_label.text = "Lv." + str(GameState.master_level)
+	level_label.visible = false
 	silver_label.text = "🪙 Bạc: " + str(GameState.silver_coins)
 	gems_label.text = "💎 Gem: " + str(GameState.gem_stones)
 	hero_count_label.text = "Số Tướng sở hữu: " + str(GameState.owned_hero_count())

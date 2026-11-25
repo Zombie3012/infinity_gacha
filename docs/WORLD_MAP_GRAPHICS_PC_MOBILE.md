@@ -1,8 +1,10 @@
 # Tài Liệu Thiết Kế: Hệ Thống Cài Đặt Đồ Họa & Render Distance Bản Đồ Hành Tinh (PC vs Mobile)
 
-**Phiên bản:** 1.1 (Chuẩn kỹ thuật hiện hành — Giai đoạn 1 đã triển khai)  
+**Phiên bản:** 1.1 (thiết kế kết hợp tính năng đã có và đề xuất)
 **Phạm vi áp dụng:** Chế độ Viễn Chinh — Bản Đồ Hành Tinh 3D (`WorldRtsMap`, `WorldMap3D`, `PlanetRenderer`, `TacticalGroundProps3D`, `DeviceProfile`) & API World Server (`600 × 300 = 180.000` ô).  
 **Ngày cập nhật:** 2026-11-24
+
+> **Phân biệt trạng thái, cập nhật 25/11/2026:** Đây là tài liệu thiết kế, không phải mô tả toàn bộ tính năng đã triển khai. Hiện có `DeviceProfile`, preset/cài đặt lưu qua `GameState`, renderer hành tinh và chunk snapshot; chế độ `PLANET_WIDE` là tên preset, không chứng minh Binary Atlas đã hoạt động. `GraphicsProfileManager`, autoload `GraphicsSettings`, endpoint `atlas.bin`, `WorldChunkCache` LRU/prefetch, memory-pressure handler, thermal adaptation, macro feed và các số đo hiệu năng bên dưới là **đề xuất hoặc mục tiêu**, chưa được xác nhận là code hiện hành. Không coi dự toán 0 ms, 60 FPS hay dung lượng như kết quả đo. Đối chiếu code và [hướng dẫn client](../client-godot/README.md) trước khi áp dụng.
 
 ---
 
@@ -46,7 +48,7 @@ flowchart TD
 
 ## 3. Ma Trận Cài Đặt Đồ Họa Chi Tiết: Mobile (Hybrid) vs PC (Full Unlock)
 
-### 3.1. Bảng các Preset chuẩn
+### 3.1. Bảng preset thiết kế (tham khảo, không phải cam kết triển khai)
 
 | Hạng mục cài đặt | Mobile: Thấp (`MOBILE_LOW`) | Mobile: Cân bằng (`MOBILE_HYBRID`) | Mobile: Cao (`MOBILE_HIGH`) | PC: Trung bình (`PC_MEDIUM`) | PC: Cao (`PC_HIGH`) | PC: Cực đại (`PC_ULTRA`) | PC: Toàn Hành Tinh (`PC_PLANET_WIDE`) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -67,7 +69,7 @@ flowchart TD
 | **Giới hạn FPS mặc định** | `30 FPS` | `60 FPS` | `60 FPS` | `60 FPS` | `60 FPS` | `120 FPS` | **Không giới hạn / `144 FPS`** |
 | **Chu kỳ Poll mạng (`POLL_INTERVAL`)** | `5.0 giây` | `4.0 giây` | `3.0 giây` | `3.0 giây` | `3.0 giây` | `2.5 giây` | **`2.0 giây`** |
 
-### 3.2. Các giới hạn bắt buộc trên Mobile (Hybrid Guardrails)
+### 3.2. Các guardrail Mobile trong thiết kế (một phần chưa triển khai)
 1. **Không bao giờ tải toàn bộ 180.000 ô dạng JSON** trên Mobile.
 2. **Tự động giải phóng Cache khi hệ điều hành báo thiếu RAM** (`NOTIFICATION_APPLICATION_PAUSED` / memory warning → co `WorldChunkCache` về `600` ô gần nhất).
 3. **Bảo vệ nhiệt độ & pin**: Nếu frame time Mobile vượt `28ms` liên tục trong `5 giây`, tự động gợi ý chuyển sang `MOBILE_LOW` hoặc giảm MSAA `2x → Off`.
@@ -75,7 +77,7 @@ flowchart TD
 
 ---
 
-## 4. Kiến Trúc Kỹ Thuật Cho Chế Độ "Toàn Hành Tinh" Trên PC (60+ FPS Không Giật)
+## 4. Đề xuất kiến trúc chế độ "Toàn Hành Tinh" trên PC
 
 Khi người chơi PC bật chế độ **Mở khóa Toàn Hành Tinh (`PC_PLANET_WIDE`)**, hệ thống **không** thực hiện kiểu brute-force (tải 40 MB JSON + vẽ 400.000 cây full-poly), mà kết hợp **3 kỹ thuật chuẩn game chiến thuật AAA**:
 

@@ -729,7 +729,7 @@ export class PveService {
       await tx.update(heroConsumables).set({ config, strengthReady: false }).where(and(eq(heroConsumables.heroId, heroId), eq(heroConsumables.squadId, squad.id)));
     }
     const settlement = await settleCombat(tx, { masterId: map.masterId, sessionId: battleId, worldId: map.worldId, floor: map.floor,
-      report, silverReward: foes.silver, heroExpReward: foes.exp, masterExpReward: foes.exp, transactionType: 'PVE_MAP_REWARD', now });
+      report, silverReward: foes.silver, heroExpReward: foes.exp, transactionType: 'PVE_MAP_REWARD', now });
     for (const hero of heroUnits) {
       const [state] = await tx.select().from(heroSurvivalStates).where(eq(heroSurvivalStates.heroId, hero.id));
       if (state) await tx.update(heroSurvivalStates).set({ ...applyActivity(state.hungerScore, state.fatigueScore, 'BATTLE'),

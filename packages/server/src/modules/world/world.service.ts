@@ -76,10 +76,9 @@ export class WorldService {
     const totalTiles = (await db.select({ total: sql<number>`count(*)::int` }).from(worldTiles))[0]?.total ?? 0;
 
     return {
-      unlocked: Boolean(status),
-      eligible: canUnlockGlobal({ masterLevel: master.level, clearedFloor: world?.currentFloor ?? 1 }),
-      masterLevel: master.level,
-      clearedFloor: world?.currentFloor ?? 1,
+      unlocked: Boolean(status) && (world?.currentFloor ?? 1) > 25,
+      eligible: canUnlockGlobal({ currentFloor: world?.currentFloor ?? 1 }),
+      clearedFloor: Math.max(0, (world?.currentFloor ?? 1) - 1),
       base: status ? { x: status.baseX, y: status.baseY, continentId: status.continentId } : null,
       worldGrid: { width: PLANET_GRID_WIDTH, height: PLANET_GRID_HEIGHT },
       unlockedAt: status?.unlockedAt ?? null,
@@ -177,7 +176,7 @@ export class WorldService {
       this.master(masterId),
       db.select().from(worlds).where(eq(worlds.masterId, masterId)).limit(1).then(rows => rows[0]),
     ]);
-    const check = canUnlockGlobal({ masterLevel: master.level, clearedFloor: world?.currentFloor ?? 1 });
+    const check = canUnlockGlobal({ currentFloor: world?.currentFloor ?? 1 });
     if (!check.ok) throw new WorldError(check.reason ?? 'ERR_WORLD_LOCKED', 409);
 
     const existing = await this.statusRow(masterId);

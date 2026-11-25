@@ -429,7 +429,7 @@ export class CombatV2Service {
       const settlement = await settleCombat(tx, {
         masterId, sessionId, worldId: session.worldId, floor: world?.currentFloor ?? 1, report,
         silverReward: foes.reduce((sum, foe) => sum + foe.baseSilverReward, 0),
-        heroExpReward: expReward, masterExpReward: expReward, transactionType: 'COMBAT_V2_REWARD', now,
+        heroExpReward: expReward, transactionType: 'COMBAT_V2_REWARD', now,
       });
       if (report.winner === 'HERO') {
         await questService.recordEvent(masterId, 'WIN_BATTLE', 1, now, tx);

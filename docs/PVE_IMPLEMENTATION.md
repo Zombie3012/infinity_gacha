@@ -1,10 +1,12 @@
 # PvE map: implementation and verification
 
-Approved from `thaoluan.md` and the implementation plan, 2026-11-22 (UTC+7). The loop is **explore → command several squads → auto battle → collect → defeat boss → enter next floor**.
+Based on the historical PvE discussion and implementation plan from 2026-11-22 (UTC+7). The loop is **explore → command several squads → auto battle → collect → defeat boss → enter next floor**.
+
+Current progression update, 25/11/2026: `currentFloor` is the highest unlocked Tower floor; players can replay previous floors without reducing it. Master EXP and level no longer affect rewards or unlocks. Both base floors are open from the start; see [Tower progression](TOWER_PROGRESSION.md). Ancient Dungeon is under development and `/api/dungeon/*` is blocked, even though the historical implementations described below remain in the repository. Verification results and version-specific statements below describe their original runs and should not be treated as current test results.
 
 ## Exploration v2: objectives, buildings and ambush
 
-New floors use layout version 2. Existing floors with `exploration = null` keep the v1 behavior below until cleared. Migration 0049 adds the exploration snapshot and squad area/portal fields without rewriting existing layouts or progress.
+New floors use exploration version 3; version 2 floors already stored retain their prior generation rules, and floors with `exploration = null` keep the v1 behavior below until cleared. Version 3 adds basic herb drops; see [alchemy and PvE consumables](ALCHEMY_PVE_CONSUMABLES.md). Migration 0049 added the exploration snapshot and squad area/portal fields without rewriting existing layouts or progress.
 
 - A floor objective stores type, target ID, progress and status. Only `DEFEAT_BOSS` is implemented. Defeating that enemy anywhere completes the floor once; another boss-shaped encounter cannot complete it. Item search and escort remain future objective types.
 - Three scales: floor 12x12 at 1000m/cell; lazy region 20x20 at 50m/cell; interior 8x8 at 5m/cell. Buildings have their own ID, footprint (40m), entrance and interior. Two optional buildings share one floor cell; a main building contains the designated boss. No nested buildings.
@@ -33,7 +35,7 @@ V2 verification on 2026-11-22: TypeScript build, OpenAPI validation and encoding
 ## Hero lifecycle and casualty visibility
 
 - All Heroes reach DEAD at zero HP, regardless of summon/payment source. Zero HP is never a surviving injury. Resurrection uses one RESURRECTION_GEM_7 and restores 100% HP without Silver fees. See [Hero Chronicle](HERO_CHRONICLE.md).
-- Default barracks filters show living Heroes. Separate **Chờ hồi sinh** and **Tử trận** filters retain read-only profiles; reports and API history remain intact. Facility/party selectors, equipment targets, kitchen, dormitory, training and base residents exclude casualties. Open views react to Hero updates and drop stale selections. Owned counts exclude permanent deaths.
+- Default barracks filters show living Heroes; the death/archive views retain read-only profiles for casualties, who can be revived with the 7★ gem. Reports and API history remain intact. Facility/party selectors, equipment targets, kitchen, dormitory, training and base residents exclude casualties; open views react to Hero updates and drop stale selections.
 - Both combat flows close injuries/treatments, release work/rest and party membership after death. Ordinary medical timers cannot revive casualties. All DEAD instances can use the same resurrection gem; concurrent requests consume it once.
 - Medical admission, emergency care and worker assignment serialize Master-before-Hero with combat. Quick Heal revalidates the locked Hero and item stock so simultaneous requests restore/charge once. Feeding/resting and EXP/fodder actions reject casualties and zero HP. Positive fractional HP rounds to at least one when computing progression; terminal derived HP stays zero.
 - Migration 0053 backfills Hero Chronicle records and normalizes legacy DISABLED and zero-HP Heroes to DEAD without reviving players. Historical reports and equipment locations are preserved.

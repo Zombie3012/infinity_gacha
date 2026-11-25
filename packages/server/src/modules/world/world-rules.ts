@@ -2,7 +2,7 @@
  * Domain 13 (P3) global-world rules.
  *
  * Sample tuning (prototype):
- * - Global World unlocks at Master level 15 and dungeon floor 10 cleared
+ * - Global World unlocks after clearing Tower floor 25
  * - a new Master is placed on a random Outer Rim tile with a 48h Novice Shield
  *   and a 5-tile discovery radius around the base
  * - a tile can be discovered if it is inside the base radius or adjacent (1 tile)
@@ -12,7 +12,6 @@
  * - territory yield grows 50% per level
  */
 
-export const UNLOCK_MASTER_LEVEL = 1;
 export const UNLOCK_CLEARED_FLOOR = 25;
 export const NOVICE_SHIELD_HOURS = 48;
 export const DISCOVERY_RADIUS = 5;
@@ -24,13 +23,11 @@ export const UPGRADE_BASE_COST_SILVER = 1500;
 export const MAX_TERRITORY_LEVEL = 5;
 
 export interface UnlockState {
-  masterLevel: number;
-  clearedFloor: number;
+  currentFloor: number;
 }
 
-export function canUnlockGlobal(state: UnlockState): { ok: boolean; reason?: 'ERR_WORLD_LEVEL_REQUIRED' | 'ERR_WORLD_FLOOR_REQUIRED' } {
-  if (state.masterLevel < UNLOCK_MASTER_LEVEL) return { ok: false, reason: 'ERR_WORLD_LEVEL_REQUIRED' };
-  if (state.clearedFloor < UNLOCK_CLEARED_FLOOR) return { ok: false, reason: 'ERR_WORLD_FLOOR_REQUIRED' };
+export function canUnlockGlobal(state: UnlockState): { ok: boolean; reason?: 'ERR_WORLD_FLOOR_REQUIRED' } {
+  if (state.currentFloor <= UNLOCK_CLEARED_FLOOR) return { ok: false, reason: 'ERR_WORLD_FLOOR_REQUIRED' };
   return { ok: true };
 }
 

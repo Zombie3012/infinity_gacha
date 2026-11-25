@@ -19,7 +19,6 @@ export interface CombatSettlementInput {
   report: CombatV2Report;
   silverReward: number;
   heroExpReward: number;
-  masterExpReward: number;
   transactionType: string;
   now: Date;
 }
@@ -40,7 +39,6 @@ export async function settleCombat(tx: GameTransaction, input: CombatSettlementI
   const won = report.winner === 'HERO';
   const silverReward = won ? input.silverReward : 0;
   const heroExpReward = won ? input.heroExpReward : 0;
-  const masterExpReward = won ? input.masterExpReward : 0;
   const deaths: { heroId: string; name: string; state: string; droppedEquipmentIds: string[] }[] = [];
   const heroProgress: { heroId: string; expGranted: number; fromLevel: number; toLevel: number }[] = [];
   const configs = await tx.select().from(heroLevelConfigs).orderBy(asc(heroLevelConfigs.level));
@@ -103,14 +101,8 @@ export async function settleCombat(tx: GameTransaction, input: CombatSettlementI
 
   const [master] = await tx.select().from(masters).where(eq(masters.id, masterId)).for('update');
   if (!master) throw new Error('Master missing during settlement.');
-  let masterExp = master.exp + BigInt(masterExpReward);
-  let masterLevel = master.level;
-  const masterConfigs = await tx.select().from(masterLevelConfigs).orderBy(asc(masterLevelConfigs.level));
-  for (const config of masterConfigs) if (config.level > masterLevel && masterExp >= config.expRequired) {
-    masterExp -= config.expRequired; masterLevel = config.level;
-  }
   await tx.update(masters).set({
-    exp: masterExp, level: masterLevel, silverCoins: sql`${masters.silverCoins} + ${BigInt(silverReward)}`, updatedAt: now,
+    silverCoins: sql`${masters.silverCoins} + ${BigInt(silverReward)}`, updatedAt: now,
   }).where(eq(masters.id, masterId));
   if (silverReward > 0) await tx.insert(currencyTransactions).values({
     id: uuid(), masterId, currencyType: 'SILVER', amountDelta: BigInt(silverReward),
@@ -119,6 +111,5 @@ export async function settleCombat(tx: GameTransaction, input: CombatSettlementI
   const survivors = report.units.filter(unit => unit.side === 'HERO' && unit.alive && unit.hp > 0)
     .map(unit => ({ id: unit.id, hp: unit.hp, maxHp: unit.maxHp }));
   await medicalService.recordBattleInjuries(masterId, survivors, tx, now);
-  return { silverReward, heroExpReward, masterExpReward, deaths, heroProgress,
-    masterProgress: { fromLevel: master.level, toLevel: masterLevel, exp: masterExp.toString() } };
+  return { silverReward, heroExpReward, deaths, heroProgress };
 }

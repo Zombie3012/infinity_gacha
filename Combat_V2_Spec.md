@@ -28,9 +28,9 @@ Accuracy, BlockRate, BlockEffect, CritRES, CritDMGRes, DR, Tenacity, ArmorPen, M
 Crit 100% · CritDMG 300% · Evasion 75% · Block 75% · BlockEffect 85% · DR 70% · Tenacity 70% · Lifesteal 50% · Armor/Magic Pen 80% · Hit chance 5–98%.
 
 ## 3. Growth
-- Level-1 budget by star: 100 / 130 / 170 / 220 / 280 / **350 (6★ locked)** / **430 (7★ locked)**.
+- Level-1 budget by star: 100 / 130 / 170 / 220 / 280 / 350 / 430. Hero promotion supports 1–7★; the current summon seed banners themselves award at most 5★.
 - `Budget(L) = Budget(1) + 8*(L-1) + Compensation(L)`, `Compensation = (target − Budget(1) − 392) * ((L−1)/49)²`.
-- 1–5★ all reach **672** points at level 50; 6★ = 742, 7★ = 822 (future).
+- 1–5★ all reach **672** points at level 50; 6★ = 742 and 7★ = 822.
 - 8 points per level: **5 automatic** (class growth, retroactive on class change) + **3 training** (player, 1:1, 60% per-stat cap).
 - Random roll at summon: 75% template archetype + 25% wildcard, ±15% noise, min 8/stat, max 45%/stat.
 
@@ -71,7 +71,7 @@ Non-Mage casts at 1.0 and gets no affinity bonus.
 - PvE formations use distinct cells 0–8 (row-major, row zero in front), with at most five Heroes. Target policy FRONTLINE / LOWEST_HP / HIGHEST_ATK and per-Hero skill order are frozen on deployment. Heal skills skip when no ally needs HP.
 - Mitigation selects physical/magical defence from the attacker's damage type. Skill upgrades add their configured effect increment per level.
 - Pre-combat modifiers: equipment (HP/ATK/DEF, Speed→AGI), starvation, injury, loyalty, resonance.
-- Rewards on win: Silver, Hero EXP + level-up, Master EXP + level-up; injuries recorded; quests WIN_BATTLE/CLEAR_FLOOR; leaderboard floor. Normal Heroes die permanently and drop gear; Special/Limited become DISABLED.
+- Rewards on win include Silver and Hero EXP + level-up; injuries, quest events and leaderboard floor progress are recorded. Master EXP and level are no longer awarded or used. Any Hero reaching zero HP becomes DEAD and drops equipped gear; resurrection uses one 7★ resurrection gem. See [Hero Chronicle](docs/HERO_CHRONICLE.md).
 - Session advance is claimed atomically (`ACTIVE → RESOLVING → COMPLETED`) so rewards pay once.
 - Private PvE encounters use per-squad records, so three squads can fight independently. Encounter results, Hero HP/MP/EXP, death/gear drops, wallet/ledger, cleared nodes and boss progression share one transaction. They do not create an ACTIVE legacy session.
 - Reports contain `initialUnits`, final `units` and log entries with `targetHp`, `actorMp`, optional `actorHp`, `hit` and `actionType`. Lethal damage precedes its REVIVE event. Godot replays this persisted report; viewing has no settlement effect.
@@ -122,7 +122,7 @@ crowd-control skills exist; it is aggregated and reported but has no damage effe
 - Slot limits by star (1–2★: 1, 3★: 2, 4★: 3, 5★+: 4) are now dynamically unlocked via Star Promotion.
 
 ## 11. Star Promotion (Pick Me Up style)
-- **Concept:** Procedural Heroes always create independent instances with rolled base stats, including 5★ SPECIAL Heroes. Duplicate conversion to Thiên Mệnh applies only to fixed-template 5★+ Heroes on SPECIAL/LIMITED banners. Star promotion consumes fodder Heroes of the **same star rating**.
+- **Concept:** Every summoned Hero is a separate instance, including duplicate fixed-template Heroes; duplicate conversion to Thiên Mệnh no longer applies. Star promotion consumes fodder Heroes of the **same star rating**.
 - **Requirement:** Target Hero must be at current maximum level:
   - 1★: Max Level 10
   - 2★: Max Level 20
@@ -169,6 +169,6 @@ crowd-control skills exist; it is aggregated and reported but has no damage effe
 
 ## 14. Private PvE loop
 
-See [PVE_IMPLEMENTATION.md](docs/PVE_IMPLEMENTATION.md) for map generation, movement, transactions, recovery and verification. Hero recovery updates persisted HP percentages as well as display HP, so a treated/revived v2 Hero starts the next encounter at the restored ratio. Normal permadeath and Special/Limited recovery retain their existing costs and rules.
+See [PVE_IMPLEMENTATION.md](docs/PVE_IMPLEMENTATION.md) for map generation, movement, transactions, recovery and verification. Hero recovery updates persisted HP percentages as well as display HP, so a treated/revived v2 Hero starts the next encounter at the restored ratio. All Heroes share the same death and resurrection rules in [Hero Chronicle](docs/HERO_CHRONICLE.md).
 
 Remaining work includes visual playtesting, balance/TTK, assets/VFX/audio and platform exports, alongside the non-PvE UI backlog in `GODOT_BACKLOG.md`.

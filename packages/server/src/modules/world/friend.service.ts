@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../database/db.js';
 import {
@@ -66,7 +66,7 @@ export class FriendService {
     const allTargetIds = Array.from(new Set([...acceptedIds, ...blockedIds]));
     const masterRows = allTargetIds.length
       ? await db
-          .select({ id: masters.id, masterName: masters.masterName, level: masters.level })
+          .select({ id: masters.id, masterName: masters.masterName })
           .from(masters)
           .where(inArray(masters.id, allTargetIds))
       : [];
@@ -109,7 +109,6 @@ export class FriendService {
           return {
             friendMasterId: m.id,
             masterName: m.masterName,
-            level: m.level,
             giftSentToday: sentSet.has(fid),
             giftReceivedUnclaimed: unclaimedSenderSet.has(fid),
           };
@@ -122,7 +121,6 @@ export class FriendService {
           return {
             friendMasterId: m.id,
             masterName: m.masterName,
-            level: m.level,
           };
         })
         .filter(Boolean),
@@ -147,7 +145,7 @@ export class FriendService {
     );
     const masterRows = otherIds.length
       ? await db
-          .select({ id: masters.id, masterName: masters.masterName, level: masters.level })
+          .select({ id: masters.id, masterName: masters.masterName })
           .from(masters)
           .where(inArray(masters.id, otherIds))
       : [];
@@ -161,7 +159,6 @@ export class FriendService {
           requestId: r.id,
           masterId: r.requesterMasterId,
           masterName: m?.masterName ?? 'Master',
-          level: m?.level ?? 1,
           createdAt: r.createdAt,
         };
       });
@@ -174,7 +171,6 @@ export class FriendService {
           requestId: r.id,
           masterId: r.addresseeMasterId,
           masterName: m?.masterName ?? 'Master',
-          level: m?.level ?? 1,
           createdAt: r.createdAt,
         };
       });
@@ -185,14 +181,14 @@ export class FriendService {
   async searchMasters(masterId: string, queryInput: string) {
     const q = String(queryInput ?? '').trim();
     const candidates = await db
-      .select({ id: masters.id, masterName: masters.masterName, level: masters.level })
+      .select({ id: masters.id, masterName: masters.masterName })
       .from(masters)
       .where(
         q
           ? and(ne(masters.id, masterId), or(ilike(masters.masterName, `%${q}%`), eq(masters.id, q)))
           : ne(masters.id, masterId),
       )
-      .orderBy(desc(masters.level))
+      .orderBy(asc(masters.masterName), asc(masters.id))
       .limit(20);
 
     if (!candidates.length) return { results: [] };
@@ -224,7 +220,6 @@ export class FriendService {
       results: candidates.map(c => ({
         masterId: c.id,
         masterName: c.masterName,
-        level: c.level,
         relationStatus: relMap.get(c.id) ?? 'NONE',
       })),
     };
@@ -235,7 +230,7 @@ export class FriendService {
     if (!targetKey) throw new FriendError('Vui lòng nhập tên hoặc ID Master cần kết bạn.', 400);
 
     const [target] = await db
-      .select({ id: masters.id, masterName: masters.masterName, level: masters.level })
+      .select({ id: masters.id, masterName: masters.masterName })
       .from(masters)
       .where(or(eq(masters.id, targetKey), ilike(masters.masterName, targetKey)))
       .limit(1);
@@ -460,8 +455,6 @@ export class FriendService {
       .select({
         id: masters.id,
         masterName: masters.masterName,
-        level: masters.level,
-        exp: masters.exp,
       })
       .from(masters)
       .where(eq(masters.id, targetMasterId))
@@ -507,8 +500,6 @@ export class FriendService {
       profile: {
         masterId: target.id,
         masterName: target.masterName,
-        level: Number(target.level ?? 1),
-        exp: Number(target.exp ?? 0),
         allianceName,
         heroCount: Number(totalHeroes ?? 0),
         topHeroes,
@@ -538,7 +529,7 @@ export class FriendService {
     }
 
     const [target] = await db
-      .select({ id: masters.id, masterName: masters.masterName, level: masters.level })
+      .select({ id: masters.id, masterName: masters.masterName })
       .from(masters)
       .where(eq(masters.id, friendMasterId))
       .limit(1);
@@ -559,7 +550,6 @@ export class FriendService {
       master: {
         masterId: target.id,
         masterName: target.masterName,
-        level: Number(target.level ?? 1),
       },
       buildings,
     };

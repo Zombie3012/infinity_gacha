@@ -46,7 +46,6 @@ var _landmark_nameplates: Array[Label3D] = []
 
 const MAX_LOBBY_FLOORS := 2
 const FLOOR_HEIGHT := 5.2
-const MASTER_LEVELS_PER_FLOOR := 15
 const PLOTS_PER_FLOOR := 8
 const MAX_TOTAL_PLOTS := 48
 
@@ -1999,16 +1998,11 @@ func _refresh_hud() -> void:
 	if avatar_icon_label != null:
 		avatar_icon_label.text = _get_avatar_icon()
 	if avatar_level_badge != null:
-		avatar_level_badge.text = "Lv.%d" % GameState.master_level
-
-	var cur_exp: int = GameState.master_exp
-	var max_exp: int = GameState.get_master_max_exp()
-	var exp_pct: float = clampf(float(cur_exp) / float(maxi(1, max_exp)), 0.0, 1.0) * 100.0
+		avatar_level_badge.visible = false
 	if player_exp_bar != null:
-		player_exp_bar.max_value = 100.0
-		player_exp_bar.value = exp_pct
+		player_exp_bar.visible = false
 	if player_exp_text != null:
-		player_exp_text.text = "EXP: %d%%" % int(exp_pct)
+		player_exp_text.visible = false
 
 	var gems := _format_num(GameState.gem_stones)
 	var gold := _format_num(GameState.silver_coins)
@@ -2735,7 +2729,7 @@ func _begin_structure_long_press_drag() -> void:
 func _enter_place_new_building_mode(b_code: String, b_name: String) -> void:
 	var free_plot := _find_first_free_unlocked_plot_index()
 	if free_plot < 0:
-		status_banner_label.text = "⚠️ Đã đạt giới hạn số lượng công trình theo cấp Master (%d/%d)! Hãy nâng cấp Master/Mở rộng hoặc phá dỡ bớt." % [
+		status_banner_label.text = "⚠️ Đã hết ô xây dựng (%d/%d). Hãy phá dỡ bớt công trình." % [
 			_get_constructed_building_count(),
 			GameState.unlocked_plots
 		]
@@ -2996,7 +2990,7 @@ func _on_left_mouse_up(screen_pos: Vector2) -> void:
 				return
 			var free_plot := _find_first_free_unlocked_plot_index()
 			if free_plot < 0:
-				status_banner_label.text = "⚠️ Đã đạt giới hạn công trình theo cấp Master!"
+				status_banner_label.text = "⚠️ Đã hết ô xây dựng!"
 				_exit_grid_edit_mode()
 				return
 			var b_code := _pending_build_code
@@ -3490,32 +3484,16 @@ func _open_free_grid_build_catalog() -> void:
 	inspector_title_label.text = "🏗️ XÂY CÔNG TRÌNH TRÊN LƯỚI (%d/%d)" % [built_cnt, max_cnt]
 	inspector_subtitle_label.text = "Đặt tự do trên lưới 2m×2m tại Hạ Thành (100×100m) hoặc Thượng Thành (60×100m)"
 
-	_add_inspector_section_header("📏 GIỚI HẠN THEO LEVEL MASTER (Lv.%d)" % GameState.master_level, Color(1.0, 0.88, 0.42))
+	_add_inspector_section_header("📏 GIỚI HẠN CÔNG TRÌNH", Color(1.0, 0.88, 0.42))
 	_add_inspector_info(
-		"• Số lượng công trình đã xây: %d / %d (Mở rộng thêm ô xây dựng khi tăng cấp Master / Mở rộng Khu vực).\n• Các ô chưa xây được ẩn hoàn toàn để mặt sân Lâu đài thoáng đãng." % [
+		"• Số lượng công trình đã xây: %d / %d. Hai tầng căn cứ đã mở.\n• Các ô chưa xây được ẩn hoàn toàn để mặt sân Lâu đài thoáng đãng." % [
 			built_cnt, max_cnt
 		],
 		Color(0.85, 0.94, 1.0)
 	)
 
 	if built_cnt >= max_cnt or free_slot < 0:
-		var exp_info: Dictionary = GameState.base_overview.get("expansion", {})
-		var next_z := int(exp_info.get("nextZone", GameState.base_zones + 1))
-		var cost := int(exp_info.get("costSilver", 2000))
-		var req_wl := int(exp_info.get("requiredWorldLevel", maxi(1, next_z - 1)))
-		var req_ml := 1 if next_z <= 1 else (next_z - 1) * MASTER_LEVELS_PER_FLOOR
-		_add_inspector_info(
-			"⚠️ Bạn đã đạt giới hạn %d/%d công trình theo cấp Master hiện tại!\nHãy nâng cấp Master Lv.%d (hoặc WL %d) để mở khóa thêm ô công trình mới." % [
-				built_cnt, max_cnt, req_ml, req_wl
-			],
-			Color(1.0, 0.78, 0.42)
-		)
-		if next_z <= MAX_LOBBY_FLOORS:
-			_add_inspector_button(
-				"🔓 Mở Thêm Giới Hạn Công Trình Cấp #%d (🪙 %d Bạc)" % [next_z, cost],
-				_on_expand_zone_pressed,
-				(GameState.master_level < req_ml and GameState.world_level < req_wl) or GameState.silver_coins < cost
-			)
+		_add_inspector_info("⚠️ Đã hết ô xây dựng (%d/%d)." % [built_cnt, max_cnt], Color(1.0, 0.78, 0.42))
 
 	_add_inspector_section_header("📐 DANH MỤC BẢN VẼ CÔNG TRÌNH (2×2 Ô = 4m×4m)", Color(0.62, 0.96, 0.75))
 
@@ -3531,17 +3509,15 @@ func _open_free_grid_build_catalog() -> void:
 		var bname := str(bt.get("name", code))
 		var desc_txt := str(bt.get("description", ""))
 		var cost := int(bt.get("buildCostSilver", 1000))
-		var req_wl := int(bt.get("requiredWorldLevel", 1))
-		var req_ml := int(bt.get("requiredMasterLevel", 1))
+		var req_floor := int(bt.get("requiredTowerFloor", 0))
 		var unlocked := bool(bt.get("unlocked", true))
 		var max_w := int(bt.get("maxWorkers", 0))
 
-		var info_line := "📌 %s [Kích thước: 2×2 ô]\n   • %s\n   • Giá xây: 🪙 %d Bạc | Cần WL %d%s | Tối đa %d Hero" % [
+		var info_line := "📌 %s [Kích thước: 2×2 ô]\n   • %s\n   • Giá xây: 🪙 %d Bạc | Vượt tầng %d | Tối đa %d Hero" % [
 			bname,
 			desc_txt,
 			cost,
-			req_wl,
-			(" & Master Lv.%d" % req_ml) if req_ml > 1 else "",
+			req_floor,
 			max_w
 		]
 		_add_inspector_info(info_line, Color(0.86, 0.95, 0.88) if unlocked else Color(0.68, 0.65, 0.65))
@@ -3679,16 +3655,10 @@ func _open_plot_inspector(plot_node: BasePlot3D, focus_cam: bool = true) -> void
 	if focus_cam:
 		camera_rig.focus_action_unit(plot_node.global_position, 11.5, 0.35)
 
-	var req_master_lvl := 1 if plot_node.zone_index <= 1 else (plot_node.zone_index - 1) * MASTER_LEVELS_PER_FLOOR
-
 	# Case 1: Locked Floor / Plot -> Show action bar with unlock button
 	if not plot_node.is_unlocked:
-		var exp_info: Dictionary = GameState.base_overview.get("expansion", {})
-		var cost := int(exp_info.get("costSilver", 2000))
-		var req_wl := int(exp_info.get("requiredWorldLevel", maxi(1, plot_node.zone_index - 1)))
-		var can_unlock := (GameState.master_level >= req_master_lvl or GameState.world_level >= req_wl) and GameState.silver_coins >= cost
 		if _building_action_bar != null:
-			_building_action_bar.show_locked_plot(plot_node.plot_index, plot_node.zone_index, cost, can_unlock)
+			_building_action_bar.show_locked_plot(plot_node.plot_index, plot_node.zone_index, 0, false)
 		return
 
 	# Case 2: Unlocked Empty Plot -> Show action bar with [🔨 Xây dựng]
@@ -3730,6 +3700,14 @@ func _on_action_bar_upgrade_pressed(b_data: Dictionary) -> void:
 	$HUD.add_child(popup)
 
 func _on_action_bar_facility_pressed(b_data: Dictionary, action_code: String) -> void:
+	var required_floor := 0
+	match action_code:
+		"SHOP_AIRSHIP": required_floor = 5
+		"HALL_OF_MAGIC": required_floor = 10
+		"ALLIANCE_HALL", "AIRSHIP_PORT": required_floor = 25
+	if GameState.current_floor - 1 < required_floor:
+		show_status_toast("🔒 Công trình mở sau khi vượt Tháp tầng %d." % required_floor, "warn")
+		return
 	match action_code:
 		"HALL_OF_MAGIC":
 			var existing = $HUD.get_node_or_null("MagicHallModal")
@@ -3748,11 +3726,11 @@ func _on_action_bar_facility_pressed(b_data: Dictionary, action_code: String) ->
 				modal.name = "AirshipPortModal"
 				modal.closed.connect(func(): await _sync_all_from_backend())
 				modal.open_rts_map_requested.connect(func():
-					SceneTransition.change_scene("res://scenes/world/world_rts_map.tscn", "🗺️ Đang mở Bản Đồ Viễn Chinh RTS...")
+					_open_world_rts_map()
 				)
 				$HUD.add_child(modal)
 		"WORLD_RTS":
-			SceneTransition.change_scene("res://scenes/world/world_rts_map.tscn", "🗺️ Đang mở Bản Đồ Viễn Chinh RTS...")
+			_open_world_rts_map()
 		"SHOP_AIRSHIP":
 			var shop = preload("res://scripts/ui/airship_shop_modal.gd").new()
 			shop.closed.connect(func(): await _sync_all_from_backend())
@@ -4378,11 +4356,11 @@ func _render_forge_facility(b_lvl: int, b_status: String) -> void:
 
 func _render_training_center_facility(b_lvl: int, b_status: String) -> void:
 	var cap_heroes := 3 if b_lvl <= 1 else (5 if b_lvl == 2 else 7)
-	var max_tc_count := 2 if GameState.master_level >= 30 else 1
+	var max_tc_count := 1 + maxi(0, GameState.current_floor - 1) / 10
 	_add_inspector_section_header("🥋 KHU HUẤN LUYỆN (TRAINING CENTER Lv.%d/3)" % b_lvl, Color(0.58, 0.96, 0.72))
 	_add_inspector_info(
 		"• Sức chứa Hero huấn luyện theo cấp: Lv.1 = 3 Hero | Lv.2 = 5 Hero | Lv.3 = 7 Hero (Hiện tại: %d Hero).\n" % cap_heroes +
-		"• Xây dựng tối đa 2 công trình theo cấp Master (Hiện mở: %d/2 công trình — Mở công trình thứ 2 ở Master Lv.30).\n" % max_tc_count +
+		"• Hiện có thể xây %d công trình; vượt mỗi 10 tầng mở thêm một công trình.\n" % max_tc_count +
 		"• Rèn luyện chuyên sâu 4 chỉ số gốc (STR / AGI / INT / STA) và lĩnh hội Kỹ năng chiến đấu!",
 		Color(0.75, 0.96, 0.82)
 	)
@@ -4909,16 +4887,6 @@ func _construct_building_on_plot(building_type: String, plot_index: int) -> void
 		await _sync_all_from_backend()
 	else:
 		status_banner_label.text = "❌ Không thể xây dựng: " + str(res["error"])
-
-func _promote_house_to_party_mansion(building_id: String) -> void:
-	status_banner_label.text = "🏰 Đang nâng cấp Nhà Nghỉ thành Biệt Thự Tổ Đội (Party Mansion)..."
-	var res := await ApiClient.post_req("/api/base/buildings/%s/promote-mansion" % building_id, {})
-	if res["ok"]:
-		camera_rig.shake(0.24, 0.25)
-		status_banner_label.text = "🎉 Đã nâng cấp thành công Nhà Nghỉ lên Biệt Thự Tổ Đội (Party Mansion)!"
-		await _sync_all_from_backend()
-	else:
-		status_banner_label.text = "❌ Không thể nâng cấp Party Mansion: " + str(res["error"])
 
 func _craft_equipment_recipe(recipe_code: String, target_name: String) -> bool:
 	status_banner_label.text = "⚒️ Đang rèn [%s] tại Xưởng Rèn..." % target_name
@@ -5574,17 +5542,10 @@ func _on_enter_pve_pressed() -> void:
 
 func _on_pve_mode_selected(mode_id: String) -> void:
 	if mode_id == "DUNGEON":
-		var existing = $HUD.get_node_or_null("AncientDungeonModal")
-		if existing != null: existing.queue_free()
-		var d_script = load("res://scripts/ui/ancient_dungeon_modal.gd")
-		if d_script != null:
-			var modal = d_script.new()
-			modal.name = "AncientDungeonModal"
-			modal.closed.connect(func(): await _sync_all_from_backend())
-			$HUD.add_child(modal)
+		show_status_toast("Hầm Ngục Cổ Đại đang được phát triển." if GameState.current_floor > 5 else "Hầm Ngục mở sau khi vượt Tháp tầng 5.", "warn")
 		return
 	if mode_id == "EXPEDITION":
-		SceneTransition.change_scene("res://scenes/world/world_rts_map.tscn", "🗺️ Đang mở Bản Đồ Viễn Chinh RTS...")
+		_open_world_rts_map()
 		return
 	if mode_id != "TOWER":
 		return
@@ -5595,6 +5556,27 @@ func _on_pve_mode_selected(mode_id: String) -> void:
 		status_banner_label.text = "🗼 Đang mở Tháp Thử Thách PvE..."
 	await get_tree().create_timer(0.4).timeout
 	SceneTransition.change_scene("res://scenes/pve/pve_tower.tscn", "🗼 Đang tiến vào Tháp Thử Thách PvE...")
+
+func _open_world_rts_map() -> void:
+	var required_floor := PveModeModalScript.EXPEDITION_UNLOCK_FLOOR
+	if not PveModeModalScript.can_enter_expedition(GameState.current_floor):
+		show_status_toast("🔒 Viễn Chinh mở khi đạt tầng %d. Hiện tại: Tầng %d." % [required_floor, maxi(1, GameState.current_floor)], "warn")
+		return
+	# Recheck the server before navigation in case cached progress belongs to an older run.
+	var res: Dictionary = await ApiClient.get_req("/api/world/rts/snapshot")
+	if not is_inside_tree() or is_queued_for_deletion():
+		return
+	var data = res.get("data")
+	if not bool(res.get("ok", false)) or not (data is Dictionary):
+		show_status_toast("⚠️ Không thể kiểm tra điều kiện mở Viễn Chinh. Vui lòng thử lại.", "warn")
+		return
+	var floor_progress := int(data.get("clearedFloor", 0))
+	required_floor = int(data.get("requiredFloor", required_floor))
+	GameState.current_floor = floor_progress + 1
+	if floor_progress < required_floor:
+		show_status_toast("🔒 Viễn Chinh mở khi đạt tầng %d. Hiện tại: Tầng %d." % [required_floor, maxi(1, floor_progress)], "warn")
+		return
+	SceneTransition.change_scene("res://scenes/world/world_rts_map.tscn", "🗺️ Đang mở Bản Đồ Viễn Chinh RTS...")
 
 const RecoveryCenterModalScript = preload("res://scripts/ui/recovery_center_modal.gd")
 

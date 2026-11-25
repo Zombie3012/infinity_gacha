@@ -31,7 +31,32 @@ func _run_tests() -> void:
 	_expect(rts_map._minimap.custom_minimum_size.x > rts_map._minimap.custom_minimum_size.y * 1.8,
 		"Minimap must be horizontal 2:1 aspect ratio, got %s" % [rts_map._minimap.custom_minimum_size])
 
-	# Apply realistic Expedition RTS snapshot
+	# A locked world's API response explicitly returns null coordinates.
+	var locked_snapshot := {
+		"unlocked": false, "clearedFloor": 1, "requiredFloor": 25,
+		"worldGrid": {"width": 600, "height": 300},
+		"base": null, "chunkCenter": null,
+		"portState": {"portLevel": 0, "airships": []},
+		"tiles": [], "activeFleets": [], "nearbyPlayers": [],
+	}
+	rts_map.apply_snapshot(locked_snapshot)
+	await get_tree().process_frame
+	_expect(rts_map._snapshot.get("base") is Dictionary,
+		"Locked snapshot must safely reach renderers with dictionary coordinates")
+	_expect(rts_map._snapshot.get("chunkCenter") is Dictionary,
+		"Explicit null chunkCenter must use the base fallback")
+	_expect(locked_snapshot["base"] == null and locked_snapshot["chunkCenter"] == null,
+		"Applying a snapshot must not rewrite the caller's null coordinates")
+	_expect(not rts_map._centered_once, "Locked world must leave initial camera centering pending")
+	rts_map._center_on_base()
+	rts_map.apply_snapshot({})
+	_expect(rts_map._last_chunk_center == Vector2i(100, 100),
+		"Legacy snapshots without coordinates must retain the default center")
+	rts_map.apply_snapshot({"base": {"x": 412, "y": 186}, "chunkCenter": null})
+	_expect(rts_map._last_chunk_center == Vector2i(412, 186),
+		"A null chunkCenter must fall back to the actual base coordinates")
+
+	# Apply realistic Expedition RTS snapshot after the locked response.
 	rts_map.apply_snapshot({
 		"unlocked": true,
 		"clearedFloor": 25,

@@ -714,8 +714,8 @@ export class ExpeditionService {
       airshipService.getPortState(masterId, now),
     ]);
 
-    const clearedFloor = world?.currentFloor ?? 1;
-    if (!status) {
+    const clearedFloor = Math.max(0, (world?.currentFloor ?? 1) - 1);
+    if (!status || clearedFloor < AIRSHIP_UNLOCK_FLOOR) {
       return {
         unlocked: false,
         clearedFloor,

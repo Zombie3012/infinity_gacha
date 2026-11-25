@@ -1,11 +1,18 @@
 extends Node
 
+class LockedSnapshotApi extends "res://scripts/network/api_client.gd":
+	func get_req(_endpoint: String) -> Dictionary:
+		return {"ok": true, "data": {"unlocked": false, "clearedFloor": 1, "requiredFloor": 25}}
+
 class BaseFixture extends "res://scenes/base/isometric_base_3d.gd":
 	signal response_ready
 	var requests := 0
 	var renders := 0
 	var pause_last := false
+	var entry_warnings := 0
 	func _ready() -> void: set_process(false)
+	func show_status_toast(_message: String, _level: String = "info", _duration: float = 2.6) -> void:
+		entry_warnings += 1
 	func _backend_refresh_steps() -> Array[Callable]:
 		return [_immediate, _pending] if pause_last else [_pending, _immediate]
 	func _pending() -> bool:
@@ -42,6 +49,29 @@ func _ready() -> void:
 	watchdog.timeout.connect(func(): push_error("BASE LIFECYCLE: Timed out"); get_tree().quit(1))
 	ApiClient.auth_token = "lifecycle-test-token"
 	GameState.master_id = "lifecycle-test-master"
+	var previous_floor := GameState.current_floor
+	var locked_base = make_base()
+	for floor_progress in [1, 24]:
+		GameState.current_floor = floor_progress
+		var warnings_before: int = locked_base.entry_warnings
+		locked_base._on_pve_mode_selected("EXPEDITION")
+		expect(locked_base.entry_warnings == warnings_before + 1 and not SceneTransition._transitioning,
+			"Direct Expedition selection is blocked at floor %d" % floor_progress)
+		locked_base._open_world_rts_map()
+		expect(locked_base.entry_warnings == warnings_before + 2 and not SceneTransition._transitioning,
+			"Landmark and airship entry share the floor gate at floor %d" % floor_progress)
+	var api_script = ApiClient.get_script()
+	ApiClient.set_script(LockedSnapshotApi)
+	GameState.current_floor = 26
+	var stale_warnings: int = locked_base.entry_warnings
+	await locked_base._open_world_rts_map()
+	expect(locked_base.entry_warnings == stale_warnings + 1 and not SceneTransition._transitioning,
+		"Server floor 1 blocks entry even when the client cache says floor 25")
+	expect(GameState.current_floor == 2, "Server preflight replaces stale floor progress")
+	ApiClient.set_script(api_script)
+	ApiClient.auth_token = "lifecycle-test-token"
+	locked_base.free()
+	GameState.current_floor = previous_floor
 	var base = make_base()
 	base._sync_all_from_backend()
 	expect(base.requests == 1, "First refresh is waiting for a response")

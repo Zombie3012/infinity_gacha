@@ -212,8 +212,8 @@ func _show_summary() -> void:
 	var result := {"HERO": "CHIẾN THẮNG", "ENEMY": "THẤT BẠI", "DRAW": "HÒA"}
 	var outcome := str(result.get(str(_report.get("winner", "DRAW")), "KẾT THÚC"))
 	floor_title_label.text = "TẦNG %d · %s · %d HIỆP" % [int(settlement.get("floor", 1)), outcome, int(_report.get("rounds", 0))]
-	turn_banner_label.text = "%s · +%d Silver · +%d EXP/Hero · +%d EXP Master" % [outcome,
-		int(settlement.get("silverReward", 0)), int(settlement.get("heroExpReward", 0)), int(settlement.get("masterExpReward", 0))]
+	turn_banner_label.text = "%s · +%d Silver · +%d EXP/Hero" % [outcome,
+		int(settlement.get("silverReward", 0)), int(settlement.get("heroExpReward", 0))]
 	if bool(settlement.get("bossCleared", false)):
 		_append_log("[color=#8ce6b8]Boss đã bị hạ. Đã mở tầng %d; các đội đã rời map.[/color]" % int(settlement.get("nextFloor", 1)))
 	for death in settlement.get("deaths", []):

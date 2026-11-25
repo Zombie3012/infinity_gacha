@@ -715,11 +715,10 @@ components:
               note: { type: string }
     Settlement:
       type: object
-      required: [silverReward, heroExpReward, masterExpReward, deaths, heroProgress, masterProgress, floor, nextFloor, bossCleared]
+      required: [silverReward, heroExpReward, deaths, heroProgress, floor, nextFloor, bossCleared]
       properties:
         silverReward: { type: integer, minimum: 0 }
         heroExpReward: { type: integer, minimum: 0 }
-        masterExpReward: { type: integer, minimum: 0 }
         deaths:
           type: array
           items:
@@ -738,12 +737,6 @@ components:
               expGranted: { type: integer }
               fromLevel: { type: integer }
               toLevel: { type: integer }
-        masterProgress:
-          type: object
-          properties:
-            fromLevel: { type: integer }
-            toLevel: { type: integer }
-            exp: { type: string, pattern: '^\d+$' }
         floor: { type: integer }
         nextFloor: { type: integer }
         bossCleared: { type: boolean }

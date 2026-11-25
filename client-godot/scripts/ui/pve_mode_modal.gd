@@ -12,6 +12,7 @@ signal closed
 const CARD_WIDTH := 429
 const CARD_GAP := 18
 const CARD_STEP := CARD_WIDTH + CARD_GAP
+const EXPEDITION_UNLOCK_FLOOR := 25
 
 var _modes: Array = []
 var _selected_mode: Dictionary = {}
@@ -32,10 +33,14 @@ func setup(modes: Array = []) -> void:
 	_build_shell()
 	_render_mode_list()
 
+static func can_enter_expedition(floor_progress: int) -> bool:
+	return floor_progress > EXPEDITION_UNLOCK_FLOOR
+
 static func _build_default_modes() -> Array:
 	var party_cnt := GameState.active_party_ids.size()
 	var cur_floor := maxi(1, GameState.current_floor)
 	var world_lvl := maxi(1, GameState.world_level)
+	var expedition_available := can_enter_expedition(cur_floor)
 	return [
 		{
 			"id": "TOWER",
@@ -56,31 +61,28 @@ static func _build_default_modes() -> Array:
 		},
 		{
 			"id": "DUNGEON",
-			"badge": "🕳️ HẦM NGỤC • ĐANG MỞ",
+			"badge": "🕳️ HẦM NGỤC • ĐANG PHÁT TRIỂN" if cur_floor > 5 else "🔒 HẦM NGỤC • CHƯA MỞ",
 			"title": "Hầm Ngục Cổ Đại (Dungeon)",
-			"subtitle": "Thám hiểm theo phiên • World Seed",
-			"requirement": "🔑 Yêu cầu: Sẵn sàng thám hiểm",
+			"subtitle": "Nội dung đang được phát triển",
+			"requirement": "🗼 Yêu cầu: Vượt tầng 5 • Nội dung đang phát triển",
 			"accent": Color(0.35, 0.78, 1.0),
 			"bg": Color(0.08, 0.13, 0.22, 0.96),
-			"available": true,
-			"enter_label": "🕳️ Tiến Vào Hầm Ngục",
+			"available": false,
+			"enter_label": "🚧 Đang phát triển",
 			"highlights": [
-				"• Bản đồ sinh ngẫu nhiên theo World Seed từng tầng",
-				"• Đối mặt Quái tinh nhuệ & Bẫy hầm ngục với phần thưởng hiếm",
-				"• Quản lý thể lực, khẩu phần và rút lui bảo toàn chiến lợi phẩm",
-				"• Rơi Nguyên liệu rèn Trang bị & Đá cường hóa"
+				"• Nội dung Hầm Ngục Cổ Đại sẽ được cập nhật sau."
 			]
 		},
 		{
 			"id": "EXPEDITION",
-			"badge": "🧭 VIỄN CHINH • ĐANG MỞ",
+			"badge": "🧭 VIỄN CHINH • ĐANG MỞ" if expedition_available else "🔒 VIỄN CHINH • CHƯA MỞ",
 			"title": "Viễn Chinh Thế Giới (Expedition)",
 			"subtitle": "Cử đội thám hiểm dài ngày",
-			"requirement": "👥 Yêu cầu: Tối thiểu 1 Tướng rảnh",
+			"requirement": "🗼 Yêu cầu: Vượt tầng %d • Hiện tại: Tầng %d" % [EXPEDITION_UNLOCK_FLOOR, cur_floor],
 			"accent": Color(0.42, 0.92, 0.68),
 			"bg": Color(0.07, 0.16, 0.15, 0.96),
-			"available": true,
-			"enter_label": "🧭 Mở Viễn Chinh Thế Giới",
+			"available": expedition_available,
+			"enter_label": "🧭 Mở Viễn Chinh Thế Giới" if expedition_available else "🔒 Mở sau tầng %d" % EXPEDITION_UNLOCK_FLOOR,
 			"highlights": [
 				"• Cử Tướng đi thu thập Lương thực, Gỗ, Đá và Bạc tự động",
 				"• Thời gian thực theo khu vực tài nguyên ngoài Lâu Đài",

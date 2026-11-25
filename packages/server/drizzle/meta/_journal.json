@@ -421,6 +421,55 @@
       "when": 1795363691853,
       "tag": "0059_alchemy_shop",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1795449600000,
+      "tag": "0060_chat_channels",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1795449600001,
+      "tag": "0061_friends_system",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1795449600002,
+      "tag": "0062_airship_port_rts",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1795449600003,
+      "tag": "0063_expedition_garrison",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1795449600004,
+      "tag": "0064_planet_world_tiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1795560000000,
+      "tag": "0065_startup_compatibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1795560000001,
+      "tag": "0066_tower_base_defaults",
+      "breakpoints": true
     }
   ]
 }

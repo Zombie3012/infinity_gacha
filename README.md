@@ -2,7 +2,7 @@
 
 Game quản lý Hero, sinh tồn và chiến thuật. Client hiện tại là **Godot 3D isometric**, kết nối REST API Node.js/Express và PostgreSQL. Web React/Vite đã được gỡ khỏi workspace.
 
-Cập nhật: **24/11/2026 (UTC+7)**. Đây là bản prototype đang hoàn thiện, với dữ liệu cân bằng mẫu; các checklist P0–P3 cũ không có nghĩa toàn bộ game đã sẵn sàng phát hành.
+Cập nhật: **25/11/2026 (UTC+7)**. Đây là bản prototype đang hoàn thiện, với dữ liệu cân bằng mẫu; các checklist P0–P3 và handoff cũ là lịch sử, không mô tả chắc chắn trạng thái hiện tại. Xem [tiến độ và điều kiện mở khóa](docs/TOWER_PROGRESSION.md).
 
 Hero và vật liệu dùng độ hiếm **1–7★** (1★ Bạc, 2★ Xanh lá, 3★ Xanh dương, 4★ Tím, 5★ Vàng, 6★ Đỏ, 7★ viền Rainbow). Mọi Hero đều có thể tử trận; hồ sơ được giữ tại công trình **Sử Điện Anh Hùng**. Dùng **1 Ngọc hồi sinh 7★** để hồi sinh một Hero về **100% HP**, không phí thêm. Xem [cơ chế và API](docs/HERO_CHRONICLE.md).
 
@@ -12,7 +12,7 @@ Công trình **[Thương Thuyền Khinh Khí](docs/SHOP_AIRSHIP.md)** là cửa 
 
 **[Đại Sảnh Ma Thuật](docs/MAGIC_HALL.md)** tích hợp Thư viện, Giả kim và Nghiên cứu. Ba phân khu giữ chức năng nhưng không còn là công trình xây riêng.
 
-Công trình **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** cho phép xây dựng ngay tại căn cứ 3D (nhãn `"Liên minh"`) để lập hội, tìm kiếm, gia nhập, quản lý thành viên và thông báo nội bộ (chưa mở Công nghệ & Chiến tranh Liên minh).
+Công trình **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** cho phép lập hội, tìm kiếm, gia nhập, quản lý thành viên và thông báo nội bộ sau khi vượt Tháp tầng 25 (chưa mở Công nghệ & Chiến tranh Liên minh).
 
 ## Cấu trúc
 
@@ -20,7 +20,7 @@ Công trình **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** cho phép xây dựn
 client-godot/                   Client Godot, giao diện và diễn hoạt 3D
 packages/shared/               Combat v2, sinh chỉ số, công thức, hằng số
 packages/server/               Express API, domain services, Drizzle ORM
-packages/server/drizzle/       Lịch sử migration (0000–0064)
+packages/server/drizzle/       Lịch sử migration (0000–0066)
 packages/server/src/database/seeds/  Dữ liệu mẫu
 docs/                          Tài liệu kỹ thuật hệ thống (PvE, Căn cứ, Đồ họa PC/Mobile, ...)
 docs/design_drafts/            Đặc tả/checklist lịch sử P0–P3
@@ -34,15 +34,21 @@ scripts/                       Build cleanup, encoding, seed hành tinh, test Go
 | Tài khoản, Master, World | JWT có thu hồi phiên, định danh, mã khôi phục, lưu PostgreSQL | Có đăng nhập/đăng ký, tab Bảo mật & Tài khoản trong Hồ sơ Master; vẫn giữ auto-demo khi mở game để test nhanh |
 | Gacha | Pool theo trọng số cố định, giao dịch nguyên tử, idempotency, lịch sử summon | Hai banner, chọn ngang, xem tỷ lệ, lịch sử triệu hồi, đổi Thiên Thư nhanh, triệu hồi ×1/×10 và chống double-submit |
 | Hero | Sinh instance ngẫu nhiên, huấn luyện, kỹ năng, đổi nghề, thức tỉnh, ấn ký, thăng sao | Thẻ Hero dùng chung 1–7★ (`CardGridBrowser`), chi tiết 3D, khóa/đột phá/ấn ký/trang bị/thăng sao |
-| Căn cứ & HUD chính | Xây/nâng cấp tức thì, mở rộng, sản xuất, tách biệt ký túc xá và phân công Hero | Căn cứ 3D thoáng với Top-Right 3 tài nguyên + thanh Sự Kiện, nút xoay vòng góc nhìn T1/T2/Toàn cảnh, Build Drawer ẩn mặc định và Dock CTA |
+| Căn cứ & HUD chính | Hai tầng và 16 ô mở từ đầu, xây/nâng cấp tức thì, sản xuất, cư trú và phân công Hero | Căn cứ 3D với thanh tài nguyên, nút góc nhìn T1/T2/Toàn cảnh và danh mục xây dựng |
 | Sinh tồn, y tế, rèn & kho | Có API đầy đủ và lưu trạng thái | Bếp/tâm lý, ký túc xá, hồi phục, lò rèn (`ItemGridBrowser` + lọc `+15`) và Nhà Kho tổng hợp mọi vật phẩm theo phân loại + thu hồi đồ rơi tầng |
 | Giả kim và công nghệ | Nghiên cứu tức thì, chế ba loại thuốc, dược liệu 1–7★ và tiến độ theo Master | Cây Giả kim, chế/dùng thuốc và thẻ kho vật phẩm 1–7★ trong Đại Sảnh; [hướng dẫn](docs/ALCHEMY_PVE_CONSUMABLES.md) |
-| PvE, Hầm Ngục & Viễn Chinh Hành Tinh 3D | Map PvE ba cấp, Combat v2, Hầm Ngục Cổ Đại, Hành tinh `600×300` (`180.000` ô gồm 5 lục địa + `OCEAN`), RTS Random Spawn, Chunk Streaming, Cảng Tàu Bay (`AIRSHIP_PORT`), Hầm Ngục Nổi, Tập kết & Cứu hộ SOS | `WorldRtsMap` hành tinh 3D morph 2D↔3D (`≤ 3 Draw Calls`), cảnh quan 3D `MultiMesh`, sương mù mây mềm 1h, nội suy tàu bay 60 FPS, nhập tọa độ Minimap, click hộp Hạm đội nhảy theo tàu, `AirshipPortModal`, `WorldDispatchModal`, `WorldReportsModal` |
+| PvE, Hầm Ngục & Viễn Chinh Hành Tinh 3D | Tháp PvE và Combat v2; Hầm Ngục Cổ Đại đang phát triển; Viễn Chinh sau tầng 25 có hành tinh `600×300`, tàu bay, Hầm Ngục Nổi và cứu hộ | Map Tháp, thẻ Hầm Ngục đang phát triển và `WorldRtsMap` hành tinh 3D |
 | Cửa hàng khinh khí cầu | Danh mục, mua bằng bạc, chống trả tiền hai lần | Mô hình khinh khí cầu và giao diện mua hàng auto-fit thẻ 92×92 Godot |
 | Sự kiện, nhiệm vụ, hòm thư & Bách khoa | API LiveOps, nhiệm vụ, thành tựu, hòm thư, sổ giao dịch ví & dữ liệu từ điển | `EventsQuestsModal`, `MailboxModal`, chấm đỏ thông báo (Red-Dot), hàng đợi Toast mượt và `CodexModal` (Bách Khoa 4 tab trong Avatar Master) |
 | Bạn bè, Liên minh & Chat 3 kênh SSE | API Bạn bè + tặng quà ngày + chặn chat, Liên minh cơ bản, Chat 3 kênh + SSE Stream (`/api/chat/stream`; Thế Giới in-memory, Liên Minh & Riêng Tư lưu DB) | `FriendsModal` (3 tab), công trình 3D `ALLIANCE_HALL` → `AllianceModal`, `ChatPanelModal` real-time SSE & liên kết chéo Bạn bè/Liên minh |
 | Cài đặt đồ họa PC / Mobile | Chế độ Chunk Streaming tương thích Hybrid & PC mở rộng | Tự động nhận diện thiết bị (`DeviceProfile`): Mobile khóa **Hybrid** an toàn (`R ≤ 12`), PC mở khóa toàn bộ tới `ULTRA` / `PLANET_WIDE` — tập trung 100% tại **Avatar Master → Tab Cài Đặt**; xem [chuẩn đồ họa PC/Mobile](docs/WORLD_MAP_GRAPHICS_PC_MOBILE.md) |
 | Vận hành | Admin API key, cấu hình, audit, analytics, hỗ trợ | Có gửi ticket trong hồ sơ; console quản trị Web cũ đã gỡ |
+
+## Tiến độ mở khóa
+
+Tiến độ mở khóa dựa trên **tầng Tháp cao nhất đã vượt**. Hai tầng căn cứ và công trình cơ bản mở từ đầu; vượt tầng 5 mở Thương Thuyền và mục Hầm Ngục Cổ Đại đang phát triển; vượt tầng 10 mở Đại Sảnh Ma Thuật và thêm một Khu Huấn Luyện, sau đó mỗi 10 tầng mở thêm một khu; vượt tầng 25 mở Liên Minh, Viễn Chinh và Cảng Tàu Bay. Các tầng Tháp đã mở có thể chơi lại. Khu Cư Trú và Biệt Thự Tổ Đội là hai công trình độc lập. EXP và cấp Master không còn được sử dụng.
+
+Chi tiết và ý nghĩa `currentFloor`: [Tiến độ Tháp](docs/TOWER_PROGRESSION.md).
 
 ## Quy tắc gacha hiện hành
 
@@ -83,6 +89,8 @@ npm run dev:server
 
 Import `client-godot/project.godot` bằng Godot rồi bấm F5. API mặc định là `http://127.0.0.1:3000`, cấu hình tại `client-godot/scripts/network/api_client.gd`.
 
+Với database local đã có dữ liệu từ bản trước, chạy `npm run db:upgrade` rồi `npm run build` và `npm run dev:server`. Lệnh upgrade áp dụng migration còn thiếu, bổ sung danh mục Liên Minh/Cảng Tàu Bay và seed bản đồ hành tinh; không chạy lại toàn bộ seed mẫu. Căn cứ cũ nằm trên biển được chuyển sang đất liền. Sao lưu database trước khi nâng cấp.
+
 `dev:server` theo dõi file JavaScript đã build; sau khi sửa TypeScript cần build lại. Không còn lệnh `dev:client` cho Web.
 
 Seed runner dùng `DATABASE_URL` của process hoặc URL mặc định; nếu dùng DB khác, đặt biến môi trường cho các lệnh seed. `db:seed` áp dụng 23 file theo thứ tự phụ thuộc, bao gồm hai banner; chạy lại sẽ cập nhật pool và thời gian banner, vì vậy chỉ dùng với dữ liệu phát triển.
@@ -90,11 +98,11 @@ Seed runner dùng `DATABASE_URL` của process hoặc URL mặc định; nếu d
 ## Kiểm tra
 
 ```powershell
-npm run verify
-npm run docs:routes
+npm run build
+node --test --test-force-exit packages/server/tests/http.tower-unlocks.test.mjs
 ```
 
-- `verify`: kiểm tra encoding → build shared/server → test Node.js. Build xóa `dist` tương ứng trước khi biên dịch để không giữ module đã xóa.
+- Theo `AGENTS.md`, chỉ chạy kiểm tra có mục tiêu; không chạy `npm run verify`, `npm test` hoặc toàn bộ suite nếu người dùng chưa yêu cầu. HTTP integration cần database test đã migrate và seed, đặt `DATABASE_URL` tới database đó.
 - HTTP integration test có thể skip nếu PostgreSQL không truy cập được. Cần xem số `skipped` để phân biệt kết quả unit test với xác nhận đầy đủ DB.
 - CI dựng PostgreSQL 17, migrate, seed rồi chạy `verify`.
 - Kiểm tra này không chạy engine Godot. Giao diện, camera, replay và luồng tương tác cần được kiểm tra trong Godot.

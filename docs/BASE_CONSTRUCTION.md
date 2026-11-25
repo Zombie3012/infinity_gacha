@@ -2,6 +2,8 @@
 
 Quy tắc hiện hành ngày 22/11/2026: **xây mới và nâng cấp công trình không có thời gian chờ**.
 
+Cập nhật tiến độ 25/11/2026: hai tầng căn cứ và 16 ô xây dựng mở từ đầu. Điều kiện xây/sử dụng công trình được xác định bằng tầng Tháp đã vượt; xem [tiến độ Tháp](TOWER_PROGRESSION.md). Khu Cư Trú và Biệt Thự Tổ Đội là hai công trình độc lập.
+
 - `POST /api/base/buildings` trừ bạc, tạo công trình cấp 1 ở trạng thái `READY`, kích hoạt sản xuất ngay trong cùng giao dịch.
 - `POST /api/base/buildings/:id/upgrade` trừ bạc/nguyên liệu, tăng cấp và áp dụng sức chứa, năng suất cùng các hiệu ứng cấp công trình ngay. Giá và điều kiện mở khóa/cấp tối đa giữ nguyên.
 - Cả hai luồng khóa ví Master và kiểm tra lại dữ liệu trong giao dịch, tránh chi vượt số dư hoặc xây trùng ô khi thao tác đồng thời.

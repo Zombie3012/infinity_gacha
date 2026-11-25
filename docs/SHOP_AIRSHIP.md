@@ -1,8 +1,8 @@
 # Thương Thuyền Khinh Khí
 
-Cập nhật 22/11/2026 (UTC+7). Công trình `SHOP_AIRSHIP` là cửa hàng dạng **khinh khí cầu neo tại căn cứ**: bóng khí, giỏ hàng, dây treo và chuyển động nhấp nhô. Mở danh mục xây dựng để xây công trình, sau đó chọn **Cửa hàng** trên thanh hành động.
+Cập nhật 25/11/2026 (UTC+7). Công trình `SHOP_AIRSHIP` là cửa hàng dạng **khinh khí cầu neo tại căn cứ**: bóng khí, giỏ hàng, dây treo và chuyển động nhấp nhô. Sau khi vượt tầng Tháp 5, mở danh mục xây dựng để xây công trình, sau đó chọn **Cửa hàng** trên thanh hành động.
 
-- Mở từ cấp thế giới 1, một cấp công trình, không cần nhân sự; giá xây mẫu 1.000 bạc.
+- Mở sau khi vượt Tháp tầng 5, một cấp công trình, không cần nhân sự; giá xây mẫu 1.000 bạc.
 - **Giá bán tạm thời: 1 bạc mỗi món**, gồm Ngọc hồi sinh 7★, Đá dịch chuyển, thuốc điều trị, thức ăn, sách EXP, nguyên liệu phát triển/chế tạo, trang bị và Thiên Thư thường.
 - Không giới hạn ngày hoặc xoay vòng ngày bán trong catalog tạm này. Mỗi lệnh mua 1–99 món. Admin vẫn có thể cấu hình giá và giới hạn cho từng mặt hàng; khi tạo hàng mới mà không nhập giá, mặc định là 1 bạc.
 - Không bán Thần Lệ đã ngừng dùng, vật phẩm rác hoặc Bình Thể Lực chưa có logic sử dụng. Không thêm Gem hay Hero vào danh mục vật phẩm bán.
@@ -20,7 +20,7 @@ Server khóa ví Master, kiểm tra số dư hiện tại, trừ bạc và giao 
 
 `POST /api/shop/purchase` nhận `{itemCode, quantity}` và hỗ trợ header `Idempotency-Key`. Cùng Master, cùng key và cùng nội dung trả lại biên nhận đã lưu, không trừ bạc/giao hàng/tính tiến độ chi tiêu lần nữa. Đổi nội dung với cùng key bị từ chối 409. Client giữ key khi chưa nhận được kết quả và cho bấm **Kiểm tra lại giao dịch**; không tự tạo lần mua mới cho lần thử lại đó. Các client cũ chưa gửi key vẫn được hỗ trợ.
 
-Các endpoint danh mục `GET /api/shop`, chi tiết `GET /api/shop/items/:code` và quản trị shop được giữ nguyên. API cũ không thêm điều kiện phải xây công trình; khinh khí cầu là lối vào giao diện tại căn cứ.
+Các endpoint `GET /api/shop`, `GET /api/shop/items/:code` và `POST /api/shop/purchase` yêu cầu vượt Tháp tầng 5; chưa yêu cầu phải xây công trình. API quản trị shop có xác thực riêng.
 
 ## Dữ liệu và kiểm chứng
 

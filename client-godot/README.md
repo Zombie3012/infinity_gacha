@@ -1,6 +1,6 @@
 # Infinite Gacha — Godot client
 
-Client chính thức đang phát triển: **3D isometric** cho căn cứ/đấu trường và **Hành tinh Fantasy 3D** cho chế độ Viễn Chinh. Cập nhật **24/11/2026 (UTC+7)**.
+Client chính thức đang phát triển: **3D isometric** cho căn cứ/đấu trường và **Hành tinh Fantasy 3D** cho chế độ Viễn Chinh. Cập nhật **25/11/2026 (UTC+7)**. Điều kiện mở hiện hành: [tiến độ Tháp](../docs/TOWER_PROGRESSION.md).
 
 ## Mở dự án
 
@@ -44,7 +44,7 @@ Cửa sổ thương thuyền được căn giữa và co theo kích thước mà
 
 Xây mới/nâng cấp mọi công trình hoàn tất ngay khi server chấp nhận và thanh toán đủ; giao diện đã bỏ bộ đếm thi công và thông tin thời gian chờ. Xem [cơ chế xây dựng tức thì](../docs/BASE_CONSTRUCTION.md).
 
-Xây **Thương Thuyền Khinh Khí** (`SHOP_AIRSHIP`) rồi chọn **Cửa hàng**. Khinh khí cầu có mô hình bóng khí/giỏ/dây treo và chuyển động nhấp nhô. Giao diện cho tìm tên, lọc hàng, chọn số lượng và mua bằng bạc; giá tạm mọi món là **1 bạc**, không giới hạn ngày. Hàng gồm vật phẩm/nguyên liệu dùng được, trang bị và Thiên Thư thường; Ngọc hồi sinh 7★ đã mua dùng ngay tại Sử Điện. Xem [cơ chế cửa hàng](../docs/SHOP_AIRSHIP.md).
+Vượt Tháp tầng 5, xây **Thương Thuyền Khinh Khí** (`SHOP_AIRSHIP`) rồi chọn **Cửa hàng**. Khinh khí cầu có mô hình bóng khí/giỏ/dây treo và chuyển động nhấp nhô. Giao diện cho tìm tên, lọc hàng, chọn số lượng và mua bằng bạc; giá tạm mọi món là **1 bạc**, không giới hạn ngày. Hàng gồm vật phẩm/nguyên liệu dùng được, trang bị và Thiên Thư thường; Ngọc hồi sinh 7★ đã mua dùng ngay tại Sử Điện. Xem [cơ chế cửa hàng](../docs/SHOP_AIRSHIP.md).
 
 Kiểm tra Godot với API thật: `node scripts/test-godot-shop.mjs` từ gốc repo, cấu hình `GODOT_BIN` nếu cần. Kiểm tra có cả tình huống mất phản hồi sau thanh toán và gửi lại cùng giao dịch.
 
@@ -76,7 +76,7 @@ Quái đi 1,5 giây/bước, phát hiện trong radar bốn ô khi không bị v
 
 Lệnh đang chờ được lưu với khóa retry, không lưu token. Khi mất kết nối hoặc mở lại game, bấm **Thử lại lệnh** để nhận lại kết quả; server không trả thưởng/trừ lương thực lần hai. Bản nháp đội hình giữ nguyên khi lưu lỗi. Hero đang triển khai bị khóa thao tác xung đột tại căn cứ.
 
-Hero NORMAL tử trận được giữ ở mục **Tử trận** để xem lịch sử; không xuất hiện trong danh sách hoạt động. Hero SPECIAL/LIMITED 0 HP thuộc mục **Chờ hồi sinh**, cần Thần Lệ và không thể chữa bằng điều trị thường. Các bộ chọn công trình, đội hình, ăn/nghỉ, huấn luyện và trang bị chỉ cho chọn Hero còn sống; trạng thái và lựa chọn được cập nhật ngay khi có tử vong.
+Mọi Hero về 0 HP đều tử trận theo cùng quy tắc, được giữ hồ sơ tại Sử Điện và có thể hồi sinh bằng một Ngọc hồi sinh 7★. Các bộ chọn công trình, đội hình, ăn/nghỉ, huấn luyện và trang bị chỉ cho chọn Hero còn sống; trạng thái và lựa chọn được cập nhật khi có tử vong. Xem [Sử Điện Anh Hùng](../docs/HERO_CHRONICLE.md).
 
 Từ root, đặt `GODOT_BIN` tới engine console và `DATABASE_URL` tới DB test đã migrate/seed rồi chạy:
 
@@ -106,9 +106,9 @@ Chi tiết hợp đồng và kiểm thử ở [PVE_IMPLEMENTATION.md](../docs/PV
   - Bottom-Left: 1 nút xoay vòng góc nhìn (`🏰 Tầng 1 ↻` → `👑 Tầng 2 ↻` → `🌐 Toàn Cảnh ↻`), nút `👥 Nhân Sự`, nút `💬 Chat` (3 kênh: Thế Giới, Liên Minh, Riêng Tư qua `chat_panel_modal.gd`) và thanh toast mảnh.
   - Bottom-Right: Cụm Dock (`✨ Triệu Hồi`, `🛡️ Anh Hùng`, `📦 Nhà Kho`, `🏗️ Xây Dựng` bật/tắt Build Drawer ẩn mặc định) và nút CTA `⚔️ THÁP PvE`.
 - **Chế độ PvE, Sự kiện, Hòm thư & Đại Sảnh Liên Minh:**
-  - `pve_mode_modal.gd` có 3 chế độ mở khóa: **Tháp PvE (`TOWER`)**, **Hầm Ngục Cổ Đại (`DUNGEON` → `ancient_dungeon_modal.gd`)**, và **Viễn Chinh Thế Giới (`EXPEDITION` → `world_expedition_modal.gd`)** (đã gỡ Chinh Phạt Lãnh Thổ).
+  - `pve_mode_modal.gd` hiển thị Tháp PvE, mục Hầm Ngục Cổ Đại đang phát triển sau tầng 5 và Viễn Chinh Thế Giới sau tầng 25 (`world_rts_map.tscn`). `ancient_dungeon_modal.gd` và `world_expedition_modal.gd` là UI cũ, không phải lối vào chính hiện hành.
   - `events_quests_modal.gd` (Sự Kiện LiveOps, Nhiệm Vụ, Thành Tựu) và `mailbox_modal.gd` (Hòm Thư + Sổ Giao Dịch).
-  - Công trình 3D **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** mở `alliance_modal.gd` (lập hội, tìm kiếm, gia nhập, quản lý thành viên & thông báo; chưa gồm Công nghệ/Chiến tranh Liên minh).
+  - Sau khi vượt tầng 25, công trình 3D **Đại Sảnh Liên Minh (`ALLIANCE_HALL`)** mở `alliance_modal.gd` (lập hội, tìm kiếm, gia nhập, quản lý thành viên & thông báo; chưa gồm Công nghệ/Chiến tranh Liên minh).
   - Hồ sơ Master (`player_profile_modal.gd`) bổ sung tab **Bảo Mật & Tài Khoản** (định danh, mã khôi phục, đăng xuất) trong khi vẫn giữ auto-demo khi mở game để test nhanh.
 
 ## Bản Đồ Hành Tinh 3D, Viễn Chinh RTS & Đồ Họa PC/Mobile (24/11/2026)
@@ -125,6 +125,8 @@ Chi tiết hợp đồng và kiểm thử ở [PVE_IMPLEMENTATION.md](../docs/PV
 ## Kiểm thử Headless Targeted
 
 Từ root, đặt `GODOT_BIN` tới engine console rồi chạy từng suite mục tiêu (không chạy full suite trừ khi được yêu cầu):
+
+Các runner mạng dưới đây là công cụ theo từng tính năng, không phải kết quả kiểm thử hiện hành. Đặt `DATABASE_URL` tới **database test riêng** đã migrate và seed; một số fixture cũ có thể cần cập nhật mốc Tháp trước khi dùng. `scripts/test-airship-rts-api.mjs` và các test Liên Minh/Thương Thuyền cũ từng dùng quy tắc tầng hoặc cấp Master cũ; ưu tiên `packages/server/tests/http.tower-unlocks.test.mjs` khi xác minh điều kiện mở hiện tại.
 
 ```powershell
 # Server & Bản Đồ Hành Tinh 3D

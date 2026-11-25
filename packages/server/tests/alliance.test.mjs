@@ -27,12 +27,11 @@ test('P3 Alliance - identity validation', async (t) => {
 });
 
 test('P3 Alliance - founding rules', async (t) => {
-  await t.test('needs level 20, no membership and no cooldown', () => {
-    assert.equal(canCreateAlliance({ masterLevel: 20, inAlliance: false, cooldownUntil: null, now }).ok, true);
-    assert.equal(canCreateAlliance({ masterLevel: 19, inAlliance: false, cooldownUntil: null, now }).reason, 'ERR_ALLIANCE_LEVEL_REQUIRED');
-    assert.equal(canCreateAlliance({ masterLevel: 20, inAlliance: true, cooldownUntil: null, now }).reason, 'ERR_ALLIANCE_ALREADY_MEMBER');
+  await t.test('needs no membership and no cooldown', () => {
+    assert.equal(canCreateAlliance({ inAlliance: false, cooldownUntil: null, now }).ok, true);
+    assert.equal(canCreateAlliance({ inAlliance: true, cooldownUntil: null, now }).reason, 'ERR_ALLIANCE_ALREADY_MEMBER');
     assert.equal(canCreateAlliance({
-      masterLevel: 20, inAlliance: false, cooldownUntil: new Date(now.getTime() + 60_000), now,
+      inAlliance: false, cooldownUntil: new Date(now.getTime() + 60_000), now,
     }).reason, 'ERR_ALLIANCE_COOLDOWN');
   });
 

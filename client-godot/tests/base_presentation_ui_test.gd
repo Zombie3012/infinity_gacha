@@ -98,7 +98,27 @@ func _ready() -> void:
 	expect(summon._selected_banner.get("id") == "normal", "Focused banner also opens with Enter")
 	summon.queue_free()
 
-	var pve_modal: Control = load("res://scripts/ui/pve_mode_modal.gd").new()
+	var previous_floor := GameState.current_floor
+	var mode_script = load("res://scripts/ui/pve_mode_modal.gd")
+	for floor_progress in [1, 25, 26]:
+		GameState.current_floor = floor_progress
+		var gated_modal: Control = mode_script.new()
+		add_child(gated_modal)
+		gated_modal.setup()
+		var expedition: Dictionary = gated_modal._modes.filter(func(m): return m.get("id") == "EXPEDITION")[0]
+		var available: bool = floor_progress > 25
+		expect(bool(expedition["available"]) == available,
+			"Expedition card follows the floor-25 boundary at floor %d" % floor_progress)
+		expect(str(expedition["requirement"]).contains("25"), "Expedition card explains the floor requirement")
+		gated_modal._render_mode_detail(expedition)
+		var enter: Button = gated_modal.find_children("*", "Button", true, false).filter(func(b): return b.text == expedition["enter_label"])[0]
+		expect(enter.disabled == not available,
+			"Expedition Enter button is disabled below floor 25, current floor %d" % floor_progress)
+		gated_modal.queue_free()
+		await get_tree().process_frame
+	GameState.current_floor = previous_floor
+
+	var pve_modal: Control = mode_script.new()
 	add_child(pve_modal)
 	pve_modal.setup()
 	await get_tree().process_frame
@@ -307,7 +327,7 @@ func _ready() -> void:
 
 	# P2-05: GameState removes fake hardcoded defaults and uses is_synced
 	GameState.clear()
-	expect(not GameState.is_synced and GameState.silver_coins == 0 and GameState.gem_stones == 0 and GameState.master_level == 0, "GameState defaults to 0 and is_synced=false when cleared")
+	expect(not GameState.is_synced and GameState.silver_coins == 0 and GameState.gem_stones == 0, "GameState defaults to 0 and is_synced=false when cleared")
 
 	# P2-07: Hero Daily Routine AI goal selection
 	var unit_script = load("res://scripts/actors/unit_actor_3d.gd")

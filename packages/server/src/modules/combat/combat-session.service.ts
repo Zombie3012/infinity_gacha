@@ -121,8 +121,6 @@ export type CombatReport = {
   silverReward: number;
   battleSilverReward: number;
   floorEventSilverReward: number;
-  masterExpReward: number;
-  masterLevelUps: { fromLevel: number; toLevel: number }[];
   heroLevelUps: { heroId: string; name: string; fromLevel: number; toLevel: number }[];
   survivors: CombatSurvivor[];
   fallenHeroes: CombatFallenHero[];
@@ -400,7 +398,7 @@ export class CombatSessionService {
   public async getMasterSkills(masterId: string) {
     const [master] = await db.select({ level: masters.level }).from(masters).where(eq(masters.id, masterId)).limit(1);
     if (!master) throw new CombatSessionError('Master not found.', 404);
-    return db.select().from(masterSkillTemplates).where(and(eq(masterSkillTemplates.isActive, true), sql`${masterSkillTemplates.unlockLevel} <= ${master.level}`));
+    return db.select().from(masterSkillTemplates).where(eq(masterSkillTemplates.isActive, true));
   }
 
   public async useMasterSkill(masterId: string, sessionId: string, skillCode: string) {
@@ -409,7 +407,6 @@ export class CombatSessionService {
       if (!master) throw new CombatSessionError('Master not found.', 404);
       const [skill] = await tx.select().from(masterSkillTemplates).where(and(eq(masterSkillTemplates.code, skillCode), eq(masterSkillTemplates.isActive, true))).limit(1);
       if (!skill) throw new CombatSessionError('Master skill not found.', 404);
-      if (master.level < skill.unlockLevel) throw new CombatSessionError(`This skill unlocks at Master level ${skill.unlockLevel}.`, 403);
       const [session] = await tx.select().from(combatSessions)
         .where(and(eq(combatSessions.id, sessionId), eq(combatSessions.masterId, masterId))).for('update').limit(1);
       if (!session) throw new CombatSessionError('Combat session not found.', 404);
@@ -755,8 +752,6 @@ export class CombatSessionService {
         }
         let expReward = 0;
         let battleSilverReward = 0;
-        const masterExpReward = result === 'VICTORY' ? 300 : 0;
-        const masterLevelUps: CombatReport['masterLevelUps'] = [];
         const heroLevelUps: CombatReport['heroLevelUps'] = [];
         if (result === 'VICTORY') {
           const templates = await tx.select().from(enemyTemplates).where(eq(enemyTemplates.isActive, true));
@@ -799,19 +794,6 @@ export class CombatSessionService {
             if (level > record.level) heroLevelUps.push({ heroId: hero.id, name: hero.name, fromLevel: record.level, toLevel: level });
             await tx.update(heroes).set({ exp: totalExp, level, hp, maxHp, attack, defense, speed, updatedAt: new Date() }).where(eq(heroes.id, hero.id));
           }
-          const [masterRecord] = await tx.select().from(masters).where(eq(masters.id, masterId)).for('update').limit(1);
-          if (masterRecord) {
-            let masterExp = masterRecord.exp + BigInt(masterExpReward);
-            let masterLevel = masterRecord.level;
-            const masterGrowth = await tx.select().from(masterLevelConfigs).where(gt(masterLevelConfigs.level, masterRecord.level)).orderBy(asc(masterLevelConfigs.level));
-            for (const config of masterGrowth) {
-              if (masterExp < config.expRequired || config.level <= masterLevel) continue;
-              masterExp -= config.expRequired;
-              masterLevel = config.level;
-            }
-            if (masterLevel > masterRecord.level) masterLevelUps.push({ fromLevel: masterRecord.level, toLevel: masterLevel });
-            await tx.update(masters).set({ exp: masterExp, level: masterLevel, updatedAt: new Date() }).where(eq(masters.id, masterId));
-          }
           const floorEventSilverReward = state.floorEvent.eventType === 'CACHE' ? state.floorEvent.silverReward : 0;
           const silverReward = battleSilverReward + floorEventSilverReward;
           const rewardTime = new Date();
@@ -824,14 +806,14 @@ export class CombatSessionService {
             id: uuidv4(), masterId, currencyType: 'SILVER', amountDelta: BigInt(floorEventSilverReward),
             transactionType: 'DUNGEON_EVENT_REWARD', referenceId: session.id, createdAt: rewardTime,
           });
-          await tx.update(worlds).set({ currentFloor: state.floor + 1 }).where(eq(worlds.id, session.worldId));
+          await tx.update(worlds).set({ currentFloor: sql`greatest(${worlds.currentFloor}, ${state.floor + 1})` }).where(eq(worlds.id, session.worldId));
         }
         if (defeated.length) await tx.delete(combatPartySlots).where(and(eq(combatPartySlots.masterId, masterId), inArray(combatPartySlots.heroId, defeated.map(hero => hero.id))));
         const floorEventSilverReward = result === 'VICTORY' && state.floorEvent.eventType === 'CACHE' ? state.floorEvent.silverReward : 0;
         report = {
           result, rounds: state.round - 1, floor: state.floor, nextFloor: result === 'VICTORY' ? state.floor + 1 : state.floor,
           floorEvent: { code: state.floorEvent.code, name: state.floorEvent.name, description: state.floorEvent.description, eventType: state.floorEvent.eventType },
-          expReward, silverReward: battleSilverReward + floorEventSilverReward, battleSilverReward, floorEventSilverReward, masterExpReward, masterLevelUps, heroLevelUps, survivors: survivorsList, fallenHeroes, log: state.log,
+          expReward, silverReward: battleSilverReward + floorEventSilverReward, battleSilverReward, floorEventSilverReward, heroLevelUps, survivors: survivorsList, fallenHeroes, log: state.log,
         };
       }
       const [updated] = await tx.update(combatSessions).set({
@@ -921,8 +903,6 @@ export class CombatSessionService {
         silverReward: 0,
         battleSilverReward: 0,
         floorEventSilverReward: 0,
-        masterExpReward: 0,
-        masterLevelUps: [],
         heroLevelUps: [],
         survivors,
         fallenHeroes: [],

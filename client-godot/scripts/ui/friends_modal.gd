@@ -219,13 +219,12 @@ func _render_friends_tab() -> void:
 		if not (f is Dictionary): continue
 		var fid := str(f.get("friendMasterId", ""))
 		var fname := str(f.get("masterName", "Master"))
-		var lvl := int(f.get("level", 1))
 		var sent := bool(f.get("giftSentToday", false))
 		var has_gift := bool(f.get("giftReceivedUnclaimed", false))
 
 		var row := _make_card()
 		var info := Label.new()
-		info.text = "👤 %s (Lv.%d)%s" % [fname, lvl, "  • 🎁 Có quà chưa nhận!" if has_gift else ""]
+		info.text = "👤 %s%s" % [fname, "  • 🎁 Có quà chưa nhận!" if has_gift else ""]
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(info)
 
@@ -278,10 +277,9 @@ func _render_requests_tab() -> void:
 			if not (req is Dictionary): continue
 			var rid := str(req.get("requestId", ""))
 			var rname := str(req.get("masterName", "Master"))
-			var lvl := int(req.get("level", 1))
 			var row := _make_card()
 			var lbl := Label.new()
-			lbl.text = "👤 %s (Lv.%d)" % [rname, lvl]
+			lbl.text = "👤 %s" % rname
 			lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(lbl)
 
@@ -311,10 +309,9 @@ func _render_requests_tab() -> void:
 			if not (req is Dictionary): continue
 			var rid := str(req.get("requestId", ""))
 			var rname := str(req.get("masterName", "Master"))
-			var lvl := int(req.get("level", 1))
 			var row := _make_card()
 			var lbl := Label.new()
-			lbl.text = "⏳ %s (Lv.%d)" % [rname, lvl]
+			lbl.text = "⏳ %s" % rname
 			lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(lbl)
 
@@ -344,11 +341,10 @@ func _render_search_and_block_tab() -> void:
 		if not (r is Dictionary): continue
 		var mid := str(r.get("masterId", ""))
 		var mname := str(r.get("masterName", "Master"))
-		var lvl := int(r.get("level", 1))
 		var rel := str(r.get("relationStatus", "NONE"))
 		var row := _make_card()
 		var lbl := Label.new()
-		lbl.text = "👤 %s (Lv.%d)" % [mname, lvl]
+		lbl.text = "👤 %s" % mname
 		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(lbl)
 
@@ -506,7 +502,6 @@ func view_profile(friend_master_id: String) -> Dictionary:
 	if res.get("ok", false) and res.get("data") is Dictionary:
 		var prof: Dictionary = res["data"].get("profile", {})
 		var mname := str(prof.get("masterName", "Master"))
-		var lvl := int(prof.get("level", 1))
 		var al := str(prof.get("allianceName", ""))
 		var hcnt := int(prof.get("heroCount", 0))
 		var top_heroes: Array = prof.get("topHeroes", []) if prof.get("topHeroes") is Array else []
@@ -514,8 +509,8 @@ func view_profile(friend_master_id: String) -> Dictionary:
 		for h in top_heroes:
 			if h is Dictionary:
 				h_names.append("%s (%d★ Lv.%d)" % [str(h.get("name", "Hero")), int(h.get("rarity", 1)), int(h.get("level", 1))])
-		_status_lbl.text = "🪪 %s (Lv.%d) • LM: %s • %d Tướng • Top: %s" % [
-			mname, lvl, al if not al.is_empty() else "Chưa gia nhập", hcnt, ", ".join(h_names) if not h_names.is_empty() else "Không có"
+		_status_lbl.text = "🪪 %s • LM: %s • %d Tướng • Top: %s" % [
+			mname, al if not al.is_empty() else "Chưa gia nhập", hcnt, ", ".join(h_names) if not h_names.is_empty() else "Không có"
 		]
 	else:
 		_status_lbl.text = "❌ " + str(res.get("error", "Không thể xem hồ sơ"))
@@ -536,7 +531,6 @@ func visit_friend_base(friend_master_id: String, friend_name: String = "Bạn b�
 	var m_info: Dictionary = data.get("master", {}) if data.get("master") is Dictionary else {}
 	var buildings: Array = data.get("buildings", []) if data.get("buildings") is Array else []
 	var m_name := str(m_info.get("masterName", friend_name))
-	var m_lvl := int(m_info.get("level", 1))
 
 	if _profile_overlay != null and is_instance_valid(_profile_overlay):
 		_profile_overlay.queue_free()
@@ -565,7 +559,7 @@ func visit_friend_base(friend_master_id: String, friend_name: String = "Bạn b�
 	var hdr := HBoxContainer.new()
 	v.add_child(hdr)
 	var t := Label.new()
-	t.text = "🏰 LÂU ĐÀI CỦA %s (Lv.%d)" % [m_name.to_upper(), m_lvl]
+	t.text = "🏰 LÂU ĐÀI CỦA %s" % m_name.to_upper()
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	t.add_theme_font_size_override("font_size", 16)
 	t.add_theme_color_override("font_color", Color(1.0, 0.90, 0.42))

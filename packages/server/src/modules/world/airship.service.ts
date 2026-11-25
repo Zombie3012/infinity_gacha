@@ -51,7 +51,7 @@ export class AirshipService {
         .where(and(eq(baseBuildings.masterId, masterId), eq(baseBuildings.buildingType, 'AIRSHIP_PORT')))
         .limit(1),
     ]);
-    return { clearedFloor: world?.currentFloor ?? 1, port: port ?? null };
+    return { clearedFloor: Math.max(0, (world?.currentFloor ?? 1) - 1), port: port ?? null };
   }
 
   private async getUnlockedTechSet(masterId: string): Promise<Set<string>> {

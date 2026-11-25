@@ -188,7 +188,7 @@ export class AllianceService {
       this.masterRow(masterId), this.membership(masterId), this.activeCooldown(masterId, now),
     ]);
     const check = canCreateAlliance({
-      masterLevel: master.level, inAlliance: Boolean(membership), cooldownUntil: cooldown?.expiresAt ?? null, now,
+      inAlliance: Boolean(membership), cooldownUntil: cooldown?.expiresAt ?? null, now,
     });
     if (!check.ok) throw new AllianceError(check.reason ?? 'ERR_ALLIANCE_CANNOT_CREATE', 409);
 

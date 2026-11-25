@@ -1,6 +1,6 @@
 # Godot client: trạng thái và backlog
 
-Cập nhật: **24/11/2026 (UTC+7)**. Đối chiếu với code hiện tại; checklist thiết kế P0–P3 chỉ phản ánh phạm vi prototype tại thời điểm viết.
+Cập nhật: **25/11/2026 (UTC+7)**. Checklist và kết quả kiểm thử ghi thời điểm triển khai, không bảo đảm vẫn đi qua sau các thay đổi sau đó. Quy tắc hiện hành: [tiến độ Tháp](docs/TOWER_PROGRESSION.md); checklist thiết kế P0–P3 là tài liệu lịch sử.
 
 ## Đã có trong code
 
@@ -14,7 +14,7 @@ Cập nhật: **24/11/2026 (UTC+7)**. Đối chiếu với code hiện tại; ch
 - Đấu trường PvE (Auto/Thủ công 10s/lượt, 5 ô thuốc/Hero, Floating Damage/Crit/Heal/Revive Numbers) với diễn hoạt replay, tốc độ phát và dynamic camera.
 - REST client, cấu hình `user://client_config.json`, `export_presets.cfg` cho Windows Desktop, và đồng bộ profile/Hero/căn cứ/trang bị/đội hình.
 
-## PvE đã triển khai theo `thaoluan.md`
+## PvE đã triển khai
 
 - [x] Map PvE riêng 12×12, fog, tài nguyên, boss và ba đội hoạt động độc lập qua `/api/pve`.
 - [x] Tạo/sửa party 1–5 Hero, xếp vị trí 0–8 và đặt ưu tiên mục tiêu/thứ tự kỹ năng.
@@ -25,7 +25,7 @@ Cập nhật: **24/11/2026 (UTC+7)**. Đối chiếu với code hiện tại; ch
 - [x] Hero triển khai được đánh dấu và loại khỏi chọn nhân sự/trang bị tại căn cứ.
 - [x] Kiểm thử headless bằng Godot thật và HTTP/PostgreSQL; có ca đổi tài khoản và khởi động lại cả API/client.
 
-PvE dùng map và encounter riêng theo đội, tái sử dụng Combat v2. Luồng session/dungeon cũ được giữ để tương thích và bị chặn khi có map mới đang ACTIVE. Không còn kế hoạch nối đấu trường vào luồng đánh từng phòng. Bằng chứng và giới hạn kiểm thử ở [PVE_IMPLEMENTATION.md](docs/PVE_IMPLEMENTATION.md).
+PvE dùng map và encounter riêng theo đội, tái sử dụng Combat v2. Luồng combat session cũ được giữ để tương thích; `/api/dungeon/*` bị chặn và Hầm Ngục Cổ Đại đang chờ thiết kế mới. Không còn kế hoạch nối đấu trường vào luồng đánh từng phòng. Bằng chứng và giới hạn kiểm thử ở [PVE_IMPLEMENTATION.md](docs/PVE_IMPLEMENTATION.md).
 
 ## Ưu tiên 1: chơi thử và cân bằng PvE
 
@@ -47,7 +47,7 @@ Gacha hiện không có pity. Banner seed NORMAL ra 1–3★, SPECIAL ra 2–5�
 
 - [x] Nhiệm vụ, thành tựu, shop (`SHOP_AIRSHIP`) và hòm thư (`EventsQuestsModal`, `MailboxModal`, `scripts/test-godot-events-quests.mjs`, `scripts/test-godot-mailbox.mjs`).
 - [x] LiveOps & mission sự kiện (`EventsQuestsModal`); Bảng xếp hạng chủ động để lại cho đợt sau.
-- [x] Hầm Ngục Cổ Đại (`AncientDungeonModal`) & Viễn Chinh Thế Giới (`WorldExpeditionModal`) — đã bỏ chế độ Chinh Phạt Lãnh Thổ khỏi `PveModeModal`.
+- [ ] Thiết kế và triển khai Hầm Ngục Cổ Đại mới; mục hiện tại chỉ thông báo đang phát triển. Viễn Chinh dùng `world_rts_map.tscn` sau khi vượt tầng 25.
 - [x] Công trình 3D Đại Sảnh Liên Minh (`ALLIANCE_HALL` + `AllianceModal`) & Hệ thống Chat 3 kênh Thế Giới / Liên Minh / Riêng Tư (`ChatPanelModal`); Công nghệ & Chiến tranh Liên minh chủ động để lại cho đợt sau.
 - [ ] Luồng mua hàng sau khi tích hợp store thật; không coi receipt HMAC hiện tại là IAP sản xuất.
 

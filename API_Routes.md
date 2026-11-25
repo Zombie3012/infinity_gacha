@@ -1,7 +1,8 @@
 # API route inventory
 
-Generated from `packages/server/src/server.ts` (265 routes).
+Generated from `packages/server/src/server.ts` (264 routes).
 Errors use `{ "error": string }`; the string may be an error code or a readable message. Detailed schemas: [private PvE map](openapi.pve.yaml) and [Combat v2](openapi.combat-v2.yaml). PvE mutations require `Idempotency-Key`; map reads settle due arrivals. This inventory lists the remaining API coverage.
+This is a static inventory of literal route declarations, not a guarantee of access or an exhaustive list of dynamically generated routes. Prefix middleware can enforce additional conditions: `/api/dungeon/*` is unavailable, `/api/shop/*` requires clearing Tower floor 5, `/api/alchemy/*` requires floor 10, and `/api/alliance/*` and protected World routes require floor 25. See [Tower progression](docs/TOWER_PROGRESSION.md) and the server implementation.
 
 | Method | Path | Auth | Feature |
 |---|---|---|---|
@@ -90,7 +91,6 @@ Errors use `{ "error": string }`; the string may be an error code or a readable 
 | POST | `/api/base/buildings/:buildingId/demolish` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/mage-study` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/production` | Bearer | — |
-| POST | `/api/base/buildings/:buildingId/promote-mansion` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/upgrade` | Bearer | — |
 | POST | `/api/base/buildings/:buildingId/workers` | Bearer | — |
 | DELETE | `/api/base/buildings/:buildingId/workers/:heroId` | Bearer | — |

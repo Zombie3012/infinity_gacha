@@ -11,8 +11,6 @@ const DEFAULT_DEMO_MASTER_NAME := "Demo Master"
 var account_id: String = ""
 var master_id: String = ""
 var master_name: String = ""
-var master_level: int = 0
-var master_exp: int = 0
 var silver_coins: int = 0
 var gem_stones: int = 0
 var is_synced: bool = false
@@ -178,9 +176,6 @@ static func calculate_hero_cp(hero: Dictionary) -> int:
 	var sta_v := int(hero.get("sta", 10))
 	return mhp + atk * 4 + def_v * 3 + spd * 2 + (str_v + agi_v + int_v + sta_v) * 5
 
-func get_master_max_exp() -> int:
-	return maxi(1000, master_level * 1000)
-
 func redeem_giftcode(code: String) -> Dictionary:
 	var payload := {"code": code}
 	var res = await ApiClient.post_req("/api/giftcodes/redeem", payload)
@@ -240,8 +235,6 @@ func refresh_profile() -> bool:
 		master_id = str(m.get("id", ""))
 		account_id = str(m.get("accountId", ""))
 		master_name = str(m.get("masterName", ""))
-		master_level = int(m.get("level", 1))
-		master_exp = int(m.get("exp", 0))
 		silver_coins = int(m.get("silverCoins", 0))
 		gem_stones = int(m.get("gems", m.get("gemStones", 0)))
 		is_synced = true
@@ -285,7 +278,7 @@ func refresh_base_overview() -> bool:
 		current_floor = int(w.get("currentFloor", 1))
 		world_level = int(w.get("worldLevel", 1))
 		base_zones = int(w.get("baseZones", 1))
-		unlocked_lobby_floors = int(w.get("unlockedLobbyFloors", maxi(base_zones, 1 + int(master_level / 15))))
+		unlocked_lobby_floors = int(w.get("unlockedLobbyFloors", 2))
 		unlocked_plots = maxi(int(w.get("plots", base_zones * PLOTS_PER_ZONE)), unlocked_lobby_floors * PLOTS_PER_ZONE)
 	EventBus.base_updated.emit(base_overview)
 	return true
@@ -517,8 +510,6 @@ func clear() -> void:
 	account_id = ""
 	master_id = ""
 	master_name = ""
-	master_level = 0
-	master_exp = 0
 	silver_coins = 0
 	gem_stones = 0
 	is_synced = false

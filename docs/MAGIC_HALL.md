@@ -1,6 +1,6 @@
 # Đại Sảnh Ma Thuật là công trình ma thuật duy nhất
 
-Quy tắc từ 22/11/2026: chỉ xây **Đại Sảnh Ma Thuật** (`HALL_OF_MAGIC`). Bỏ ba công trình riêng `LIBRARY`, `ALCHEMY_WORKSHOP`, `MAGIC_RESEARCH_LAB` khỏi danh mục xây dựng, bản đồ căn cứ và luồng xây mới. Ba mã này vẫn được dùng nội bộ để xác định chức năng/phân khu.
+Quy tắc hiện hành: sau khi **vượt tầng Tháp 10** mới được xây và sử dụng **Đại Sảnh Ma Thuật** (`HALL_OF_MAGIC`). Ba công trình riêng `LIBRARY`, `ALCHEMY_WORKSHOP`, `MAGIC_RESEARCH_LAB` không còn trong danh mục xây dựng; các mã này vẫn xác định phân khu nội bộ. Xem [tiến độ Tháp](TOWER_PROGRESSION.md).
 
 ## Chức năng giữ lại
 
@@ -10,7 +10,7 @@ Chọn Đại Sảnh Ma Thuật trên căn cứ, bấm **Đại sảnh ma thuậ
 - **Giả kim**: sản xuất/thu hoạch Đá Cường Hóa, chế thuốc theo công thức đã nghiên cứu, điều trị và dùng thuốc ma lực/cường lực.
 - **Nghiên cứu**: chuyển chức, thức tỉnh và cây Giả kim gồm nền tảng cùng ba nhánh thuốc độc lập. Nghiên cứu tức thì và giữ theo Master khi phá/xây lại đại sảnh.
 
-Xem [giả kim và vật phẩm PvE](ALCHEMY_PVE_CONSUMABLES.md) để biết chi phí, công thức, năm ô tiêu hao mỗi Hero, combat thủ công và API. Chuyển đổi nguyên liệu cùng nhánh Bến Thiên Hành vẫn là định hướng, chưa có gameplay.
+Xem [giả kim và vật phẩm PvE](ALCHEMY_PVE_CONSUMABLES.md) để biết chi phí, công thức, năm ô tiêu hao mỗi Hero, combat thủ công và API. Chuyển đổi nguyên liệu và nhánh nghiên cứu Bến Thiên Hành trong Giả Kim vẫn là định hướng; công trình Cảng Tàu Bay và gameplay Viễn Chinh đã có riêng sau mốc tầng 25.
 
 Hero tử trận hoặc đang triển khai PvE không xuất hiện trong bộ chọn. Nút phát triển kiểm tra khóa Hero, cấp, vật phẩm và chi phí; khi đang gửi yêu cầu, các thao tác bị khóa để tránh nhấn lặp. Hero cần rời vị trí nhân sự trước khi chuyển chức/thức tỉnh. Sau mỗi thao tác, cửa sổ tải lại Hero, kho và đại sảnh; vật phẩm dùng hết không còn giữ số lượng cũ. Khi mất phản hồi, không tự gửi lại lệnh tiêu hao.
 
@@ -32,7 +32,7 @@ Migration `0056` gộp các công trình con:
 
 Các đại sảnh đã tồn tại được giữ nguyên instance; không gộp những đại sảnh độc lập với nhau. Hàm bảo trì nội bộ `consolidate_magic_buildings(master_id)` có thể áp dụng lại an toàn cho dữ liệu cũ chưa gộp; gọi lại khi không còn công trình con không tạo thưởng lặp.
 
-Danh mục và điều kiện xây đại sảnh thống nhất: World Level 2 hoặc Master Lv.15. Giữ cách nâng cấp tức thì.
+Điều kiện cũ World Level 2 hoặc Master Lv.15 đã được thay bằng vượt Tháp tầng 10. Việc nâng cấp vẫn hoàn tất tức thì.
 
 ## Kiểm chứng có mục tiêu
 

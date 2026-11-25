@@ -15,7 +15,7 @@ import {
   accruedStored, buildingProductionForLevel, capacityForLevel, demolishRefundSilver,
   dormitoryRecoveryMultiplier, dormitoryResidentCapacity, expansionCostSilver, expansionRequiredWorldLevel,
   libraryMageExpPerHour, maxConstructibleCountForType, maxWorkersForBuildingLevel, plotsForZones,
-  productionRatePerHour, recoveryCenterTreatmentSlots, requiredMasterLevelForFloor, unlockedLobbyFloorsForMasterLevel,
+  productionRatePerHour, recoveryCenterTreatmentSlots, requiredMasterLevelForFloor, unlockedLobbyFloorsForMasterLevel, requiredTowerFloorForBuilding,
   upgradeCostSilver, upgradeMaterials, warehouseBonusSlotsForLevel, worldLevelForFloor,
 } from './base-rules.js';
 
@@ -136,7 +136,7 @@ export class BuildingService {
     }
 
     const typeByCode = new Map(types.map(type => [type.code, type]));
-    const plots = Array.from({ length: plotsForZones(world.baseZones) }, (_, index) => index + 1);
+    const plots = Array.from({ length: plotsForZones(MAX_BASE_ZONES) }, (_, index) => index + 1);
     const magic = new Map(await Promise.all(buildings.filter(b => b.buildingType === 'HALL_OF_MAGIC').map(async b => {
       let snapshot = await magicSnapshot(db,b.id,now);
       if (snapshot.length !== 2 || snapshot.some(n => n.resourceType !== buildingProductionForLevel(n.wing,b.level)?.resourceType
@@ -207,21 +207,20 @@ export class BuildingService {
       countByType.set(b.buildingType, (countByType.get(b.buildingType) ?? 0) + 1);
     }
 
-    const nextZone = world.baseZones + 1;
+    const nextZone = MAX_BASE_ZONES + 1;
     const canExpandZone = nextZone <= MAX_BASE_ZONES;
-    const unlockedLobbyFloors = Math.max(world.baseZones, unlockedLobbyFloorsForMasterLevel(master.level));
+    const unlockedLobbyFloors = MAX_BASE_ZONES;
     return {
       master: {
         id: master.id,
-        level: master.level,
         silverCoins: master.silverCoins.toString(),
       },
       world: {
         id: world.id,
         currentFloor: world.currentFloor,
         worldLevel,
-        baseZones: world.baseZones,
-        plots: plotsForZones(world.baseZones),
+        baseZones: MAX_BASE_ZONES,
+        plots: plotsForZones(MAX_BASE_ZONES),
         unlockedLobbyFloors,
       },
       expansion: {
@@ -233,24 +232,18 @@ export class BuildingService {
         maxZones: MAX_BASE_ZONES,
       },
       buildingTypes: types.map(type => {
-        const maxCount = maxConstructibleCountForType(type.code, master.level);
+        const maxCount = maxConstructibleCountForType(type.code, world.currentFloor);
         const builtCount = countByType.get(type.code) ?? 0;
-        const reqMasterLvl = type.code === 'PARTY_MANSION'
-          ? PARTY_MANSION_REQUIRED_MASTER_LEVEL
-          : (type.code === 'HALL_OF_MAGIC' || type.code === 'LIBRARY' || type.code === 'ALCHEMY_WORKSHOP' || type.code === 'MAGIC_RESEARCH_LAB')
-            ? 15
-            : 1;
+        const requiredTowerFloor = requiredTowerFloorForBuilding(type.code);
         return {
           ...type,
           maxLevel: type.code === 'AIRSHIP_PORT' ? 5 : Math.min(3, type.maxLevel ?? 3),
           maxWorkers: maxWorkersForBuildingLevel(type.code, 1, type.maxWorkers ?? 0),
           production: buildingProductionForLevel(type.code, 1) ?? asProfile(type.production),
-          requiredMasterLevel: reqMasterLvl,
+          requiredTowerFloor,
           maxAllowedCount: maxCount,
           currentBuiltCount: builtCount,
-          unlocked: (worldLevel >= type.requiredWorldLevel || master.level >= reqMasterLvl)
-            && (type.code !== 'PARTY_MANSION' || master.level >= PARTY_MANSION_REQUIRED_MASTER_LEVEL)
-            && (type.code !== 'AIRSHIP_PORT' || world.currentFloor >= 25)
+          unlocked: world.currentFloor - 1 >= requiredTowerFloor
             && (maxCount === null || builtCount < maxCount),
         };
       }),
@@ -275,17 +268,11 @@ export class BuildingService {
       const worldLevel = worldLevelForFloor(world.currentFloor);
       const [type] = await tx.select().from(buildingTypes).where(eq(buildingTypes.code, code)).limit(1);
       if (!type) throw new BaseError('Loại công trình không tồn tại.', 404);
-      if (type.code === 'PARTY_MANSION' && master.level < PARTY_MANSION_REQUIRED_MASTER_LEVEL) {
-        throw new BaseError(`Party Mansion cần Master đạt cấp ${PARTY_MANSION_REQUIRED_MASTER_LEVEL}.`, 409);
+      const requiredFloor = requiredTowerFloorForBuilding(type.code);
+      if (world.currentFloor - 1 < requiredFloor) {
+        throw new BaseError(`Cần vượt Tháp tầng ${requiredFloor} để xây ${type.name}.`, 409);
       }
-      if (type.code === 'AIRSHIP_PORT' && world.currentFloor < 25) {
-        throw new BaseError('Bến Thiên Hành (Cảng Tàu Bay) mở khóa khi vượt Tháp tầng 25.', 409);
-      }
-      const requiredMasterLevel = type.code === 'HALL_OF_MAGIC' ? 15 : requiredMasterLevelForFloor(type.requiredWorldLevel + 1);
-      if (worldLevel < type.requiredWorldLevel && master.level < requiredMasterLevel) {
-        throw new BaseError(`Công trình cần World Level ${type.requiredWorldLevel}.`, 409);
-      }
-      const maxCount = maxConstructibleCountForType(type.code, master.level);
+      const maxCount = maxConstructibleCountForType(type.code, world.currentFloor);
       if (maxCount !== null) {
         const existingOfType = await tx.select({ id: baseBuildings.id }).from(baseBuildings)
           .where(and(eq(baseBuildings.masterId, masterId), eq(baseBuildings.buildingType, type.code)));
@@ -293,7 +280,7 @@ export class BuildingService {
           throw new BaseError(`Đã đạt giới hạn tối đa ${maxCount} công trình ${type.name} ở cấp Master hiện tại.`, 409);
         }
       }
-      const maxUnlockedPlots = plotsForZones(Math.max(world.baseZones, unlockedLobbyFloorsForMasterLevel(master.level)));
+      const maxUnlockedPlots = plotsForZones(MAX_BASE_ZONES);
       if (plotIndex > maxUnlockedPlots) throw new BaseError('Ô đất chưa được mở khóa.', 409);
 
       const [existing] = await tx.select({ id: baseBuildings.id }).from(baseBuildings)
@@ -658,70 +645,10 @@ export class BuildingService {
     });
   }
 
-  async expand(masterId: string) {
-    await this.settle(masterId);
-    const master = await this.master(masterId);
-    const world = await this.world(masterId);
-    if (world.baseZones >= MAX_BASE_ZONES) throw new BaseError('Căn cứ đã mở rộng tối đa.', 409);
-
-    const nextZone = world.baseZones + 1;
-    const worldLevel = worldLevelForFloor(world.currentFloor);
-    const requiredWl = expansionRequiredWorldLevel(nextZone);
-    const requiredMasterLvl = requiredMasterLevelForFloor(nextZone);
-    if (worldLevel < requiredWl && master.level < requiredMasterLvl) {
-      throw new BaseError(`Cần Master Level ${requiredMasterLvl} hoặc World Level ${requiredWl} để mở Tầng ${nextZone}.`, 409);
-    }
-    const cost = expansionCostSilver(world.baseZones);
-    if (master.silverCoins < BigInt(cost)) throw new BaseError('Không đủ Xu Bạc để mở rộng.', 409);
-
-    const now = new Date();
-    await db.transaction(async tx => {
-      await tx.update(masters).set({ silverCoins: sql`${masters.silverCoins} - ${cost}`, updatedAt: now })
-        .where(eq(masters.id, masterId));
-      await tx.update(worlds).set({ baseZones: nextZone }).where(eq(worlds.id, world.id));
-    });
-
-    return { zones: nextZone, plots: plotsForZones(nextZone), silverSpent: cost };
+  async expand(_masterId: string) {
+    throw new BaseError('Cả hai tầng căn cứ đã được mở.', 409);
   }
 
-  /**
-   * Promotes an existing Dormitory (`HOUSE`) into a `PARTY_MANSION` (Biệt Thự Tổ Đội)
-   * once the Master reaches Level 30.
-   */
-  async promoteToPartyMansion(masterId: string, buildingId: string) {
-    await this.settle(masterId);
-    const master = await this.master(masterId);
-    if (master.level < PARTY_MANSION_REQUIRED_MASTER_LEVEL) {
-      throw new BaseError(`Cần Master đạt cấp ${PARTY_MANSION_REQUIRED_MASTER_LEVEL} để nâng cấp Nhà Nghỉ thành Party Mansion.`, 409);
-    }
-
-    const [building] = await db.select().from(baseBuildings)
-      .where(and(eq(baseBuildings.id, buildingId), eq(baseBuildings.masterId, masterId))).limit(1);
-    if (!building) throw new BaseError('Không tìm thấy công trình.', 404);
-    if (building.buildingType !== 'HOUSE') {
-      throw new BaseError('Chỉ có thể nâng cấp Nhà Nghỉ (HOUSE) thành Party Mansion.', 409);
-    }
-    if (building.status !== 'READY') {
-      throw new BaseError('Công trình đang trong quá trình thi công.', 409);
-    }
-    if (master.silverCoins < BigInt(PARTY_MANSION_UPGRADE_COST_SILVER)) {
-      throw new BaseError('Không đủ Xu Bạc để nâng cấp lên Party Mansion.', 409);
-    }
-
-    const now = new Date();
-    const updated = await db.transaction(async tx => {
-      await tx.update(masters)
-        .set({ silverCoins: sql`${masters.silverCoins} - ${PARTY_MANSION_UPGRADE_COST_SILVER}`, updatedAt: now })
-        .where(eq(masters.id, masterId));
-      const [row] = await tx.update(baseBuildings)
-        .set({ buildingType: 'PARTY_MANSION', status: 'READY', updatedAt: now })
-        .where(eq(baseBuildings.id, building.id))
-        .returning();
-      return row;
-    });
-
-    return { building: updated, silverSpent: PARTY_MANSION_UPGRADE_COST_SILVER };
-  }
 }
 
 export const buildingService = new BuildingService();

@@ -1,6 +1,8 @@
 # Hàng Đợi Mục Tiêu Tự Hành (`/goal`)
 
-## Quy Tắc Vận Hành Bắt Buộc (Đọc kỹ trước mỗi mốc)
+> **Trạng thái 25/11/2026:** Đây là đề xuất cho Khám Phá, chưa phải chức năng đã triển khai và chưa thay thế [tiến độ Tháp hiện hành](docs/TOWER_PROGRESSION.md). Các đường dẫn máy, lịch sử kiểm thử và chỉ dẫn vận hành bên dưới là bối cảnh của lần soạn; dùng `AGENTS.md`, môi trường hiện tại và yêu cầu mới nhất khi thực hiện. `0065` và `0066` đã được dùng: chọn số migration tiếp theo còn trống. `/api/dungeon/*` hiện bị chặn, không coi là gameplay khả dụng. Không tự triển khai hàng đợi chỉ vì tài liệu tồn tại.
+
+## Ghi chú vận hành tại thời điểm soạn (kiểm tra lại trước khi dùng)
 1. **Tuân thủ `AGENTS.md`:**
    - **TUYỆT ĐỐI KHÔNG** chạy full test suite (`npm run verify`, `npm test`, v.v.). Chỉ chạy các lệnh kiểm thử **targeted** của mốc đang làm.
    - **KHÔNG** sửa/xóa lịch sử cũ trong `AGENT_HANDOFF_NOTES.md`; chỉ **append** phần tổng kết mới vào cuối file khi hoàn thành.
@@ -12,8 +14,8 @@
 3. **Quy tắc UI & Cài đặt chung:**
    - Mọi tùy chọn cài đặt mới (nếu có) đều đặt tập trung trong **Avatar Master → `PlayerProfileModal` → Tab `⚙️ Cài Đặt`**.
 4. **Thông số môi trường:**
-   - Godot Headless: `C:\Users\k\Downloads\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`
-   - Project Godot: `e:\infiniti_gacha\client-godot`
+   - Godot Headless: đặt `GODOT_BIN` theo engine trên máy hiện tại.
+   - Project Godot: `client-godot/` trong workspace hiện tại.
    - PowerShell 5.1: Không dùng `&&`, dùng `; if ($LASTEXITCODE -eq 0) { ... }`.
 
 ---
@@ -26,12 +28,12 @@
 ### Các mốc triển khai tuần tự
 
 - [ ] **EXP-01 — Database Migration, Schema & Seed 5 Vật Phẩm Khám Phá**
-  - **Phạm vi:** `packages/server/drizzle/0065_daily_exploration.sql`, `packages/server/src/database/drizzle-schema.ts`.
+  - **Phạm vi:** migration mới có số tiếp theo còn trống (hiện sau `0066`), `packages/server/src/database/drizzle-schema.ts`.
   - **Nội dung:**
     - Tạo bảng `master_exploration_progress` (`master_id`, `level`, `exp`, `energy` mặc định 6/ngày tăng tới 8 theo cấp, `max_energy`, `last_reset_date` UTC+7, `daily_discovery_date`, `daily_discovery_claimed`, `weekly_key`, `weekly_runs_completed`, `weekly_milestones_claimed`).
     - Tạo bảng `exploration_runs` (`id`, `master_id`, `date_key`, `biome_code`, `tier`, `is_daily_discovery`, `mode` `MANUAL | QUICK`, `hero_ids`, `map_layout`, `collected_node_ids`, `defeated_monster_ids`, `rewards`, `status`, `created_at`, `completed_at`).
     - Seed bổ sung vào `item_templates` (`ON CONFLICT DO NOTHING`): `WILD_MUSHROOM` (2★), `RARE_ORE` (3★), `ANCIENT_RELIC` (4★), `CRAFTING_BLUEPRINT` (4★), `LOST_RUNE` (5★).
-  - **Kiểm chứng:** Apply `0065_daily_exploration.sql` vào PostgreSQL local + `npm --prefix packages/server run build` PASS.
+  - **Kiểm chứng dự kiến:** áp dụng migration mới vào database test riêng + `npm --prefix packages/server run build`; xác nhận kết quả sau khi triển khai.
 
 - [ ] **EXP-02 — Backend Rules, Balanced Weekly Schedule UTC+7, Map Generator & Service API**
   - **Phạm vi:** `packages/server/src/modules/exploration/exploration-rules.ts` [NEW], `packages/server/src/modules/exploration/exploration.service.ts` [NEW], `packages/server/src/server.ts`.
@@ -48,7 +50,7 @@
       - `ANCIENT_RUINS`: `LOST_RUNE` ×2.0 (cực hiếm), `CRAFTING_BLUEPRINT` ×2.0, `ANCIENT_RELIC` ×2.0, Khoáng sản ×0.8.
     - **Trình sinh bản đồ `48m × 48m` (`generateExplorationMapLayout`)**: `spawn` + `exitPortal`, `8–10` điểm `GATHERING`, `4–6` bãi `MONSTER` tuần tra (có `aggroRadius`, `hp`, `atk`, `isElite`), `2–3` điểm `DISCOVERY` (Kho báu & Bệ đá bí mật), `12–16` vật cản địa hình tạo lối lách né.
     - **API:** `GET /api/exploration/status`, `POST /api/exploration/runs/start`, `POST /api/exploration/runs/:runId/complete` (xác thực ID, bonus đồ hiếm thủ công `×2.2`, cộng kho + EXP + mốc tuần), `POST /api/exploration/quick` (skip bản đồ, ~80% sản lượng, tỷ lệ đồ hiếm cơ bản `×1.0`), `POST /api/exploration/weekly/:target/claim` (`5 / 12 / 20` chuyến/tuần).
-    - Giữ nguyên `/api/dungeon/*` cũ để không vỡ test lịch sử.
+    - `/api/dungeon/*` cũ hiện bị chặn; không mở lại mà chưa có yêu cầu mới. Cập nhật test liên quan theo thiết kế được duyệt khi triển khai.
   - **Kiểm chứng:** `npm --prefix packages/server run build` + tạo & chạy `scripts/test-daily-exploration-api.mjs` PASS (kèm dọn tài khoản test sạch).
 
 - [ ] **EXP-03 — Đổi Tên Thẻ 2 Trong `PveModeModal` & Xây Dựng Sảnh Chọn Địa Hình (`DailyExplorationModal`)**

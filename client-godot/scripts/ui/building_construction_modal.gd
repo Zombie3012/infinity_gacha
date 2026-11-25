@@ -121,8 +121,7 @@ func _create_blueprint_card(bt: Dictionary) -> PanelContainer:
 	var bname := str(bt.get("name", code))
 	var desc_txt := str(bt.get("description", ""))
 	var cost := int(bt.get("buildCostSilver", 1000))
-	var req_wl := int(bt.get("requiredWorldLevel", 1))
-	var req_ml := int(bt.get("requiredMasterLevel", 1))
+	var req_floor := int(bt.get("requiredTowerFloor", 0))
 	var unlocked := bool(bt.get("unlocked", true))
 	var max_w := int(bt.get("maxWorkers", 0))
 
@@ -187,7 +186,7 @@ func _create_blueprint_card(bt: Dictionary) -> PanelContainer:
 	cvb.add_child(action_row)
 
 	var req_lbl := Label.new()
-	req_lbl.text = "WL %d%s | %d Hero" % [req_wl, (" & ML %d" % req_ml) if req_ml > 1 else "", max_w]
+	req_lbl.text = "Vượt Tháp tầng %d | %d Hero" % [req_floor, max_w] if req_floor > 0 else "Mở từ đầu | %d Hero" % max_w
 	req_lbl.add_theme_font_size_override("font_size", 10)
 	req_lbl.add_theme_color_override("font_color", Color(0.55, 0.7, 0.85))
 	req_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL

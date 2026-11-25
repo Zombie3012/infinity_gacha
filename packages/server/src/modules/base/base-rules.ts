@@ -3,15 +3,14 @@
  * Kept free of I/O so the numbers are unit-testable and prototype tuning is visible in one place.
  *
  * Multi-floor & building rules:
- * - Each floor (zone) holds 8 building plots; base starts with Floor 1, up to 6 Floors (48 plots).
- * - Every 15 Master levels unlocks a higher floor (Lv.1 -> Floor 1, Lv.15 -> Floor 2, Lv.30 -> Floor 3, etc.),
- *   or a floor can be unlocked once World Level reaches `floor - 1`.
- * - Dormitory (`HOUSE`) can be promoted to `PARTY_MANSION` once Master reaches Level 30.
+ * - Two castle floors are available from the start, with eight building plots each.
+ * - Dormitory (`HOUSE`) and `PARTY_MANSION` are independent buildings.
+ * - Tower milestones unlock new buildings and additional training centers.
  * - `FORGE` is an active equipment crafting facility (not passive iron mining).
  */
 
 export const PLOTS_PER_ZONE = 8;
-export const MAX_BASE_ZONES = 6;
+export const MAX_BASE_ZONES = 2;
 export const MASTER_LEVELS_PER_FLOOR = 15;
 export const PARTY_MANSION_REQUIRED_MASTER_LEVEL = 30;
 export const PARTY_MANSION_UPGRADE_COST_SILVER = 5000;
@@ -214,13 +213,15 @@ export function warehouseBonusSlotsForLevel(level: number): number {
 }
 
 /** Maximum constructible instances for limited buildings (e.g. Training Center max 2 unlocked by Master level). */
-export function maxConstructibleCountForType(code: string, masterLevel: number): number | null {
-  const mLvl = Math.max(1, Math.floor(masterLevel));
-  if (code === 'TRAINING_CENTER') {
-    return mLvl >= 30 ? 2 : 1;
-  }
-  if (code === 'AIRSHIP_PORT') {
-    return 1;
-  }
+export function requiredTowerFloorForBuilding(code: string): number {
+  if (code === 'SHOP_AIRSHIP') return 5;
+  if (code === 'HALL_OF_MAGIC') return 10;
+  if (code === 'ALLIANCE_HALL' || code === 'AIRSHIP_PORT') return 25;
+  return 0;
+}
+
+export function maxConstructibleCountForType(code: string, currentFloor: number): number | null {
+  if (code === 'TRAINING_CENTER') return 1 + Math.floor(Math.max(0, currentFloor - 1) / 10);
+  if (code === 'AIRSHIP_PORT') return 1;
   return null;
 }

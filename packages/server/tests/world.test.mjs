@@ -6,10 +6,9 @@ import {
 } from '../dist/modules/world/world-rules.js';
 
 test('P3 World - unlock eligibility', async (t) => {
-  await t.test('level 15 and floor 10 are both required', () => {
-    assert.equal(canUnlockGlobal({ masterLevel: 15, clearedFloor: 10 }).ok, true);
-    assert.equal(canUnlockGlobal({ masterLevel: 14, clearedFloor: 10 }).reason, 'ERR_WORLD_LEVEL_REQUIRED');
-    assert.equal(canUnlockGlobal({ masterLevel: 15, clearedFloor: 9 }).reason, 'ERR_WORLD_FLOOR_REQUIRED');
+  await t.test('floor 25 must be cleared to unlock the world', () => {
+    assert.equal(canUnlockGlobal({ currentFloor: 26 }).ok, true);
+    assert.equal(canUnlockGlobal({ currentFloor: 25 }).reason, 'ERR_WORLD_FLOOR_REQUIRED');
   });
 });
 

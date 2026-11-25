@@ -33,18 +33,12 @@ test('DM-08 Base - world progress and expansion', async (t) => {
     assert.equal(worldLevelForFloor(999), 10);
   });
 
-  await t.test('each zone holds eight plots, capped at six zones', () => {
+  await t.test('two base floors each hold eight plots', () => {
     assert.equal(plotsForZones(1), 8);
-    assert.equal(plotsForZones(3), 24);
-    assert.equal(plotsForZones(MAX_BASE_ZONES + 5), 48);
+    assert.equal(plotsForZones(3), 16);
+    assert.equal(plotsForZones(MAX_BASE_ZONES + 5), 16);
   });
 
-  await t.test('zone 3 costs 5,000 Silver and requires world level 2 (scenario 7.1)', () => {
-    assert.equal(expansionCostSilver(1), 2000);
-    assert.equal(expansionCostSilver(2), 5000);
-    assert.equal(expansionRequiredWorldLevel(3), 2);
-    assert.equal(expansionRequiredWorldLevel(2), 1);
-  });
 });
 
 test('DM-08 Base - production and capacity', async (t) => {
@@ -109,10 +103,12 @@ test('DM-08 Base - building economy', async (t) => {
     assert.equal(maxWorkersForBuildingLevel('MEDICAL', 1), 1);
     assert.deepEqual([1, 2, 3].map(recoveryCenterTreatmentSlots), [2, 4, 6]);
 
-    // Training Center: 3/5/7 heroes, max 2 buildings
+    // Training Center: 3/5/7 heroes, one additional building per 10 floors cleared
     assert.deepEqual([1, 2, 3].map(lvl => maxWorkersForBuildingLevel('TRAINING_CENTER', lvl)), [3, 5, 7]);
     assert.equal(maxConstructibleCountForType('TRAINING_CENTER', 1), 1);
-    assert.equal(maxConstructibleCountForType('TRAINING_CENTER', 30), 2);
+    assert.equal(maxConstructibleCountForType('TRAINING_CENTER', 10), 1);
+    assert.equal(maxConstructibleCountForType('TRAINING_CENTER', 11), 2);
+    assert.equal(maxConstructibleCountForType('TRAINING_CENTER', 21), 3);
 
     // Hall of Magic & 3 sub-wings: 6 total (2 per sub-wing)
     assert.equal(maxWorkersForBuildingLevel('HALL_OF_MAGIC', 1), 6);

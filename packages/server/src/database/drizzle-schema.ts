@@ -53,7 +53,7 @@ export const worlds = pgTable('worlds', {
   difficultyMultiplier: doublePrecision('difficulty_multiplier').default(1).notNull(),
   currentFloor: integer('current_floor').default(1).notNull(),
   pveRun: integer('pve_run').default(0).notNull(),
-  baseZones: integer('base_zones').default(1).notNull(),
+  baseZones: integer('base_zones').default(2).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

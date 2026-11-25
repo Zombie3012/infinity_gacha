@@ -178,7 +178,7 @@ const RESOURCES_BY_TERRAIN = {
 
 async function main() {
   const t0 = Date.now();
-  const connectionString = process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/infiniti_gacha';
+  const connectionString = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5433/infinite_gacha';
   const pool = new pg.Pool({ connectionString });
 
   console.log('[PlanetSeed] Decoding equirectangular planet textures (ocean, height, biome)...');

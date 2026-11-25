@@ -11,7 +11,7 @@ Quy tắc hiện hành từ 22/11/2026. Tài liệu này thay thế các mô t�
 
 ## Công trình Sử Điện Anh Hùng
 
-Mã `HERO_CHRONICLE`, mở từ cấp thế giới 1; một cấp công trình, không cần nhân sự. Giá xây mẫu 1.200 Silver. Chọn công trình ở căn cứ → **Sử Điện Anh Hùng** để xem hồ sơ.
+Mã `HERO_CHRONICLE`, được phép xây từ khi tạo tài khoản; một cấp công trình, không cần nhân sự. Giá xây mẫu 1.200 Silver. Chọn công trình ở căn cứ → **Sử Điện Anh Hùng** để xem hồ sơ.
 
 - Lưu riêng từng instance: tên, sao, nghề, thời điểm triệu hồi, tiểu sử và dòng thời gian. Tiểu sử là nội dung hư cấu sinh xác định theo ID, giữ nguyên khi thăng sao/hồi sinh.
 - Bộ lọc: tất cả, đang sống, tử trận, đã tiêu hao; có phân trang 50 hồ sơ. Hồ sơ người tử trận vẫn hiển thị tại đây.

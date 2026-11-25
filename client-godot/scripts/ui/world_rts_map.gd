@@ -834,7 +834,13 @@ func _sync_minimap_state(zoom_lvl: float, morph: float) -> void:
 	)
 
 func apply_snapshot(data: Dictionary, hero_list: Array = []) -> void:
-	_snapshot = data
+	# Locked worlds return explicit nulls; Dictionary.get defaults only cover missing keys.
+	# Normalize our own copy so every renderer and navigation control receives dictionaries.
+	_snapshot = data.duplicate()
+	if not (_snapshot.get("base") is Dictionary):
+		_snapshot["base"] = {"x": 100, "y": 100}
+	if not (_snapshot.get("chunkCenter") is Dictionary):
+		_snapshot["chunkCenter"] = _snapshot["base"]
 	_elapsed_since_sync = 0.0
 	if hero_list.size() > 0:
 		_heroes = hero_list

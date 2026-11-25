@@ -2,11 +2,12 @@
 
 Các BRD, use case, data model, acceptance criteria, scope matrix và checklist trong thư mục này là bản lưu thiết kế ở thời điểm phát triển P0–P3. Chúng được giữ để tra cứu quyết định và phạm vi ban đầu.
 
-**Không dùng các dấu “Done”, “100%” hoặc kết quả test cũ như báo cáo trạng thái hiện tại.** Tham chiếu Web React, Unity, pity và duplicate Hero có thể đã lỗi thời.
+**Không dùng các dấu “Done”, “100%”, quy tắc hoặc kết quả test trong thư mục này như trạng thái hiện tại.** Các bản dự thảo từng mô tả EXP/cấp Master, điểm kỹ năng, Hầm Ngục và điều kiện mở khác hiện hành; tham chiếu Web React, Unity, pity và duplicate Hero cũng có thể đã lỗi thời.
 
-Bản hiện hành ngày **22/11/2026 (UTC+7)**:
+Nguồn hiện hành để đối chiếu:
 
 - [README dự án](../../README.md): kiến trúc, quy tắc gacha, cách chạy và giới hạn prototype.
+- [Tiến độ Tháp](../TOWER_PROGRESSION.md): quy tắc mở khóa, căn cứ, EXP Master và Hầm Ngục hiện tại.
 - [Backlog Godot](../../GODOT_BACKLOG.md): client đã có và những luồng cần nối tiếp.
 - [Combat v2](../../Combat_V2_Spec.md): cơ chế combat và phát triển Hero.
 - [API inventory](../../API_Routes.md): route được sinh từ code đang chạy.
