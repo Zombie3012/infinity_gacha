@@ -1,0 +1,994 @@
+# Production Pipeline cho game Realistic 3D Action / RPG – Godot
+
+Với cấu hình Realistic 3D + Action/RPG + PC & Mobile + Solo/Small Team, mình khuyên bạn xây dựng production theo mô hình:
+
+AI-assisted asset creation → Blender game-ready production → Godot integration → Gameplay feedback → Optimization → Release.
+
+Điểm quan trọng nhất: bạn đang phát triển game cho cả PC và Mobile. Vì vậy, không nên tạo asset theo tiêu chuẩn PC rồi mới tìm cách giảm chất lượng cho Mobile. Ngay từ đầu phải có quy chuẩn asset dùng chung, với hai mức chất lượng hiển thị.
+
+Mình đề xuất sử dụng:
+
+Blender: modeling, retopology, UV, baking, rigging, animation.
+Meshy / Tripo / Rodin: AI Image-to-3D.
+Substance 3D Painter hoặc Blender: texture.
+Mixamo hoặc Blender: rigging và animation cơ bản.
+Godot 4.x: engine chính.
+Audacity / Reaper: audio production.
+Godot GPUParticles3D và Shader: VFX.
+Git + Git LFS: quản lý source và asset.
+1. Kiến trúc tổng thể production
+<box border radius="lg" padding={3} gap={2}> <title size="lg">End-to-end production workflow</title> <box background="#1D4ED81A" radius="md" padding={3} gap={1}> **A. Pre-production** <text size="xs" color="secondary">Art bible · Asset list · Reference · Technical budget</text> </box> <box align="center"><icon name="arrow-down" color="secondary"/></box> <box background="#7C3AED1A" radius="md" padding={3} gap={1}> **B. AI asset generation** <text size="xs" color="secondary">Concept image → Image-to-3D → Base mesh → Material draft</text> </box> <box align="center"><icon name="arrow-down" color="secondary"/></box> <box background="#0596691A" radius="md" padding={3} gap={1}> **C. Blender production** <text size="xs" color="secondary">Cleanup → Retopology → Triangulation → UV → Bake → Texture</text> </box> <box align="center"><icon name="arrow-down" color="secondary"/></box> <box background="#0596691A" radius="md" padding={3} gap={1}> **D. Character production** <text size="xs" color="secondary">Rigging → Skinning → Animation → Export</text> </box> <box align="center"><icon name="arrow-down" color="secondary"/></box> <box background="#EA580C1A" radius="md" padding={3} gap={1}> **E. Godot integration** <text size="xs" color="secondary">GLB → Material → Collision → AnimationTree → Gameplay</text> </box> <box align="center"><icon name="arrow-down" color="secondary"/></box> <grid columns={2} gap={2}> <grid-item> <box background="#DB27771A" radius="md" padding={2}> **F. Audio** <text color="secondary" size="xs">BGM · SFX · Ambient · Voice</text> </box> </grid-item> <grid-item> <box background="#CA8A041A" radius="md" padding={2}> **G. VFX** <text color="secondary" size="xs">Particles · Shader · Lighting</text> </box> </grid-item> </grid> <box align="center"><icon name="arrow-down" color="secondary"/></box> <box background="#0891B21A" radius="md" padding={3} gap={1}> **H. Optimization & QA** <text color="secondary" size="xs">PC profile · Mobile profile · Profiling · Final build</text> </box> </box>
+
+Một asset chỉ được xem là hoàn thành khi đã được kiểm tra trong Godot, không phải khi xuất xong từ Blender.
+
+2. Phase A – Pre-production và Asset Bible
+Trước khi generate model, hãy xác định tiêu chuẩn kỹ thuật.
+
+2.1. Xác định art direction
+Realistic 3D không có nghĩa tất cả asset đều phải có độ chi tiết tối đa.
+
+Nên chia thành:
+
+
+Nhóm	Định hướng
+Main character	High-quality realistic
+Boss	High-quality realistic
+Enemy thường	Medium-high detail
+Environment	Realistic modular
+Props	Realistic, reusable
+VFX	Stylized realism
+UI	Phù hợp phong cách thế giới game
+<AsyncImageGroup query={["realistic third person action RPG game character armor cinematic","realistic dark fantasy RPG forest environment game","realistic fantasy RPG medieval weapon props","realistic dark fantasy game combat spell effects"]} aspectRatio="5:4" layout="bento"/>
+
+2.2. Asset inventory
+Tạo một bảng liệt kê mọi thứ cần sản xuất.
+
+Ví dụ:
+
+
+Asset category	Asset	Priority
+Character	Player	Critical
+Character	Basic Enemy	Critical
+Character	Boss	High
+Environment	Terrain	Critical
+Environment	Trees / Rocks	High
+Environment	Buildings	Medium
+Props	Weapons	High
+Props	Chests	Medium
+Audio	Combat BGM	High
+Audio	Footsteps	High
+VFX	Hit impact	Critical
+VFX	Skill effects	High
+Không nên tạo toàn bộ asset ngay lập tức. Chỉ sản xuất những gì cần cho vertical slice đầu tiên.
+
+2.3. Technical budget cho PC và Mobile
+Đây là budget khởi điểm để lập kế hoạch cho game 3D góc nhìn thứ ba, không phải giới hạn bắt buộc. Cần benchmark trên thiết bị mục tiêu.
+
+
+Asset	Triangle budget
+Player	30k–60k
+Boss	30k–70k
+Enemy thường	10k–25k
+NPC	8k–20k
+Small prop	100–1k
+Medium prop	1k–5k
+Large prop	3k–15k
+Foliage	100–2k mỗi instance
+Đối với mobile, cần thêm LOD, instancing và giới hạn số object hiển thị.
+
+Hai profile đồ họa:
+
+PC: texture 2K–4K cho asset quan trọng, shadow và post-processing chất lượng cao hơn.
+Mobile: texture 512–1K cho asset nhỏ, 1K–2K cho hero asset, shader đơn giản, giảm shadow và hiệu ứng nặng.
+Đừng tạo hai bộ model hoàn toàn riêng biệt. Hãy tạo một source asset và nhiều LOD/texture variant từ nó.
+
+3. Phase B – AI Image-to-3D Production
+3.1. Chọn công cụ theo loại asset
+Không nên dùng một công cụ AI cho tất cả asset.
+
+
+Công cụ	Vai trò đề xuất
+<Entity value="Meshy" category="software" disambig="AI 3D generation"/>	Props, environment, base models
+<Entity value="Tripo" category="software" disambig="AI image-to-3D"/>	Image-to-3D nhanh
+<Entity value="Rodin" category="software" disambig="AI 3D model generation"/>	Thử nghiệm model chi tiết
+<Entity value="Blender" category="software" disambig="3D modeling"/>	Sửa mesh và hoàn thiện
+<Entity value="Substance 3D Painter" category="software" disambig="3D texture painting"/>	Texture painting chuyên sâu
+Website:
+
+<Link url="https://www.meshy.ai/" title="Meshy"/>
+
+<Link url="https://www.tripo3d.ai/" title="Tripo"/>
+
+<Link url="https://hyper3d.ai/" title="Rodin"/>
+
+<Link url="https://www.blender.org/" title="Blender"/>
+
+<Link url="https://www.adobe.com/products/substance3d/apps/painter.html" title="Substance 3D Painter"/>
+
+Phân loại khả năng sử dụng AI
+
+Asset	Có nên dùng AI 3D?	Lý do
+Rock / Stone	Rất phù hợp	Hình khối tương đối tự do
+Tree / Stump	Phù hợp	Có thể cleanup
+Furniture	Phù hợp	Hình khối rõ
+Weapon	Phù hợp có điều kiện	Cần chỉnh silhouette
+Armor	Phù hợp có điều kiện	Cần chuẩn bị rig và attachment
+Character	Chỉ nên dùng làm base	Cần topology và deformation tốt
+Boss	Dùng làm concept/base	Yêu cầu cao về animation
+Terrain	Không ưu tiên Image-to-3D	Nên dùng terrain workflow riêng
+Khuyến nghị: Dùng AI mạnh nhất ở environment props, rocks, furniture, decorative objects. Với player và boss, hãy kiểm soát mesh, topology, rigging và animation bằng Blender.
+
+3.2. Chuẩn bị reference image
+Ví dụ: bạn cần tạo một thanh kiếm realistic fantasy.
+
+<AsyncImageGroup query={["realistic medieval fantasy sword isolated product photography front view","fantasy steel sword side profile concept design","realistic medieval sword pommel guard blade close up"]} aspectRatio="5:4"/>
+
+Quy trình:
+
+Tạo concept hình ảnh.
+Chốt thiết kế.
+Tạo hình ảnh front và side.
+Loại bỏ background.
+Kiểm tra hình dạng, tỷ lệ và các chi tiết.
+Đưa hình ảnh vào Image-to-3D.
+Prompt mẫu:
+
+
+text
+A realistic dark fantasy medieval longsword.
+
+Design:
+- Steel blade with subtle scratches
+- Detailed metal crossguard
+- Dark leather wrapped handle
+- Realistic proportions
+- Physically plausible construction
+
+Presentation:
+- Isolated object
+- Neutral background
+- Full object visible
+- No additional objects
+- Consistent geometry
+Đối với character, nên tạo concept turnaround và character sheet trước khi generate.
+
+3.3. Generate và đánh giá model
+Khi nhận model từ AI, không chỉ nhìn vào vẻ ngoài.
+
+Kiểm tra:
+
+Silhouette có đúng concept không?
+Có chi tiết bị biến dạng không?
+Mesh có lỗ hoặc phần giao nhau bất thường không?
+Texture có bị kéo giãn không?
+Các bộ phận có thể tách riêng không?
+Model có phù hợp để retopology không?
+Có thể tạo LOD không?
+Mỗi model nên có ba trạng thái:
+
+<list connector="solid" marker="number" gap={2}> <list-item> **AI Generated**
+
+
+Model nguyên bản từ công cụ AI.
+</list-item> <list-item> **Blender Work In Progress**
+
+
+Đã cleanup, retopology và UV.
+</list-item> <list-item> **Game Ready**
+
+
+Đã bake, texture, export và test trong Godot.
+</list-item> </list>
+
+Không ghi đè model AI ban đầu. Luôn giữ source để có thể quay lại khi retopology hoặc texture gặp vấn đề.
+
+4. Phase C – Blender: Cleanup, Retopology và Triangle Budget
+Đây là phần nên đầu tư thời gian nhiều nhất.
+
+4.1. Pipeline Blender cho mỗi asset
+<AsyncImageGroup query={["Blender high poly realistic medieval fantasy sword model","Blender low poly retopology realistic 3D asset wireframe","Blender UV unwrap realistic weapon","Blender texture baking normal map high poly low poly"]} aspectRatio="5:4"/>
+
+Thực hiện theo thứ tự:
+
+Import AI model.
+Đặt scale và origin.
+Cleanup mesh.
+Fix normals.
+Separate mesh nếu cần.
+Retopology.
+Triangulation validation.
+UV Unwrap.
+Bake texture.
+Texture painting.
+LOD generation.
+Export GLB.
+4.2. Cleanup mesh
+Trong Blender:
+
+Edit Mode → Merge by Distance.
+Mesh → Clean Up.
+Recalculate Outside.
+Kiểm tra non-manifold geometry.
+Kiểm tra duplicate vertices.
+Xóa geometry ẩn không cần thiết.
+Kiểm tra material slots.
+Các model AI thường có những vùng mesh rất phức tạp nhưng không đóng góp đáng kể vào silhouette.
+
+Bạn cần ưu tiên giữ hình dáng nhìn từ camera gameplay.
+
+4.3. Retopology theo từng loại asset
+Không dùng cùng một phương pháp cho character và environment.
+
+<box gap={3}> <box gap={1}> **Character – Manual / Semi-automatic Retopology**
+
+
+<AsyncImage query="Blender human character retopology quad edge loops face shoulder elbow knees wireframe" aspectRatio="16:9" width="100%"/>
+- Ưu tiên quad topology.
+- Edge loop quanh mắt và miệng nếu cần facial animation.
+- Edge loop tại vai, khuỷu tay, cổ tay, hông, đầu gối.
+- Hạn chế pole ở vị trí biến dạng mạnh.
+- Kiểm tra shoulder deformation và hip deformation.
+</box> <divider color="subtle"/> <box gap={1}> **Environment – Decimate / Manual Retopology**
+
+
+<AsyncImage query="Blender low poly rock retopology decimate modifier wireframe comparison" aspectRatio="16:9" width="100%"/>
+- Dùng Decimate cho rock, stone và object cứng.
+- Giữ silhouette.
+- Xóa mặt không nhìn thấy.
+- Không cần quad topology hoàn hảo.
+</box> <divider color="subtle"/> <box gap={1}> **Weapon – Hard Surface Optimization**
+
+
+<AsyncImage query="Blender realistic medieval sword low poly high poly topology wireframe" aspectRatio="16:9" width="100%"/>
+- Giữ bevel quan trọng.
+- Kiểm soát edge density.
+- Bake bevel và micro details vào normal map.
+- Tách blade, handle, guard khi cần attachment hoặc animation.
+</box> </box>
+
+4.4. Triangle budget thực tế
+Đối với game Action/RPG góc nhìn thứ ba, mình đề xuất bắt đầu với các mục tiêu sau:
+
+
+Asset	PC target	Mobile target
+Player	40k–60k	20k–35k
+Boss	40k–70k	20k–40k
+Elite enemy	20k–35k	10k–20k
+Normal enemy	12k–25k	6k–15k
+NPC	10k–20k	5k–12k
+Weapon	3k–10k	1.5k–5k
+Small prop	500–2k	200–1k
+Large prop	3k–12k	1k–6k
+Đây là target để bắt đầu, không phải con số bảo đảm FPS. Mobile vẫn có thể render nhiều triangles nếu các yếu tố khác được tối ưu, và ngược lại.
+
+LOD strategy
+Ví dụ player hoặc enemy:
+
+
+LOD	Triangle so với LOD0	Khoảng cách minh họa
+LOD0	100%	0–10 m
+LOD1	50–60%	10–25 m
+LOD2	20–30%	25–50 m
+LOD3	5–15%	Trên 50 m
+Khoảng cách phải được điều chỉnh theo kích thước màn hình, FOV, camera và tốc độ chuyển động. Mobile nên chuyển LOD sớm hơn nếu profiling cho thấy cần thiết.
+
+Một nguyên tắc quan trọng: Model nhân vật đang ở giữa màn hình thường đáng đầu tư hơn một object nhỏ ở phía xa.
+
+4.5. UV và Texture
+Với realistic game, nên chuẩn hóa PBR material workflow.
+
+<AsyncImage query="PBR texture maps realistic medieval armor albedo normal roughness metallic ambient occlusion" aspectRatio="16:9" width="100%"/>
+
+
+Texture	Chức năng	Khuyến nghị
+Albedo/Base Color	Màu	Bắt buộc
+Normal	Chi tiết bề mặt	Rất nên có
+Roughness	Độ nhám	Rất nên có
+Metallic	Kim loại	Theo material
+AO	Ambient occlusion	Tùy workflow
+Emission	Phát sáng	Cho vật thể đặc biệt
+Resolution theo asset
+
+Asset	PC	Mobile
+Main character	2K–4K	1K–2K
+Boss	2K–4K	1K–2K
+Normal enemy	2K	1K
+NPC	1K–2K	512–1K
+Weapon	1K–2K	512–1K
+Environment props	512–2K	256–1K
+Một lưu ý: Nếu dùng texture atlas cho nhiều props cùng material, bạn có thể tiết kiệm draw calls và texture memory.
+
+Bake workflow
+Nếu AI model có high-detail mesh:
+
+Giữ high-poly model.
+Tạo low-poly retopology.
+UV low-poly.
+Đặt high-poly và low-poly đúng vị trí.
+Bake Normal.
+Bake AO nếu cần.
+Kiểm tra skewing và ray artifacts.
+Sửa lỗi trong Blender hoặc Substance Painter.
+Với Normal Map, cần đồng bộ tangent-space convention giữa Blender và Godot. Hãy kiểm tra các chi tiết hard surface và seam sau import.
+
+5. Phase D – Rigging và Animation cho Action/RPG
+Đối với Action/RPG, animation không chỉ là làm cho character chuyển động. Nó quyết định cảm giác điều khiển và combat.
+
+5.1. Chọn rig system
+Có ba hướng:
+
+Blender Rigify: tạo rig humanoid để chỉnh sửa và animation.
+Mixamo: tạo rig và lấy animation mẫu nhanh.
+Custom rig: khi có character phức tạp, boss hoặc animation chuyên biệt.
+<Link url="https://www.mixamo.com/" title="Mixamo"/> là một lựa chọn hữu ích cho prototype và animation base, nhưng không nên mặc định rằng mọi animation đều phù hợp với combat cuối cùng.
+
+<AsyncImageGroup query={["Blender Rigify humanoid character armature","Mixamo humanoid skeleton character rig","Blender weight painting character shoulder elbow deformation"]} aspectRatio="5:4"/>
+
+5.2. Animation list cần sản xuất
+Player
+
+Nhóm	Animation
+Locomotion	Idle, Walk, Run, Sprint
+Movement	Jump, Fall, Land
+Combat	Attack 1, Attack 2, Heavy Attack
+Defense	Block, Dodge, Roll
+Reaction	Hit Front, Hit Back, Stun
+Death	Death
+Interaction	Pick Up, Open Chest, Interact
+Enemy
+Idle.
+Patrol.
+Chase.
+Attack.
+Heavy Attack.
+Hit Reaction.
+Stagger.
+Death.
+Boss
+Idle.
+Intro.
+Multiple attack animations.
+Special skill.
+Phase transition.
+Stagger.
+Death sequence.
+5.3. Animation production pipeline
+<box border radius="lg" padding={3} gap={2}> **Animation workflow** <list connector="solid" marker="number" gap={2}> <list-item>Rigging và skinning.</list-item> <list-item>Kiểm tra deformation bằng các pose cực hạn.</list-item> <list-item>Block animation bằng keyframes.</list-item> <list-item>Polish timing, anticipation và follow-through.</list-item> <list-item>Đánh dấu animation event.</list-item> <list-item>Export animation clips.</list-item> <list-item>Kiểm tra blending trong Godot.</list-item> </list> </box>
+
+Animation event rất quan trọng
+Ví dụ animation Attack có:
+
+Frame bắt đầu vung vũ khí.
+Frame bắt đầu active hitbox.
+Frame gây damage.
+Frame phát hit VFX.
+Frame phát SFX.
+Frame kết thúc active hitbox.
+Frame recovery.
+Không nên dùng một animation dài rồi bật hitbox xuyên suốt. Hãy chia các giai đoạn combat rõ ràng.
+
+5.4. Root Motion hay In-place Animation?
+Với Action/RPG:
+
+In-place: phù hợp khi gameplay movement được điều khiển bằng CharacterBody3D.
+Root motion: hữu ích với cinematic attack, finisher và một số animation có chuyển động đặc biệt.
+Mình khuyên dùng In-place làm mặc định cho locomotion. Root motion chỉ sử dụng ở những đoạn thực sự cần thiết để tránh mất kiểm soát gameplay movement.
+
+5.5. Animation trong Godot
+Cấu trúc:
+
+
+text
+Player (CharacterBody3D)
+│
+├── CollisionShape3D
+│
+├── ModelRoot (Node3D)
+│   └── Skeleton3D
+│
+├── AnimationPlayer
+├── AnimationTree
+│
+├── WeaponSocket (BoneAttachment3D)
+│
+└── VFXSocket (Node3D)
+Dùng AnimationTree với:
+
+StateMachine: Idle, Walk, Run, Attack, Dodge, Hit.
+BlendSpace1D/2D: locomotion.
+OneShot: attack, hit, dodge.
+AnimationPlayer: clip và event.
+Đặc biệt, nên tách animation của vũ khí ra khỏi animation của character nếu game hỗ trợ nhiều loại vũ khí.
+
+6. Phase E – Import và tích hợp vào Godot
+6.1. Quy chuẩn export từ Blender
+Mình khuyên dùng GLB làm định dạng chính.
+
+
+Setting	Quy chuẩn
+Format	glTF Binary (.glb)
+Scale	Đồng bộ 1 Blender unit = 1 meter
+Geometry	Apply Modifiers
+Normals	Export
+UV	Export
+Materials	PBR
+Animations	Export khi cần
+Transform	Kiểm tra orientation và scale
+Không nhất thiết mọi asset đều phải xuất cùng một cách. Props tĩnh, character và animated props có thể có export preset riêng.
+
+6.2. Cấu trúc scene Godot
+Ví dụ Player:
+
+
+text
+Player (CharacterBody3D)
+│
+├── CollisionShape3D
+│
+├── VisualRoot (Node3D)
+│   └── CharacterModel (instance GLB)
+│       ├── Skeleton3D
+│       └── MeshInstance3D
+│
+├── AnimationPlayer
+├── AnimationTree
+│
+├── WeaponSocket
+│
+├── AudioStreamPlayer3D
+│
+├── VFXContainer
+│
+└── CameraTarget (Node3D)
+Tách ba lớp:
+
+Gameplay: movement, health, combat.
+Visual: mesh, skeleton, animation.
+Feedback: audio, particles, camera effects.
+Điều này cho phép thay model hoặc animation mà không phá vỡ gameplay logic.
+
+6.3. Tạo reusable scene cho asset
+Ví dụ:
+
+
+text
+res://scenes/
+│
+├── player/
+│   └── player.tscn
+│
+├── enemies/
+│   ├── skeleton_enemy.tscn
+│   └── goblin_enemy.tscn
+│
+├── environment/
+│   ├── rock.tscn
+│   └── tree.tscn
+│
+├── weapons/
+│   ├── sword.tscn
+│   └── axe.tscn
+│
+└── vfx/
+    ├── hit_impact.tscn
+    └── explosion.tscn
+Một object như rock.tscn nên chứa:
+
+MeshInstance3D.
+Collision.
+Material.
+LOD nếu cần.
+Script tương tác nếu cần.
+Không nên copy-paste cùng một mesh và material thành hàng chục asset độc lập.
+
+6.4. Kiểm tra sau import
+Mỗi asset cần qua các bài kiểm tra:
+
+Scale có đúng không?
+Pivot có đúng không?
+Normals có bị đảo không?
+Material có đúng không?
+Texture có bị sai màu không?
+Animation có hoạt động không?
+Collision có đúng không?
+Có bị lỗi khi chạy ở mobile renderer không?
+Đặc biệt, cần kiểm tra tương thích với renderer dự kiến sử dụng. Godot Forward+ và Mobile renderer có khác biệt về khả năng và chi phí rendering. Nếu PC và Mobile dùng hai renderer khác nhau, hãy kiểm thử shader và material trên cả hai.
+
+7. Phase F – Audio Production: BGM, SFX, Ambient
+Audio nên được quản lý như một hệ thống riêng trong game, không phải những file âm thanh được gọi tùy tiện từ từng scene.
+
+7.1. Audio architecture
+<box border radius="lg" padding={3} gap={2}> **Godot Audio Bus Layout** <box background="surface-secondary" padding={2} radius="md" align="center"> **Master** </box> <grid columns={2} gap={2}> {#each [{n:"BGM",d:"Music, combat themes"},{n:"SFX",d:"Weapons, hits, explosions"},{n:"Ambient",d:"Wind, rain, environment"},{n:"Voice",d:"Dialogue, grunts, NPC"}] as item} <grid-item> <box border radius="md" padding={2}> **{item.n}** <text color="secondary" size="xs">{item.d}</text> </box> </grid-item> {/each} </grid> <text color="secondary" size="xs">UI có thể được quản lý bằng bus riêng hoặc đi qua SFX tùy quy mô game.</text> </box>
+
+7.2. BGM production
+Action/RPG nên dùng music state thay vì một bản nhạc nền duy nhất.
+
+
+Game state	Music
+Main Menu	Main theme
+Exploration	Exploration
+Combat	Combat
+Boss Combat	Boss theme
+Victory	Victory
+Defeat	Defeat
+Safe Zone	Calm ambient music
+Quy trình sản xuất
+Xác định cảm xúc của từng khu vực.
+Tạo music reference.
+Generate bản demo bằng AI hoặc sản xuất trong DAW.
+Chỉnh sửa arrangement.
+Tạo bản loop.
+Mix và master.
+Kiểm tra chuyển cảnh.
+Import Godot.
+Prompt mẫu:
+
+
+text
+Genre: Dark fantasy action RPG.
+Style: Cinematic orchestral soundtrack.
+
+Mood:
+Epic, mysterious, immersive, intense.
+
+Instruments:
+Low strings, brass, cinematic percussion,
+subtle choir, atmospheric textures.
+
+Tempo: 100 BPM.
+No vocals.
+
+Create a seamless gameplay loop.
+Avoid abrupt endings.
+Keep enough dynamic space for gameplay sound effects.
+Không chỉ generate một bài nhạc dài rồi cắt ngẫu nhiên để loop. Hãy kiểm tra điểm đầu và cuối, nhịp, hòa âm và mức âm lượng.
+
+7.3. SFX production
+Ưu tiên sản xuất theo gameplay.
+
+
+Category	SFX cần có
+Player	Footsteps, jump, land, dodge
+Weapon	Swing, hit, block, parry
+Enemy	Attack, hit, death
+Environment	Door, chest, object interaction
+Magic	Cast, projectile, impact
+UI	Click, hover, confirmation
+Combat	Critical hit, combo feedback
+Đối với weapon combat, nên có nhiều variation cho cùng một sự kiện để tránh âm thanh lặp lại quá rõ.
+
+Ví dụ:
+
+
+text
+sword_hit_01.wav
+sword_hit_02.wav
+sword_hit_03.wav
+
+footstep_grass_01.wav
+footstep_grass_02.wav
+
+enemy_hit_01.wav
+enemy_hit_02.wav
+7.4. Tích hợp audio trong Godot
+Sử dụng:
+
+AudioStreamPlayer: BGM và audio không gian.
+AudioStreamPlayer2D: âm thanh theo vị trí 2D.
+AudioStreamPlayer3D: âm thanh trong không gian 3D.
+Audio Bus: volume, effects và mixing.
+Tạo AudioManager singleton để quản lý:
+
+Play BGM.
+Fade in/out.
+Chuyển music state.
+Play SFX.
+Random variation.
+Volume settings.
+Nên dùng OGG cho phần lớn BGM và audio dài; WAV cho những SFX ngắn cần giữ chất lượng hoặc phục vụ quá trình chỉnh sửa. Thiết lập import compression theo mục tiêu nền tảng.
+
+8. Phase G – VFX Production cho Realistic Action/RPG
+Với realistic game, VFX cần có cảm giác vật lý và trọng lượng. Không nên chỉ dùng particle phát sáng quá nhiều.
+
+8.1. Chia hệ thống VFX
+<grid columns={2} gap={2}> <grid-item> <AsyncImage query="realistic fantasy sword slash impact spark game visual effect" aspectRatio="5:4" width="100%"/> **Combat VFX** <text color="secondary" size="xs">Slash, sparks, hit, blood</text> </grid-item> <grid-item> <AsyncImage query="realistic fantasy fire magic projectile game effect" aspectRatio="5:4" width="100%"/> **Skill VFX** <text color="secondary" size="xs">Fire, ice, lightning, magic</text> </grid-item> <grid-item> <AsyncImage query="realistic dark fantasy forest volumetric fog rain game environment" aspectRatio="5:4" width="100%"/> **Environment VFX** <text color="secondary" size="xs">Fog, rain, dust, smoke</text> </grid-item> <grid-item> <AsyncImage query="realistic fantasy character healing aura magical particles game" aspectRatio="5:4" width="100%"/> **Character VFX** <text color="secondary" size="xs">Healing, buff, debuff</text> </grid-item> </grid>
+
+8.2. Công cụ VFX
+GPUParticles3D: particle chính.
+CPUParticles3D: khi cần tương thích hoặc xử lý nhẹ theo trường hợp.
+ShaderMaterial: dissolve, distortion, animated effects.
+MeshInstance3D: shockwave, slash, projectile.
+OmniLight3D: flash và impact.
+Decal: dấu vết, vết bẩn, impact mark.
+8.3. Xây dựng VFX theo layer
+Ví dụ sword hit:
+
+<AsyncImage query="realistic sword combat impact sparks slash visual effect game VFX layered reference" aspectRatio="16:9" width="100%"/>
+
+
+Layer	Effect
+1	Weapon trail
+2	Impact flash
+3	Sparks
+4	Dust / debris
+5	Blood hoặc material-specific impact
+6	Sound effect
+7	Camera feedback
+Một hệ thống tốt phải có impact khác nhau tùy material:
+
+Metal: sparks.
+Stone: dust và stone debris.
+Wood: wood splinters.
+Flesh: hit effect phù hợp với art direction.
+8.4. VFX event architecture
+Không nên để mọi VFX được gọi trực tiếp từ từng script nhân vật.
+
+Thiết kế một EffectManager:
+
+
+text
+EffectManager
+│
+├── SpawnHitEffect()
+├── SpawnExplosion()
+├── SpawnProjectile()
+├── SpawnTrail()
+├── SpawnBuffEffect()
+└── SpawnEnvironmentEffect()
+Khi combat system phát hiện hit:
+
+
+text
+Combat System
+      │
+      ▼
+Hit Event
+      │
+      ├── Damage System
+      ├── Animation System
+      ├── Effect Manager
+      └── Audio Manager
+Các hiệu ứng nên có object pooling nếu được spawn thường xuyên, đặc biệt là sparks, hit particles và projectile.
+
+9. Phase H – Optimization cho PC + Mobile
+Đây là phần bắt buộc phải làm xuyên suốt production.
+
+9.1. Renderer strategy
+Godot có ba hướng rendering chính cần cân nhắc:
+
+
+Renderer	Vai trò
+Forward+	PC chất lượng cao
+Mobile	PC/mobile có nhu cầu tối ưu và mobile GPU
+Compatibility	Thiết bị hoặc nền tảng cần tương thích rộng hơn
+Với game PC + Mobile, có hai lựa chọn:
+
+Phương án A – Một renderer chung
+
+Dùng Mobile renderer nếu bạn muốn một baseline tương thích rộng và có thể chấp nhận giới hạn về hiệu ứng.
+
+Phương án B – Hai profile rendering
+
+PC: Forward+.
+Mobile: Mobile renderer.
+Phương án B có thể cho chất lượng PC tốt hơn, nhưng cần kiểm tra shader, lighting và material trên hai renderer. Không phải mọi hiệu ứng đều hoạt động giống nhau.
+
+Nếu là solo developer, mình khuyên prototype trên Mobile renderer trước để phát hiện sớm những tính năng quá đắt hoặc không phù hợp với mobile.
+
+9.2. Optimization theo từng nhóm
+
+Thành phần	PC	Mobile
+Mesh	LOD	LOD sớm
+Texture	2K–4K khi cần	512–2K
+Shadow	Nhiều nguồn hơn	Giới hạn shadow
+Lighting	Có thể dùng nhiều nguồn hơn	Ưu tiên baked/static
+Particles	Số lượng cao hơn	Giới hạn particle
+Post-processing	Tùy cấu hình	Giảm hiệu ứng
+Foliage	Instancing	Instancing và giảm density
+Reflection	Tùy chất lượng	Hạn chế
+9.3. Những thứ phải profiling
+Không chỉ kiểm tra FPS.
+
+GPU time.
+CPU time.
+Draw calls.
+Triangle count.
+Texture memory.
+RAM.
+VRAM.
+Particle count.
+Physics time.
+Loading time.
+Sử dụng Godot Profiler, Rendering Profiler và kiểm thử build thực tế trên thiết bị mục tiêu.
+
+Performance targets
+Mục tiêu ban đầu có thể đặt:
+
+
+Platform	Mục tiêu
+PC	60 FPS
+Mobile phổ thông	30 FPS
+Mobile cao cấp	60 FPS
+Tương ứng frame budget:
+
+<grid columns={2} gap={2}> <grid-item> <box border radius="lg" padding={3} gap={1}> <title size="2xl" color="success" tabularNums>16.67 ms</title> **60 FPS** <text color="secondary" size="xs">Tổng thời gian mỗi frame</text> </box> </grid-item> <grid-item> <box border radius="lg" padding={3} gap={1}> <title size="2xl" color="info" tabularNums>33.33 ms</title> **30 FPS** <text color="secondary" size="xs">Tổng thời gian mỗi frame</text> </box> </grid-item> </grid>
+
+Đây là tổng frame budget, không phải ngân sách riêng cho GPU. Cần tránh tình trạng CPU hoặc GPU vượt quá thời gian mục tiêu.
+
+9.4. Tối ưu đặc biệt cho Action/RPG
+Game thể loại này thường có nhiều enemy, projectile, hit effects cùng lúc.
+
+Ưu tiên:
+
+Object pooling cho projectile.
+Object pooling cho VFX.
+Animation LOD cho enemy xa.
+Giảm shadow trên enemy không quan trọng.
+Culling enemy ngoài camera.
+Giới hạn số particle đồng thời.
+Giảm số physics query.
+Tái sử dụng material.
+Giới hạn số dynamic lights.
+Profiling combat scene đông enemy.
+Đừng tối ưu scene trống rồi kết luận game đã đạt performance. Phải kiểm tra tình huống combat đông nhất.
+
+10. Phase I – Asset Management và Folder Structure
+Đây là phần đặc biệt quan trọng với solo developer hoặc team nhỏ. Nếu không có quy chuẩn, sau vài tháng bạn sẽ có hàng trăm file không biết file nào là bản cuối.
+
+10.1. Folder structure đề xuất
+Mình khuyên tách rõ 3 khu vực: source production, exported assets và Godot project.
+
+<CodeBlock language="text" editable> GameProject/ │ ├── _production/ │ ├── references/ │ │ ├── characters/ │ │ ├── environment/ │ │ └── weapons/ │ │ │ ├── ai_generated/ │ │ ├── images/ │ │ └── models/ │ │ │ ├── blender/ │ │ ├── characters/ │ │ ├── environment/ │ │ ├── props/ │ │ └── weapons/ │ │ │ └── audio_source/ │ ├── GodotProject/ │ ├── assets/ │ │ ├── characters/ │ │ ├── environment/ │ │ ├── props/ │ │ ├── weapons/ │ │ └── textures/ │ │ │ ├── audio/ │ │ ├── bgm/ │ │ ├── sfx/ │ │ ├── ambient/ │ │ └── voice/ │ │ │ ├── vfx/ │ │ ├── combat/ │ │ ├── skills/ │ │ ├── environment/ │ │ └── character/ │ │ │ ├── scenes/ │ ├── scripts/ │ ├── shaders/ │ ├── materials/ │ └── ui/ │ └── documentation/ ├── asset_list.xlsx ├── art_bible.pdf ├── technical_budget.xlsx └── production_sop.md </CodeBlock>
+
+_production chứa source files và dữ liệu làm việc. GodotProject chứa asset đã được duyệt để đưa vào game.
+
+Không đưa toàn bộ file AI trung gian, file bake tạm và bản render thử vào thư mục runtime.
+
+10.2. Naming convention
+Thống nhất tên file từ đầu.
+
+
+Asset	Naming
+Character	CH_Player
+Enemy	CH_Skeleton
+Weapon	WP_IronSword
+Environment	ENV_ForestTree
+Prop	PR_WoodenChest
+Material	MAT_Iron
+Texture	T_Iron_BaseColor
+Normal Map	T_Iron_Normal
+VFX	VFX_SwordHit
+Audio	SFX_SwordHit_01
+BGM	BGM_Forest
+Ví dụ file:
+
+
+text
+CH_Player_LP.glb
+CH_Player_HP.blend
+CH_Player_BaseColor_2K.png
+CH_Player_Normal_2K.png
+CH_Player_Roughness_2K.png
+
+WP_IronSword.glb
+WP_IronSword_BaseColor_1K.png
+
+VFX_SwordHit.tscn
+SFX_SwordHit_01.ogg
+BGM_Combat_01.ogg
+Trong đó:
+
+HP = High Poly.
+LP = Low Poly.
+2K / 1K = Texture resolution.
+10.3. Version control
+Sử dụng:
+
+Git: source code, scene, configuration.
+Git LFS: file Blender, GLB, texture lớn, audio source.
+GitHub hoặc GitLab: remote repository.
+<Link url="https://git-lfs.com/" title="Git LFS documentation"/>.
+
+Một lưu ý quan trọng: Godot có các file import cache riêng. Không nên commit toàn bộ thư mục .godot thông thường. Giữ các file .import cần thiết và để Godot quản lý cache theo quy trình của engine.
+
+10.4. Asset status tracking
+Tạo bảng quản lý với các trạng thái:
+
+
+Status	Ý nghĩa
+Reference	Đã có concept
+Generating	Đang AI generate
+Modeling	Đang Blender
+Retopology	Đang cleanup
+Texturing	Đang UV / Texture
+Rigging	Đang rig
+Integration	Đang import Godot
+QA	Đang kiểm tra
+Approved	Hoàn thành
+Ngoài ra nên có các cột:
+
+Asset ID.
+Asset name.
+Owner.
+Priority.
+Source file.
+Export file.
+Triangle count.
+Texture resolution.
+LOD count.
+PC status.
+Mobile status.
+License/source.
+Last updated.
+11. SOP – Quy trình chuẩn cho một asset từ đầu đến cuối
+Đây là quy trình bạn nên áp dụng mỗi khi tạo một asset mới.
+
+Ví dụ: sản xuất một con Skeleton Enemy.
+
+<box border radius="lg" padding={3} gap={3}> <title size="lg">Skeleton Enemy – Production SOP</title> <list connector="solid" marker="number" gap={3}> <list-item> **Reference & Concept**
+
+
+  <AsyncImage query="realistic dark fantasy skeleton warrior enemy concept art full body" aspectRatio="16:9" width="100%"/>
+  - Chốt hình dáng.
+  - Chốt trang bị.
+  - Chốt kích thước.
+  - Chốt art direction.
+</list-item>
+<list-item>
+  **AI Generation**
+
+  <AsyncImage query="realistic 3D skeleton warrior game character model turnaround" aspectRatio="16:9" width="100%"/>
+  - Generate base mesh.
+  - Kiểm tra hình khối.
+  - Giữ source model.
+</list-item>
+<list-item>
+  **Blender Retopology**
+
+  <AsyncImage query="Blender realistic skeleton humanoid character retopology wireframe" aspectRatio="16:9" width="100%"/>
+  - Cleanup.
+  - Retopology.
+  - Triangle budget.
+  - UV unwrap.
+</list-item>
+<list-item>
+  **Texture & Baking**
+
+  <AsyncImage query="realistic skeleton armor PBR texture maps texture sheet" aspectRatio="16:9" width="100%"/>
+  - Bake Normal.
+  - Base Color.
+  - Roughness.
+  - Metallic.
+</list-item>
+<list-item>
+  **Rigging & Animation**
+
+  <AsyncImage query="Blender skeleton warrior rig animation armature" aspectRatio="16:9" width="100%"/>
+  - Rig.
+  - Weight Paint.
+  - Idle.
+  - Walk.
+  - Attack.
+  - Hit.
+  - Death.
+</list-item>
+<list-item>
+  **Godot Integration**
+
+  <AsyncImage query="Godot 4 realistic 3D skeleton warrior character game scene" aspectRatio="16:9" width="100%"/>
+  - Export GLB.
+  - Import.
+  - Collision.
+  - AnimationTree.
+  - Gameplay testing.
+</list-item>
+<list-item>
+  **Polishing**
+
+  - Footstep SFX.
+  - Attack SFX.
+  - Hit VFX.
+  - Death VFX.
+  - LOD.
+  - PC/Mobile performance test.
+</list-item>
+</list> <badge color="success">Final deliverable: Game-ready enemy</badge> </box>
+
+11.1. Definition of Done
+Một asset chỉ được đánh dấu Approved khi đáp ứng:
+
+
+Kiểm tra	Điều kiện
+Geometry	Không lỗi mesh nghiêm trọng
+Triangle	Đạt budget
+UV	Không lỗi ngoài ý muốn
+Texture	Đúng material
+Scale	Đúng kích thước gameplay
+Pivot	Đúng vị trí
+Rig	Deformation đạt yêu cầu
+Animation	Không lỗi
+Collision	Hoạt động
+Godot	Import thành công
+PC	Đạt chất lượng và performance
+Mobile	Đạt chất lượng và performance
+License	Có nguồn và quyền sử dụng rõ ràng
+12. Kế hoạch production 12 tuần
+Với solo developer hoặc team nhỏ, không nên chia lịch theo từng asset riêng lẻ ngay từ đầu. Hãy chia theo milestone.
+
+Đây là kế hoạch tham khảo cho một vertical slice có Player, vài Enemy, một khu vực chơi và một vòng combat hoàn chỉnh.
+
+<box border radius="lg" padding={3} gap={3}> <title size="lg">12-week production roadmap</title> <list connector="solid" marker="number" gap={3}> <list-item> **Tuần 1–2: Technical & Art Foundation**
+
+
+  - Art Bible.
+  - Asset inventory.
+  - AI generation tests.
+  - Blender workflow.
+  - Godot renderer selection.
+  - Test GLB pipeline.
+</list-item>
+<list-item>
+  **Tuần 3–4: Character Production**
+
+  - Player model.
+  - Player retopology.
+  - UV / Texture.
+  - Rigging.
+  - Idle / Walk / Run / Attack.
+</list-item>
+<list-item>
+  **Tuần 5–6: Enemy & Environment**
+
+  - 2 loại enemy.
+  - Weapons.
+  - Rocks / Trees / Props.
+  - Collision.
+  - Environment assembly.
+</list-item>
+<list-item>
+  **Tuần 7–8: Animation & Combat Feedback**
+
+  - Enemy animation.
+  - Attack integration.
+  - Hit detection.
+  - Hit reactions.
+  - Combat VFX.
+  - Combat SFX.
+</list-item>
+<list-item>
+  **Tuần 9–10: Audio & World Polish**
+
+  - Exploration BGM.
+  - Combat BGM.
+  - Ambient.
+  - Environment VFX.
+  - Lighting.
+  - UI audio.
+</list-item>
+<list-item>
+  **Tuần 11–12: Optimization & QA**
+
+  - LOD.
+  - Texture optimization.
+  - Mobile profiling.
+  - PC profiling.
+  - Combat stress test.
+  - Final vertical slice build.
+</list-item>
+</list> </box>
+
+Với một người làm toàn bộ, thời gian có thể kéo dài hơn đáng kể nếu phải tự tạo animation, texture và gameplay. Hãy dùng lịch này làm thứ tự ưu tiên, không phải deadline cứng.
+
+13. Những tài nguyên nên có trong production toolkit
+<box gap={3}> <row align=start gap={3}> <AsyncImage query="Blender official logo" aspectRatio="1:1" maxWidth="64px" fit="contain"/> <box flex="1" gap={1}> **Blender** <text color="secondary" size="xs">Modeling, retopology, UV, baking, rigging.</text> <Link url="https://www.blender.org/" title="Website"/> </box> </row> <divider color="subtle"/> <row align=start gap={3}> <AsyncImage query="Adobe Substance 3D Painter logo" aspectRatio="1:1" maxWidth="64px" fit="contain"/> <box flex="1" gap={1}> **Substance 3D Painter** <text color="secondary" size="xs">Realistic PBR texturing.</text> <Link url="https://www.adobe.com/products/substance3d/apps/painter.html" title="Website"/> </box> </row> <divider color="subtle"/> <row align=start gap={3}> <AsyncImage query="Mixamo logo" aspectRatio="1:1" maxWidth="64px" fit="contain"/> <box flex="1" gap={1}> **Mixamo** <text color="secondary" size="xs">Humanoid rig và animation tham khảo.</text> <Link url="https://www.mixamo.com/" title="Website"/> </box> </row> <divider color="subtle"/> <row align=start gap={3}> <AsyncImage query="Godot engine logo" aspectRatio="1:1" maxWidth="64px" fit="contain"/> <box flex="1" gap={1}> **Godot Engine** <text color="secondary" size="xs">Game integration, animation, VFX, audio, rendering.</text> <Link url="https://godotengine.org/" title="Website"/> </box> </row> <divider color="subtle"/> <row align=start gap={3}> <AsyncImage query="Reaper digital audio workstation logo" aspectRatio="1:1" maxWidth="64px" fit="contain"/> <box flex="1" gap={1}> **Reaper** <text color="secondary" size="xs">Audio mixing và sound design.</text> <Link url="https://www.reaper.fm/" title="Website"/> </box> </row> <divider color="subtle"/> <row align=start gap={3}> <AsyncImage query="Krita digital painting software logo" aspectRatio="1:1" maxWidth="64px" fit="contain"/> <box flex="1" gap={1}> **Krita** <text color="secondary" size="xs">Texture editing và VFX sprite.</text> <Link url="https://krita.org/" title="Website"/> </box> </row> </box>
+
+14. Ưu tiên triển khai ngay: Vertical Slice đầu tiên
+Mình không khuyên bạn bắt đầu bằng việc sản xuất 50 character, 100 props hay hàng chục bài nhạc.
+
+Hãy hoàn thiện một vertical slice gồm:
+
+<box border radius="lg" padding={3} gap={3}> <title size="lg">Vertical slice – Action RPG</title> <AsyncImage query="realistic dark fantasy third person action RPG game forest combat scene player sword skeleton enemies cinematic game environment" aspectRatio="16:9" width="100%"/> **Một khu vực chơi hoàn chỉnh gồm:** - 1 Player có rig và animation. - 2 loại Enemy. - 1 Boss đơn giản. - 3 loại Weapon. - 1 Environment hoàn chỉnh. - 10–15 Props. - 1 bộ locomotion animation. - 1 bộ combat animation. - 1 Exploration BGM. - 1 Combat BGM. - 10–15 SFX cơ bản. - 5–8 VFX combat. - PC và Mobile rendering profiles. <divider color="subtle"/> **Điều kiện hoàn thành:**
+
+Người chơi có thể di chuyển, chiến đấu, nhận damage, đánh bại enemy, nghe âm thanh và nhìn thấy đầy đủ hiệu ứng trong một scene thực tế. </box>
+
+Đây là cách kiểm chứng toàn bộ pipeline trước khi mở rộng production.

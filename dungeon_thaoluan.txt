@@ -1,0 +1,243 @@
+Đăng nhập
+Đăng ký miễn phí
+hiện tại tôi đang làm chế độ thám hiểm cho game
+ý tưởng như sau ( tạm gọi nó là dungeon nhưng mô tả thì có thể không giống)
+ mở theo ngày/ chủ nhật thì mở hết.
+1(2,4,6) dungeon rừng xanh/thảo nguyên: tìm kiếm ngyên liệu chế thuốc, rawfood, ... ( nếu là rừng xanh thì tăng thảo dược tìm được,  nếu thảo nguyên thì sẽ dễ tìm được rawfood nhiều hơn)
+2(3,5,7) dungeon hầm mỏ/di tích cổ đại: tìm được các rune thất lạc ( cực hiếm) các khoáng sản, kim loại hiếm, bản vẽ chế tạo ( hiếm)
+tại sao lại chia ra ví dụ rừng/thảo nguyên thì để cơ chế random nếu thứ 4 đó là thảo nguyên thì tăng mạnh rawfood.
+
+Mình thấy ý tưởng này khá ổn, đặc biệt là việc chia dungeon theo nhóm ngày nhưng ngẫu nhiên hóa loại địa hình bên trong. Nó tạo ra cảm giác mỗi ngày người chơi đều có lý do để thám hiểm, thay vì chỉ chọn một dungeon cố định để farm tài nguyên.
+
+Mình đề xuất phát triển hệ thống này theo hướng Daily Exploration – Thám hiểm luân phiên.
+
+1. Cấu trúc hệ thống
+Dungeon được chia thành 2 nhóm chính, luân phiên theo ngày trong tuần.
+
+Nhóm 1 – Khu vực hoang dã
+Thứ 2, 4, 6 và Chủ nhật
+Neverwinter Wood Geographic Location in Crimson Heroes FR | World Anvil
+ 
+Rừng xanh
+
+Tăng thảo dược
+
+Herbs, medicinal plants, mushrooms, rare flowers.
+
+Tohad (@sylvainsarrailh) on X
+ 
+Thảo nguyên
+
+Tăng nguyên liệu thực phẩm
+
+Raw food, meat, grains, wild vegetables.
+
+Mục đích: Thu thập nguyên liệu tiêu hao, chế thuốc, nấu ăn và sinh tồn.
+
+Nhóm 2 – Khu vực cổ đại
+Thứ 3, 5, 7 và Chủ nhật
+Bergbau von Midnight: Levelguide von 1 bis 100
+ 
+Hầm mỏ
+
+Tăng khoáng sản
+
+Rare ores, precious metals, crystals.
+
+DND Dwarf Stronghold Campaign
+ 
+Di tích cổ đại
+
+Tăng vật phẩm cổ đại
+
+Lost runes, ancient artifacts, crafting blueprints.
+
+Mục đích: Thu thập tài nguyên quý hiếm, phục vụ chế tạo trang bị và nâng cấp sức mạnh.
+
+Chủ nhật – Ngày thám hiểm đặc biệt
+Mở tất cả khu vực
+Người chơi có thể lựa chọn cả 4 loại địa hình, không bị giới hạn bởi lịch luân phiên.
+
+2. Cơ chế random địa hình theo ngày
+Đây chính là điểm mình nghĩ nên giữ lại trong ý tưởng của bạn.
+
+Ví dụ lịch hoạt động:
+
+Ngày
+
+Nhóm dungeon
+
+Địa hình được random
+
+Thứ 2
+
+Hoang dã
+
+Rừng xanh
+
+Thứ 3
+
+Cổ đại
+
+Hầm mỏ
+
+Thứ 4
+
+Hoang dã
+
+Thảo nguyên
+
+Thứ 5
+
+Cổ đại
+
+Di tích cổ đại
+
+Thứ 6
+
+Hoang dã
+
+Thảo nguyên
+
+Thứ 7
+
+Cổ đại
+
+Hầm mỏ
+
+Chủ nhật
+
+Tất cả
+
+Người chơi lựa chọn
+
+Đây chỉ là lịch minh họa, không phải kết quả random cố định.
+
+Nguyên tắc quan trọng:
+
+Random địa hình theo ngày, không random theo từng lượt chơi.
+
+Tất cả người chơi trong cùng server nên có chung địa hình trong ngày.
+
+Địa hình được công bố khi ngày mới bắt đầu.
+
+Chủ nhật mở toàn bộ địa hình để người chơi chủ động farm những gì đang thiếu.
+
+Lợi ích là người chơi có thể lên kế hoạch trước, thậm chí trao đổi với nhau về tài nguyên cần farm.
+
+3. Cơ chế phân phối tài nguyên
+Mình đề xuất không nên chỉ tăng tỷ lệ xuất hiện của một loại tài nguyên, mà nên thiết kế thành hệ số ưu tiên.
+
+Ví dụ:
+
+Tài nguyên
+
+Rừng xanh
+
+Thảo nguyên
+
+Thảo dược
+
+x2.5
+
+x0.8
+
+Nấm
+
+x2.0
+
+x0.8
+
+Raw food
+
+x0.8
+
+x2.5
+
+Thịt
+
+x0.8
+
+x2.0
+
+Gỗ
+
+x1.5
+
+x1.0
+
+Tương tự với nhóm dungeon cổ đại:
+
+Tài nguyên
+
+Hầm mỏ
+
+Di tích cổ đại
+
+Khoáng sản
+
+x2.5
+
+x0.8
+
+Kim loại hiếm
+
+x2.0
+
+x0.8
+
+Rune thất lạc
+
+x0.5
+
+x2.0
+
+Bản vẽ chế tạo
+
+x0.8
+
+x2.0
+
+Cổ vật
+
+x0.8
+
+x2.0
+
+Các hệ số này là ví dụ để cân bằng, không nhất thiết phải áp dụng nguyên trạng.
+
+4. Cơ chế khám phá và phần thưởng
+Mình nghĩ nên có thêm một yếu tố để dungeon không biến thành hoạt động chỉ bấm nút rồi nhận tài nguyên.
+
+Có thể chia hoạt động thành 3 dạng:
+
+Midnight Herbalism Guide - Builds, Leveling, Specs, and Best Picks
+ 
+Gathering – Thu thập
+
+Tìm kiếm tài nguyên thông thường, nguyên liệu chế thuốc, thực phẩm, khoáng sản.
+
+3D AI Game Maker | Browser-Playable Builds & Project Export
+ 
+Discovery – Khám phá
+
+Có cơ hội tìm thấy rương bí mật, vật phẩm hiếm, bản vẽ chế tạo và rune.
+
+Monsters
+ 
+Encounter – Chạm trán
+
+Có thể gặp quái vật, sự kiện ngẫu nhiên hoặc địa điểm đặc biệt.
+
+Ba dạng này giúp mỗi chuyến thám hiểm có nhiều khả năng xảy ra hơn, không chỉ đơn thuần là thu thập nguyên liệu.
+
+5. Một số cơ chế mình khuyên nên bổ sung
+Exploration Energy: Có giới hạn lượt hoặc năng lượng thám hiểm mỗi ngày để tránh farm vô hạn.
+
+Rare Discovery: Có xác suất cực thấp tìm thấy rune thất lạc hoặc bản vẽ hiếm.
+
+Exploration Level: Càng thám hiểm nhiều, càng mở khóa khả năng tìm kiếm tài nguyên tốt hơn.
+
+Daily Discovery: Mỗi ngày có thể xuất hiện một địa điểm đặc biệt, chẳng hạn hang động bí mật hoặc tàn tích bị chôn vùi.
+
+Weekly Reward: Hoàn thành số chuyến thám hiểm nhất định trong tuần để nhận thưởng.
